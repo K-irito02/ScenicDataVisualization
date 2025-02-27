@@ -123,3 +123,9 @@ RETRY_HTTP_CODES = [500, 502, 503, 504, 522, 524, 408, 202]
 
 # 随机化下载延迟
 RANDOMIZE_DOWNLOAD_DELAY = True
+
+# 配置输出
+FEED_FORMAT = 'json'
+FEED_URI = 'attractions_01.json'
+FEED_EXPORT_ENCODING = 'utf-8'
+FEED_EXPORT_INDENT = 4

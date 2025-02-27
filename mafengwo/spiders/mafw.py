@@ -8,6 +8,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import json
+import os
 
 
 class MfwSpider(scrapy.Spider):
@@ -40,7 +41,7 @@ class MfwSpider(scrapy.Spider):
     def start_requests(self):
         url = self.start_urls[0]
         
-        # 更新 User-Agent
+        # 更新User-Agent
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
@@ -79,184 +80,102 @@ class MfwSpider(scrapy.Spider):
             callback=self.parse,
             dont_filter=True  # 防止重定向被过滤
         )
-
-    # 解析马蜂窝目的地页面
+        
+        # 测试景点详情页解析
+        # 直接访问一个景点详情页进行测试
+        test_poi_url = "https://www.mafengwo.cn/poi/4131.html"  # 爨底下村景点页面
+        yield scrapy.Request(
+            url=test_poi_url,
+            headers=headers,
+            cookies=cookies,
+            callback=self.parse_poi_detail,
+            dont_filter=True
+        )
+    
     def parse(self, response):
-        # 添加日志来查看响应状态
-        self.logger.info(f'Response status: {response.status}')
-        self.logger.info(f'Response URL: {response.url}')
+        # 原有的解析逻辑
+        # ... 这里可以添加获取景点列表的代码
+        self.logger.info(f"正在解析页面: {response.url}")
         
-        base_xpath = '/html/body/div[2]/div[2]/div/div[3]/div[1]'
-        provinces = []
+        # 这里可以添加提取景点链接的代码
+        # poi_links = response.xpath('//a[contains(@href, "/poi/")]/@href').getall()
+        # for link in poi_links:
+        #     full_url = response.urljoin(link)
+        #     yield scrapy.Request(full_url, callback=self.parse_poi_detail)
+    
+    def parse_poi_detail(self, response):
+        """解析景点详情页面"""
+        self.logger.info(f"正在解析景点详情页: {response.url}")
         
-        # 处理直辖市
-        municipalities_dl = response.xpath(f'{base_xpath}/div[1]/dl[1]')
-        if municipalities_dl:
-            # 获取"直辖市"标题
-            title = municipalities_dl.xpath('./dt/text()').get()
-            # 获取直辖市的链接
-            municipality_links = municipalities_dl.xpath('./dd/a/@href').getall()
-            municipality_names = municipalities_dl.xpath('./dd/a/text()').getall()
-            
-            # 将直辖市信息添加到结果中
-            for name, link in zip(municipality_names, municipality_links):
-                # 修改链接格式
-                if 'travel-scenic-spot/mafengwo' in link:
-                    # 提取ID
-                    id = link.split('/')[-1].replace('.html', '')
-                    # 构建新的链接
-                    link = f'/jd/{id}/gonglve.html'
-                provinces.append({
-                    'type': '直辖市',
-                    'name': name,
-                    'link': response.urljoin(link)
-                })
+        # 提取景点ID
+        poi_id = response.url.split('/')[-1].split('.')[0]
         
-        # 处理其他省份（在dt标签中的省份）
-        for div_index in [1, 2]:  # 遍历两个div
-            province_dls = response.xpath(f'{base_xpath}/div[{div_index}]/dl[position()>1]')  # 跳过直辖市的dl
-            for dl in province_dls:
-                # 获取dt中的所有省份链接和名称
-                province_links = dl.xpath('./dt/a/@href').getall()
-                province_names = dl.xpath('./dt/a/text()').getall()
-                
-                # 将省份信息添加到结果中
-                for name, link in zip(province_names, province_links):
-                    # 修改链接格式
-                    if 'travel-scenic-spot/mafengwo' in link:
-                        # 提取ID
-                        id = link.split('/')[-1].replace('.html', '')
-                        # 构建新的链接
-                        link = f'/jd/{id}/gonglve.html'
-                    provinces.append({
-                        'type': '省份',
-                        'name': name,
-                        'link': response.urljoin(link)
-                    })
+        # 提取景点名称
+        poi_name = response.xpath('//div[@class="title"]/h1/text()').get()
         
-        # 打印结果并处理省份链接
-        for province in provinces:
-            print(f"类型: {province['type']}, 省份: {province['name']}, 链接: {province['link']}")
-            # 对于直辖市且名称为北京的情况，发送请求获取景点信息
-            if province['type'] == '直辖市' and province['name'] == '北京':
-                # 添加随机延迟
-                time.sleep(random.uniform(1, 3))
-                yield scrapy.Request(
-                    url=province['link'],
-                    callback=self.parse_attractions,
-                    meta={'province_info': province},
-                    dont_filter=True
-                )
+        # 提取景点图片
+        poi_image = response.xpath('/html/body/div[2]/div[3]/div[1]/div/a/div/div[1]/img/@src').get()
+        
+        # 提取景点简介
+        poi_summary = response.xpath('//div[@class="summary"]/text()').getall()
+        poi_summary = ''.join([s.strip() for s in poi_summary if s.strip()])
+        
+        # 提取交通信息
+        poi_traffic = response.xpath('/html/body/div[2]/div[3]/div[2]/dl[1]/dd//text()').getall()
+        poi_traffic = ''.join([t.strip() for t in poi_traffic if t.strip()])
+        
+        # 提取门票信息
+        poi_ticket = response.xpath('/html/body/div[2]/div[3]/div[2]/dl[2]/dd/div[1]/div//text()').getall()
+        poi_ticket = ''.join([t.strip() for t in poi_ticket if t.strip()])
+        
+        # 提取开放时间
+        poi_opening_hours = response.xpath('/html/body/div[2]/div[3]/div[2]/dl[3]/dd//text()').getall()
+        poi_opening_hours = ''.join([h.strip() for h in poi_opening_hours if h.strip()])
+        
+        # 提取景点位置
+        poi_location = response.xpath('/html/body/div[2]/div[3]/div[3]/div[1]/p/text()').get()
+        
+        # 提取评论数量
+        poi_comment_count = response.xpath('/html/body/div[2]/div[4]/div/div/div[1]/span/em/text()').get()
+        if poi_comment_count:
+            poi_comment_count = int(poi_comment_count)
+        else:
+            poi_comment_count = 0
+        
+        # 构建景点信息字典
+        poi_info = {
+            'id': poi_id,
+            'name': poi_name,
+            'image': poi_image,
+            'summary': poi_summary,
+            'traffic': poi_traffic,
+            'ticket': poi_ticket,
+            'opening_hours': poi_opening_hours,
+            'location': poi_location,
+            'comment_count': poi_comment_count,
+            'url': response.url
+        }
+        
+        self.logger.info(f"已提取景点信息: {poi_name}")
+        
+        # 将结果添加到列表中
+        self.results.append(poi_info)
+        
+        # 每次获取数据后就保存
+        with open('attractions_01.json', 'w', encoding='utf-8') as f:
+            json.dump(self.results, f, ensure_ascii=False, indent=4)
+        
+        # 也可以使用yield返回Item
+        yield poi_info
+    
+    def closed(self, reason):
+        """爬虫关闭时将结果保存到JSON文件"""
+        if self.results:
+            # 使用绝对路径
+            file_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'attractions_01.json')
+            with open(file_path, 'w', encoding='utf-8') as f:
+                json.dump(self.results, f, ensure_ascii=False, indent=4)
+            self.logger.info(f"已保存{len(self.results)}个景点信息到{file_path}")
 
-    def parse_attractions(self, response):
-        """使用selenium爬取马蜂窝景点页面"""
-        try:
-            # 初始化 Selenium WebDriver
-            driver = webdriver.Edge(service=self.service, options=self.options)
-            
-            # 访问景点页面
-            attractions_url = response.meta['province_info']['link']
-            driver.get(attractions_url)
-            
-            # 增加初始等待时间
-            time.sleep(random.uniform(3, 5))
-            
-            # 执行JavaScript来模拟真实浏览器
-            driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-            
-            wait = WebDriverWait(driver, 30)
-            
-            # 持续爬取直到没有"后一页"按钮
-            while True:
-                # 等待景点列表加载
-                selectors = [
-                    "//div[@class='row-top']//li",
-                    "//div[contains(@class, '_j_scenic_list')]//div[contains(@class, 'row-top')]//li",
-                    "//div[contains(@class, 'scenic-list')]//li",
-                    "//div[@class='_j_scenic_list']//li",
-                    "//ul[contains(@class, 'scenic-list')]/li",
-                    "//div[contains(@class, '_j_scenic_list')]//li"
-                ]
-                
-                elements = None
-                for selector in selectors:
-                    try:
-                        if len(driver.find_elements(By.XPATH, selector)) > 0:
-                            elements = wait.until(
-                                EC.presence_of_all_elements_located((By.XPATH, selector))
-                            )
-                            if elements:
-                                self.logger.info(f"成功找到 {len(elements)} 个元素")
-                                break
-                    except Exception as e:
-                        continue
-                
-                if not elements:
-                    self.logger.error("未能找到任何景点元素")
-                    break
-                
-                # 处理当前页面的景点
-                for attraction in elements:
-                    try:
-                        # 滚动到元素位置
-                        driver.execute_script("arguments[0].scrollIntoView(true);", attraction)
-                        time.sleep(0.5)
-                        
-                        # 获取景点信息
-                        link = attraction.find_element(By.TAG_NAME, "a").get_attribute("href")
-                        name = attraction.find_element(By.TAG_NAME, "h3").text
-                        poi_id = link.split("/poi/")[1].split(".html")[0]
-                        
-                        attraction_info = {
-                            "name": name,
-                            "link": link,
-                            "poi_id": poi_id
-                        }
-                        
-                        self.results.append(attraction_info)
-                        yield attraction_info
-                        
-                    except Exception as e:
-                        self.logger.error(f"提取景点信息时出错: {str(e)}")
-                        continue
-                
-                try:
-                    # 查找"后一页"按钮 - 使用更可靠的定位方式
-                    next_page = wait.until(
-                        EC.presence_of_element_located((By.XPATH, "/html/body/div[2]/div[5]/div/div[2]/div/a[text()='后一页']"))
-                    )
-                    
-                    # 检查"后一页"按钮是否可点击和可见
-                    if next_page.is_enabled() and next_page.is_displayed():
-                        # 滚动到按钮位置
-                        driver.execute_script("arguments[0].scrollIntoView(true);", next_page)
-                        time.sleep(random.uniform(1, 2))
-                        
-                        # 尝试点击
-                        try:
-                            next_page.click()
-                            time.sleep(random.uniform(2, 3))
-                        except Exception as click_error:
-                            self.logger.error(f"点击'后一页'按钮失败: {str(click_error)}")
-                            # 尝试使用JavaScript点击
-                            driver.execute_script("arguments[0].click();", next_page)
-                            time.sleep(random.uniform(2, 3))
-                    else:
-                        self.logger.info("找到'后一页'按钮，但不可点击，爬取完成")
-                        break
-                except Exception as e:
-                    self.logger.info("没有找到'后一页'按钮，爬取完成")
-                    break
-                
-            # 保存结果到JSON文件
-            with open('attractions.json', 'w', encoding='utf-8') as f:
-                json.dump(self.results, f, ensure_ascii=False, indent=2)
-            self.logger.info(f"成功保存{len(self.results)}个景点信息到attractions.json")
-            
-        except Exception as e:
-            self.logger.error(f"详细错误信息: {str(e)}")
-            # 保存错误页面源码
-            with open('error_page.html', 'w', encoding='utf-8') as f:
-                f.write(driver.page_source)
-        finally:
-            driver.quit()
+
+
