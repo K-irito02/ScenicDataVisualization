@@ -1,18 +1,34 @@
-import scrapy
-import random
-import time
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+"""
+马蜂窝全国景点爬虫（数据库存储URL版本）
+使用Redis存储URL队列和爬取结果
+支持分布式爬取
+"""
+
 import json
-import os
+import time
+import random
 import redis
+import threading
+import os
+from datetime import datetime
+from urllib.parse import urljoin
+
 from selenium import webdriver
 from selenium.webdriver.edge.service import Service
+from selenium.webdriver.edge.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import NoSuchElementException, TimeoutException, StaleElementReferenceException
-from urllib.parse import urlparse
+from selenium.common.exceptions import TimeoutException, NoSuchElementException
+
+import scrapy
 from scrapy.crawler import CrawlerProcess
 from scrapy.utils.project import get_project_settings
+
+from mafengwo.items_distributed import MafengwoDistributedItem
 
 class ChinaAttractionsDBSpider(scrapy.Spider):
     """
@@ -44,11 +60,20 @@ class ChinaAttractionsDBSpider(scrapy.Spider):
         'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
     ]
 
-    def __init__(self, node_id='node1', is_master=False, task_type='all', redis_host='localhost', *args, **kwargs):
+    def __init__(self, node_id='node1', is_master=False, task_type='all', redis_host='localhost', checkpoint_interval=300, *args, **kwargs):
         super(ChinaAttractionsDBSpider, self).__init__(*args, **kwargs)
         self.node_id = node_id
-        self.is_master = is_master
+        
+        # 确保is_master参数正确转换为布尔值
+        if isinstance(is_master, str):
+            self.is_master = is_master.lower() == 'true'
+        else:
+            self.is_master = bool(is_master)
+        
+        self.logger.info(f"爬虫初始化: 节点ID={self.node_id}, 是否主节点={self.is_master}")
+        
         self.task_type = task_type  # 'all', 'cities', 'list', 'detail'
+        self.checkpoint_interval = int(checkpoint_interval)  # 检查点保存间隔（秒）
         
         # 初始化 Selenium 相关配置
         self.options = webdriver.EdgeOptions()
@@ -72,6 +97,10 @@ class ChinaAttractionsDBSpider(scrapy.Spider):
         # 创建结果目录
         os.makedirs('results', exist_ok=True)
         
+        # 创建断点续爬状态目录
+        self.checkpoint_dir = f'crawls/{self.name}_{self.node_id}/checkpoints'
+        os.makedirs(self.checkpoint_dir, exist_ok=True)
+        
         # 初始化Redis连接
         try:
             self.redis_client = redis.Redis(
@@ -84,48 +113,238 @@ class ChinaAttractionsDBSpider(scrapy.Spider):
             self.logger.info(f"Redis连接成功初始化，连接到 {redis_host}")
             
             # 只有主节点才初始化队列
-            if is_master:
-                self.redis_client.delete(f"{self.name}:cities_urls")
-                self.redis_client.delete(f"{self.name}:list_urls")
-                self.redis_client.delete(f"{self.name}:detail_urls")
-                self.redis_client.lpush(f"{self.name}:cities_urls", "https://www.mafengwo.cn/mdd/")
-                self.logger.info("主节点已初始化URL队列")
+            if self.is_master:
+                self.logger.info("作为主节点初始化队列")
+                # 检查是否有断点续爬状态
+                if self.load_checkpoint():
+                    self.logger.info("已从断点恢复爬虫状态")
+                else:
+                    # 清空其他队列，但保留cities_urls队列
+                    self.redis_client.delete(f"{self.name}:list_urls")
+                    self.redis_client.delete(f"{self.name}:detail_urls")
+                    
+                    # 检查cities_urls队列是否为空，如果为空则添加起始URL
+                    if self.redis_client.llen(f"{self.name}:cities_urls") == 0:
+                        # 将起始URL添加到城市队列
+                        self.redis_client.lpush(f"{self.name}:cities_urls", self.start_urls[0])
+                        self.logger.info(f"主节点已初始化URL队列，添加起始URL: {self.start_urls[0]}")
+            
+            # 记录爬虫启动时间和状态
+            self.start_time = datetime.now()
+            self.save_spider_status("started")
+            
+            # 启动定期保存检查点的线程
+            self.stop_checkpoint_thread = False
+            self.checkpoint_thread = threading.Thread(target=self.periodic_checkpoint_saver)
+            self.checkpoint_thread.daemon = True
+            self.checkpoint_thread.start()
+            self.logger.info(f"已启动定期保存检查点线程，间隔: {self.checkpoint_interval}秒")
+            
         except Exception as e:
             self.logger.error(f"Redis连接初始化失败: {str(e)}")
             self.redis_client = None
+    
+    def periodic_checkpoint_saver(self):
+        """定期保存检查点的线程函数"""
+        while not self.stop_checkpoint_thread:
+            # 等待指定的间隔时间
+            for _ in range(self.checkpoint_interval):
+                if self.stop_checkpoint_thread:
+                    break
+                time.sleep(1)
+            
+            if not self.stop_checkpoint_thread:
+                self.logger.info("定期保存检查点...")
+                self.save_checkpoint()
+    
+    def save_spider_status(self, status):
+        """保存爬虫状态"""
+        try:
+            status_data = {
+                "status": status,
+                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "node_id": self.node_id,
+                "task_type": self.task_type
+            }
+            
+            # 保存到Redis
+            self.redis_client.set(
+                f"{self.name}:status:{self.node_id}", 
+                json.dumps(status_data, ensure_ascii=False)
+            )
+            
+            # 保存到本地文件
+            status_file = os.path.join(self.checkpoint_dir, f"status_{self.node_id}.json")
+            with open(status_file, 'w', encoding='utf-8') as f:
+                json.dump(status_data, f, ensure_ascii=False, indent=4)
+                
+            self.logger.info(f"已保存爬虫状态: {status}")
+        except Exception as e:
+            self.logger.error(f"保存爬虫状态失败: {str(e)}")
+    
+    def save_checkpoint(self):
+        """保存断点续爬检查点"""
+        try:
+            # 获取当前队列状态
+            cities_urls_count = self.redis_client.llen(f"{self.name}:cities_urls")
+            list_urls_count = self.redis_client.llen(f"{self.name}:list_urls")
+            detail_urls_count = self.redis_client.llen(f"{self.name}:detail_urls")
+            
+            # 获取已处理的URL数量
+            cities_processed = self.redis_client.scard(f"{self.name}:cities:dupefilter")
+            list_processed = self.redis_client.scard(f"{self.name}:list:dupefilter")
+            detail_processed = self.redis_client.scard(f"{self.name}:detail:dupefilter")
+            
+            # 获取已保存的数据数量
+            city_count = len(self.redis_client.keys("china:city:info:*"))
+            attraction_count = self.redis_client.scard("china:attractions:all")
+            
+            checkpoint_data = {
+                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "node_id": self.node_id,
+                "task_type": self.task_type,
+                "queue_status": {
+                    "cities_urls": cities_urls_count,
+                    "list_urls": list_urls_count,
+                    "detail_urls": detail_urls_count
+                },
+                "processed_status": {
+                    "cities": cities_processed,
+                    "list": list_processed,
+                    "detail": detail_processed
+                },
+                "data_status": {
+                    "cities": city_count,
+                    "attractions": attraction_count
+                }
+            }
+            
+            # 保存检查点到文件
+            checkpoint_file = os.path.join(self.checkpoint_dir, f"checkpoint_{self.node_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json")
+            with open(checkpoint_file, 'w', encoding='utf-8') as f:
+                json.dump(checkpoint_data, f, ensure_ascii=False, indent=4)
+            
+            # 更新最新检查点文件
+            latest_checkpoint_file = os.path.join(self.checkpoint_dir, f"checkpoint_{self.node_id}_latest.json")
+            with open(latest_checkpoint_file, 'w', encoding='utf-8') as f:
+                json.dump(checkpoint_data, f, ensure_ascii=False, indent=4)
+                
+            self.logger.info(f"已保存断点续爬检查点: {checkpoint_file}")
+            return True
+        except Exception as e:
+            self.logger.error(f"保存断点续爬检查点失败: {str(e)}")
+            return False
+    
+    def load_checkpoint(self):
+        """加载断点续爬检查点"""
+        try:
+            # 检查是否存在最新检查点文件
+            latest_checkpoint_file = os.path.join(self.checkpoint_dir, f"checkpoint_{self.node_id}_latest.json")
+            if not os.path.exists(latest_checkpoint_file):
+                self.logger.info("未找到断点续爬检查点文件，将从头开始爬取")
+                return False
+            
+            # 加载检查点数据
+            with open(latest_checkpoint_file, 'r', encoding='utf-8') as f:
+                checkpoint_data = json.load(f)
+            
+            self.logger.info(f"已加载断点续爬检查点: {checkpoint_data['timestamp']}")
+            
+            # 检查队列是否为空，如果为空且有已处理的数据，则重新初始化队列
+            cities_urls_count = self.redis_client.llen(f"{self.name}:cities_urls")
+            list_urls_count = self.redis_client.llen(f"{self.name}:list_urls")
+            detail_urls_count = self.redis_client.llen(f"{self.name}:detail_urls")
+            
+            if cities_urls_count == 0 and list_urls_count == 0 and detail_urls_count == 0:
+                # 检查是否有未完成的任务
+                if self.task_type == 'all' or self.task_type == 'cities':
+                    if checkpoint_data['processed_status']['cities'] < 10:  # 假设至少应该有10个城市
+                        self.redis_client.lpush(f"{self.name}:cities_urls", "https://www.mafengwo.cn/mdd/")
+                        self.logger.info("已重新初始化城市列表页URL队列")
+                
+                self.logger.info("已从断点恢复爬虫状态")
+            
+            return True
+        except Exception as e:
+            self.logger.error(f"加载断点续爬检查点失败: {str(e)}")
+            return False
 
     def start_requests(self):
         """根据任务类型处理不同的URL队列"""
+        # 检查城市URL队列是否为空，如果为空且是主节点，则添加起始URL
+        cities_urls_count = self.redis_client.llen(f"{self.name}:cities_urls")
+        if cities_urls_count == 0 and self.is_master:
+            self.logger.info(f"城市URL队列为空，添加起始URL: {self.start_urls[0]}")
+            self.redis_client.lpush(f"{self.name}:cities_urls", self.start_urls[0])
+            # 重新获取队列长度
+            cities_urls_count = self.redis_client.llen(f"{self.name}:cities_urls")
+            self.logger.info(f"城市URL队列现在有 {cities_urls_count} 个URL")
+        
+        # 打印当前队列状态
+        self.logger.info(f"当前队列状态:")
+        self.logger.info(f"城市列表页URL队列: {self.redis_client.llen(f'{self.name}:cities_urls')}")
+        self.logger.info(f"景点列表页URL队列: {self.redis_client.llen(f'{self.name}:list_urls')}")
+        self.logger.info(f"详情页URL队列: {self.redis_client.llen(f'{self.name}:detail_urls')}")
+        
+        # 根据任务类型处理不同的URL队列
         if self.task_type == 'all' or self.task_type == 'cities':
-            self.process_cities_urls()
+            # 检查cities_urls队列中是否有URL
+            if cities_urls_count > 0:
+                self.logger.info(f"发现 {cities_urls_count} 个城市列表页URL，开始处理")
+                self.process_cities_urls()
+            else:
+                self.logger.info("城市列表页URL队列为空，跳过处理")
         
         if self.task_type == 'all' or self.task_type == 'list':
-            self.process_list_urls()
+            # 检查list_urls队列中是否有URL
+            list_urls_count = self.redis_client.llen(f"{self.name}:list_urls")
+            if list_urls_count > 0:
+                self.logger.info(f"发现 {list_urls_count} 个景点列表页URL，开始处理")
+                self.process_list_urls()
+            else:
+                self.logger.info("景点列表页URL队列为空，跳过处理")
         
         if self.task_type == 'all' or self.task_type == 'detail':
-            self.process_detail_urls()
+            # 检查detail_urls队列中是否有URL
+            detail_urls_count = self.redis_client.llen(f"{self.name}:detail_urls")
+            if detail_urls_count > 0:
+                self.logger.info(f"发现 {detail_urls_count} 个景点详情页URL，开始处理")
+                self.process_detail_urls()
+            else:
+                self.logger.info("景点详情页URL队列为空，跳过处理")
         
+        # 返回空列表，因为我们使用数据库存储URL而不是yield传递请求
         return []
 
     def process_cities_urls(self):
         """处理城市列表页URL队列"""
-        self.logger.info("开始处理城市列表页URL队列")
-        
-        # 从Redis队列中获取所有城市列表页URL
-        while True:
-            cities_url = self.redis_client.rpop(f"{self.name}:cities_urls")
-            if not cities_url:
-                self.logger.info("城市列表页URL队列为空，处理完成")
-                break
-                
-            if isinstance(cities_url, bytes):
-                cities_url = cities_url.decode('utf-8')
-                
-            self.logger.info(f"处理城市列表页URL: {cities_url}")
-            self.parse_cities_list(cities_url)
+        # 从Redis队列中获取一个城市列表页URL
+        url_data = self.redis_client.rpop(f"{self.name}:cities_urls")
+        if url_data:
+            try:
+                url = url_data.decode('utf-8')
+                # 检查URL是否已经被处理过
+                if not self.redis_client.sismember(f"{self.name}:cities:dupefilter", url):
+                    self.logger.info(f"处理城市列表页: {url}")
+                    # 将URL标记为已处理
+                    self.redis_client.sadd(f"{self.name}:cities:dupefilter", url)
+                    # 解析城市列表页
+                    self.parse_cities_list(url)
+                else:
+                    self.logger.info(f"城市列表页已处理过: {url}")
+            except Exception as e:
+                self.logger.error(f"处理城市列表页URL时出错: {str(e)}")
+                # 如果处理出错，将URL放回队列
+                self.redis_client.lpush(f"{self.name}:cities_urls", url_data)
+        else:
+            self.logger.info("城市列表页URL队列为空")
+            
+        # 如果任务类型包含列表页，则处理列表页URL队列
+        if self.task_type == 'all' or self.task_type == 'list':
+            self.process_list_urls()
 
     def parse_cities_list(self, url):
-        """使用selenium爬取马蜂窝城市列表页面"""
+        """使用selenium爬取马蜂窝城市列表页面，并使用Scrapy选择器解析"""
         self.logger.info("开始爬取城市列表")
         try:
             # 初始化 Selenium WebDriver
@@ -142,73 +361,133 @@ class ChinaAttractionsDBSpider(scrapy.Spider):
             
             wait = WebDriverWait(driver, 30)
             
-            # 等待城市列表加载
-            city_selectors = [
-                "//div[contains(@class, 'hot-list')]//div[contains(@class, 'item')]",
-                "//div[contains(@class, 'hot-list')]//li",
-                "//div[contains(@class, 'hot-list')]//a"
-            ]
+            # 等待页面加载完成
+            try:
+                wait.until(EC.presence_of_element_located((By.XPATH, "//div[contains(@class, 'hot-list')]")))
+            except TimeoutException:
+                self.logger.warning("等待页面加载超时，尝试继续处理")
             
-            city_elements = None
-            for selector in city_selectors:
-                try:
-                    elements = driver.find_elements(By.XPATH, selector)
-                    if elements and len(elements) > 0:
-                        city_elements = elements
-                        self.logger.info(f"成功找到 {len(elements)} 个城市元素")
-                        break
-                except Exception as e:
-                    continue
+            # 保存页面源码以便调试
+            with open(f'results/cities_page_source.html', 'w', encoding='utf-8') as f:
+                f.write(driver.page_source)
             
-            if not city_elements:
-                self.logger.error("未能找到任何城市元素")
-                # 保存页面源码以便调试
-                with open(f'results/cities_page_source_error.html', 'w', encoding='utf-8') as f:
-                    f.write(driver.page_source)
-                driver.quit()
-                return
+            # 获取页面源码并创建Scrapy选择器
+            html_content = driver.page_source
+            response = scrapy.Selector(text=html_content)
             
-            # 处理城市列表
-            for city_element in city_elements:
-                try:
-                    # 滚动到元素位置
-                    driver.execute_script("arguments[0].scrollIntoView(true);", city_element)
-                    time.sleep(0.5)
+            # 使用Scrapy选择器解析页面
+            base_xpath = '/html/body/div[2]/div[2]/div/div[3]/div[1]'
+            
+            # 处理直辖市
+            try:
+                # 获取直辖市区域
+                municipalities_dl = response.xpath(f'{base_xpath}/div[1]/dl[1]')
+                if municipalities_dl:
+                    # 获取"直辖市"标题
+                    title = municipalities_dl.xpath('./dt/text()').get()
+                    if not title:
+                        title = "直辖市"
                     
-                    # 获取城市信息
-                    link_element = city_element.find_element(By.TAG_NAME, "a")
-                    link = link_element.get_attribute("href")
-                    name = link_element.text.strip()
+                    # 获取直辖市的链接和名称
+                    municipality_links = municipalities_dl.xpath('./dd/a/@href').getall()
+                    municipality_names = municipalities_dl.xpath('./dd/a/text()').getall()
                     
-                    # 提取城市ID
-                    city_id = None
-                    if "/travel-scenic-spot/mafengwo/" in link:
-                        city_id = link.split("/travel-scenic-spot/mafengwo/")[1].split(".html")[0]
+                    # 将直辖市信息添加到结果中
+                    for name, link in zip(municipality_names, municipality_links):
+                        try:
+                            name = name.strip()
+                            # 修改链接格式
+                            if link and 'travel-scenic-spot/mafengwo' in link:
+                                # 提取ID
+                                city_id = link.split('/')[-1].replace('.html', '')
+                                # 构建新的链接（景点列表页面）
+                                attractions_list_url = f"https://www.mafengwo.cn/jd/{city_id}/gonglve.html"
+                                
+                                # 构建完整链接
+                                full_link = urljoin("https://www.mafengwo.cn", link)
+                                
+                                city_info = {
+                                    "type": title,
+                                    "name": name,
+                                    "link": full_link,
+                                    "city_id": city_id,
+                                    "attractions_list_url": attractions_list_url
+                                }
+                                
+                                # 将景点列表页URL添加到Redis队列
+                                self.redis_client.lpush(f"{self.name}:list_urls", attractions_list_url)
+                                self.logger.info(f"已将城市 {name} 的景点列表页URL添加到队列: {attractions_list_url}")
+                                
+                                # 同时将城市基本信息存储到Redis
+                                info_key = f"china:city:info:{city_id}"
+                                self.redis_client.set(info_key, json.dumps(city_info, ensure_ascii=False))
+                        except Exception as e:
+                            self.logger.error(f"处理直辖市信息时出错: {str(e)}")
+            except Exception as e:
+                self.logger.error(f"处理直辖市区域时出错: {str(e)}")
+            
+            # 处理其他省份
+            try:
+                # 统计省份总数
+                total_provinces = 0
+                provinces = []
+                
+                # 遍历两个div区域
+                for div_index in [1, 2]:
+                    # 获取所有省份的dl元素（第一个div跳过直辖市的dl，第二个div不跳过）
+                    if div_index == 1:
+                        province_dls = response.xpath(f'{base_xpath}/div[{div_index}]/dl[position()>1]')
+
+                    if div_index == 2:
+                        province_dls = response.xpath(f'{base_xpath}/div[{div_index}]/dl')
+                        
+                    self.logger.info(f"在div[{div_index}]中找到 {len(province_dls)} 个省份dl元素")
                     
-                    if not city_id or not name:
-                        continue
-                    
-                    # 构建景点列表页URL
-                    attractions_list_url = f"https://www.mafengwo.cn/jd/{city_id}/gonglve.html"
-                    
-                    city_info = {
-                        "name": name,
-                        "link": link,
-                        "city_id": city_id,
-                        "attractions_list_url": attractions_list_url
-                    }
-                    
-                    # 将景点列表页URL添加到Redis队列
-                    self.redis_client.lpush(f"{self.name}:list_urls", attractions_list_url)
-                    self.logger.info(f"已将城市 {name} 的景点列表页URL添加到队列: {attractions_list_url}")
-                    
-                    # 同时将城市基本信息存储到Redis
-                    info_key = f"china:city:info:{city_id}"
-                    self.redis_client.set(info_key, json.dumps(city_info, ensure_ascii=False))
-                    
-                except Exception as e:
-                    self.logger.error(f"提取城市信息时出错: {str(e)}")
-                    continue
+                    for dl in province_dls:
+                        # 获取dt中的所有省份链接和名称
+                        province_links = dl.xpath('./dt/a/@href').getall()
+                        province_names = dl.xpath('./dt/a/text()').getall()
+                        
+                        # 将省份信息添加到结果中
+                        for name, link in zip(province_names, province_links):
+                            try:
+                                name = name.strip()
+                                # 修改链接格式
+                                if link and 'travel-scenic-spot/mafengwo' in link:
+                                    # 提取ID
+                                    city_id = link.split('/')[-1].replace('.html', '')
+                                    # 构建新的链接（景点列表页面）
+                                    attractions_list_url = f"https://www.mafengwo.cn/jd/{city_id}/gonglve.html"
+                                    
+                                    # 构建完整链接
+                                    full_link = urljoin("https://www.mafengwo.cn", link)
+                                    
+                                    city_info = {
+                                        "type": "省份",
+                                        "name": name,
+                                        "link": full_link,
+                                        "city_id": city_id,
+                                        "attractions_list_url": attractions_list_url
+                                    }
+                                    
+                                    # 将景点列表页URL添加到Redis队列
+                                    self.redis_client.lpush(f"{self.name}:list_urls", attractions_list_url)
+                                    self.logger.info(f"已将省份 {name} 的景点列表页URL添加到队列: {attractions_list_url}")
+                                    
+                                    # 同时将城市基本信息存储到Redis
+                                    info_key = f"china:city:info:{city_id}"
+                                    self.redis_client.set(info_key, json.dumps(city_info, ensure_ascii=False))
+                                    
+                                    # 添加到省份列表
+                                    provinces.append(city_info)
+                                    total_provinces += 1
+                            except Exception as e:
+                                self.logger.error(f"处理省份信息时出错: {str(e)}")
+                
+                # 输出统计信息
+                self.logger.info(f"总共解析了 {total_provinces} 个省份")
+            except Exception as e:
+                self.logger.error(f"处理省份区域时出错: {str(e)}")
             
             # 关闭driver
             driver.quit()
@@ -220,36 +499,43 @@ class ChinaAttractionsDBSpider(scrapy.Spider):
 
     def process_list_urls(self):
         """处理景点列表页URL队列"""
-        self.logger.info("开始处理景点列表页URL队列")
-        
-        # 从Redis队列中获取所有列表页URL
-        while True:
-            list_url = self.redis_client.rpop(f"{self.name}:list_urls")
-            if not list_url:
-                self.logger.info("景点列表页URL队列为空，处理完成")
-                break
+        # 从Redis队列中获取一个景点列表页URL
+        url_data = self.redis_client.rpop(f"{self.name}:list_urls")
+        if url_data:
+            try:
+                # 尝试解析为JSON，如果失败则直接使用字符串
+                try:
+                    url_info = json.loads(url_data.decode('utf-8'))
+                    url = url_info.get('url')
+                    city_info = url_info.get('city_info')
+                except (json.JSONDecodeError, UnicodeDecodeError):
+                    # 如果不是JSON格式，则直接使用字符串
+                    url = url_data.decode('utf-8')
+                    city_info = None
+                    
+                # 确保URL不为空
+                if not url:
+                    url = url_data.decode('utf-8')
                 
-            if isinstance(list_url, bytes):
-                list_url = list_url.decode('utf-8')
-                
-            self.logger.info(f"处理景点列表页URL: {list_url}")
+                # 检查URL是否已经被处理过
+                if not self.redis_client.sismember(f"{self.name}:list:dupefilter", url):
+                    self.logger.info(f"处理景点列表页: {url}")
+                    # 将URL标记为已处理
+                    self.redis_client.sadd(f"{self.name}:list:dupefilter", url)
+                    # 解析景点列表页
+                    self.parse_attractions_list(url, city_info)
+                else:
+                    self.logger.info(f"景点列表页已处理过: {url}")
+            except Exception as e:
+                self.logger.error(f"处理景点列表页URL时出错: {str(e)}")
+                # 如果处理出错，将URL放回队列
+                self.redis_client.lpush(f"{self.name}:list_urls", url_data)
+        else:
+            self.logger.info("景点列表页URL队列为空")
             
-            # 提取城市ID
-            city_id = None
-            if "/jd/" in list_url:
-                city_id = list_url.split("/jd/")[1].split("/")[0]
-            
-            # 获取城市信息
-            city_info = None
-            if city_id:
-                info_key = f"china:city:info:{city_id}"
-                city_info_json = self.redis_client.get(info_key)
-                if city_info_json:
-                    if isinstance(city_info_json, bytes):
-                        city_info_json = city_info_json.decode('utf-8')
-                    city_info = json.loads(city_info_json)
-            
-            self.parse_attractions_list(list_url, city_info)
+        # 如果任务类型包含详情页，则处理详情页URL队列
+        if self.task_type == 'all' or self.task_type == 'detail':
+            self.process_detail_urls()
 
     def parse_attractions_list(self, url, city_info=None):
         """使用selenium爬取马蜂窝景点列表页面"""
@@ -416,42 +702,40 @@ class ChinaAttractionsDBSpider(scrapy.Spider):
                 driver.quit()
 
     def process_detail_urls(self):
-        """处理详情页URL队列"""
-        self.logger.info("开始处理详情页URL队列")
-        
-        # 从Redis队列中获取所有详情页URL
-        while True:
-            detail_url = self.redis_client.rpop(f"{self.name}:detail_urls")
-            if not detail_url:
-                self.logger.info("详情页URL队列为空，处理完成")
-                break
+        """处理景点详情页URL队列"""
+        # 从Redis队列中获取一个景点详情页URL
+        url_data = self.redis_client.rpop(f"{self.name}:detail_urls")
+        if url_data:
+            try:
+                # 尝试解析为JSON，如果失败则直接使用字符串
+                try:
+                    url_info = json.loads(url_data.decode('utf-8'))
+                    url = url_info.get('url')
+                    attraction_info = url_info.get('attraction_info')
+                except (json.JSONDecodeError, UnicodeDecodeError):
+                    # 如果不是JSON格式，则直接使用字符串
+                    url = url_data.decode('utf-8')
+                    attraction_info = {'name': '未知景点', 'poi_id': None}
+                    
+                # 确保URL不为空
+                if not url:
+                    url = url_data.decode('utf-8')
                 
-            if isinstance(detail_url, bytes):
-                detail_url = detail_url.decode('utf-8')
-                
-            # 提取POI ID
-            poi_id = None
-            if "/poi/" in detail_url:
-                poi_id = detail_url.split("/poi/")[1].split(".html")[0]
-            
-            # 获取基本信息
-            info_key = f"china:attraction:info:{poi_id}"
-            attraction_info_json = self.redis_client.get(info_key)
-            
-            if attraction_info_json:
-                if isinstance(attraction_info_json, bytes):
-                    attraction_info_json = attraction_info_json.decode('utf-8')
-                attraction_info = json.loads(attraction_info_json)
-            else:
-                attraction_info = {
-                    "link": detail_url,
-                    "poi_id": poi_id,
-                    "name": "待获取",
-                    "city": "未知城市"
-                }
-                
-            self.logger.info(f"处理详情页URL: {detail_url}, 景点: {attraction_info.get('name', '未知景点')}")
-            self.parse_attraction_detail(detail_url, attraction_info)
+                # 检查URL是否已经被处理过
+                if not self.redis_client.sismember(f"{self.name}:detail:dupefilter", url):
+                    self.logger.info(f"处理景点详情页: {url}")
+                    # 将URL标记为已处理
+                    self.redis_client.sadd(f"{self.name}:detail:dupefilter", url)
+                    # 解析景点详情页
+                    self.parse_attraction_detail(url, attraction_info)
+                else:
+                    self.logger.info(f"景点详情页已处理过: {url}")
+            except Exception as e:
+                self.logger.error(f"处理景点详情页URL时出错: {str(e)}")
+                # 如果处理出错，将URL放回队列
+                self.redis_client.lpush(f"{self.name}:detail_urls", url_data)
+        else:
+            self.logger.info("景点详情页URL队列为空")
 
     def parse_attraction_detail(self, url, attraction_info):
         """解析景点详情页面（使用Selenium）"""
@@ -592,31 +876,124 @@ class ChinaAttractionsDBSpider(scrapy.Spider):
                 driver.quit()
     
     def save_attraction_detail_to_redis(self, detail):
-        """保存景点详情到Redis数据库"""
-        if not self.redis_client:
-            self.logger.error("Redis客户端未初始化，无法保存数据")
-            return
-        
+        """将景点详情保存到Redis"""
         try:
-            # 生成唯一键
-            city_id = detail.get('city_id', 'unknown')
-            key = f"china:attraction:{detail.get('poi_id', hash(detail['name']))}"
+            # 获取景点ID
+            poi_id = detail.get('poi_id')
+            if not poi_id:
+                self.logger.error("景点ID为空，无法保存")
+                return False
             
-            # 将详情转换为JSON字符串
-            detail_json = json.dumps(detail, ensure_ascii=False)
+            # 添加时间戳和节点标识
+            detail['crawl_time'] = int(time.time())
+            detail['node_id'] = self.node_id
             
-            # 存储到Redis
-            self.redis_client.set(key, detail_json)
+            # 使用管道和事务确保原子性操作
+            pipe = self.redis_client.pipeline()
             
-            # 添加到索引列表
-            self.redis_client.sadd("china:attractions:all", key)
+            # 检查是否已存在数据
+            info_key = f"china:attraction:detail:{poi_id}"
+            existing_data = self.redis_client.get(info_key)
             
-            # 添加到城市索引列表
-            self.redis_client.sadd(f"china:city:{city_id}:attractions", key)
+            if existing_data:
+                # 如果已存在数据，检查版本
+                existing_detail = json.loads(existing_data.decode('utf-8'))
+                existing_time = existing_detail.get('crawl_time', 0)
+                
+                # 只有新数据的时间戳更新，才更新数据
+                if detail['crawl_time'] > existing_time:
+                    self.logger.info(f"更新景点详情: {poi_id}, {detail.get('name', '未知景点')}")
+                    # 将详情数据保存到Redis
+                    pipe.set(info_key, json.dumps(detail, ensure_ascii=False))
+                else:
+                    self.logger.info(f"保留现有景点详情: {poi_id}, {existing_detail.get('name', '未知景点')}")
+            else:
+                self.logger.info(f"新增景点详情: {poi_id}, {detail.get('name', '未知景点')}")
+                # 将详情数据保存到Redis
+                pipe.set(info_key, json.dumps(detail, ensure_ascii=False))
             
-            self.logger.info(f"已保存景点详情到Redis: {detail['name']}")
+            # 将景点ID添加到索引集合
+            pipe.sadd("china:attractions:all", f"china:attraction:detail:{poi_id}")
+            
+            # 执行事务
+            pipe.execute()
+            
+            return True
         except Exception as e:
             self.logger.error(f"保存景点详情到Redis失败: {str(e)}")
+            return False
+
+    def closed(self, reason):
+        """爬虫关闭时的回调函数"""
+        self.logger.info(f"爬虫关闭，原因: {reason}")
+        
+        # 停止定期保存检查点的线程
+        self.stop_checkpoint_thread = True
+        if hasattr(self, 'checkpoint_thread') and self.checkpoint_thread.is_alive():
+            self.checkpoint_thread.join(timeout=5)
+            self.logger.info("已停止定期保存检查点线程")
+        
+        # 保存断点续爬检查点
+        self.save_checkpoint()
+        
+        # 记录爬虫结束状态
+        self.save_spider_status(f"closed: {reason}")
+        
+        # 计算运行时间
+        end_time = datetime.now()
+        run_time = end_time - self.start_time
+        self.logger.info(f"爬虫运行时间: {run_time}")
+        
+        # 记录爬取统计信息
+        try:
+            cities_processed = self.redis_client.scard(f"{self.name}:cities:dupefilter")
+            list_processed = self.redis_client.scard(f"{self.name}:list:dupefilter")
+            detail_processed = self.redis_client.scard(f"{self.name}:detail:dupefilter")
+            
+            city_count = len(self.redis_client.keys("china:city:info:*"))
+            attraction_count = self.redis_client.scard("china:attractions:all")
+            
+            self.logger.info(f"爬取统计: 处理城市页面 {cities_processed} 个，处理列表页面 {list_processed} 个，处理详情页面 {detail_processed} 个")
+            self.logger.info(f"数据统计: 保存城市 {city_count} 个，保存景点 {attraction_count} 个")
+            
+            # 导出Redis中的景点数据到JSON文件
+            self.export_attractions_to_json()
+            
+        except Exception as e:
+            self.logger.error(f"记录爬取统计信息失败: {str(e)}")
+    
+    def export_attractions_to_json(self):
+        """将Redis中的景点数据导出到JSON文件"""
+        try:
+            # 获取所有景点的键
+            attraction_keys = self.redis_client.smembers("china:attractions:all")
+            
+            if not attraction_keys:
+                self.logger.warning("未找到任何景点数据，无法导出")
+                return
+            
+            # 从Redis中获取所有景点数据
+            attractions = []
+            for key in attraction_keys:
+                data = self.redis_client.get(key)
+                if data:
+                    try:
+                        attraction = json.loads(data)
+                        attractions.append(attraction)
+                    except json.JSONDecodeError:
+                        self.logger.error(f"景点数据格式错误: {key}")
+            
+            # 确保输出目录存在
+            os.makedirs('results', exist_ok=True)
+            
+            # 将数据写入JSON文件
+            output_file = 'attractions_distributed.json'
+            with open(output_file, 'w', encoding='utf-8') as f:
+                json.dump(attractions, f, ensure_ascii=False, indent=4)
+            
+            self.logger.info(f"已将 {len(attractions)} 个景点数据导出到 {output_file}")
+        except Exception as e:
+            self.logger.error(f"导出景点数据到JSON文件失败: {str(e)}")
 
 # 如果直接运行此文件，则启动爬虫
 if __name__ == "__main__":

@@ -44,7 +44,7 @@ CONCURRENT_REQUESTS = 1
 # Configure a delay for requests for the same website (default: 0)
 # See https://docs.scrapy.org/en/latest/topics/settings.html#download-delay
 # See also autothrottle settings and docs
-DOWNLOAD_DELAY = 3
+DOWNLOAD_DELAY = 5
 # The download delay setting will honor only one of:
 #CONCURRENT_REQUESTS_PER_DOMAIN = 16
 #CONCURRENT_REQUESTS_PER_IP = 16
@@ -70,10 +70,9 @@ COOKIES_ENABLED = True
 # Enable or disable downloader middlewares
 # See https://docs.scrapy.org/en/latest/topics/downloader-middleware.html
 DOWNLOADER_MIDDLEWARES = {
-    # "mafengwo.middlewares.MafengwoDownloaderMiddleware": 543,
-    # "mafengwo.middlewares.ProxyMiddleware": 541,
-    # "mafengwo.middlewares.RandomUserAgentMiddleware": 542,
-    # "mafengwo.middlewares.SeleniumMiddleware": 543,
+    'mafengwo.middlewares.RandomUserAgentMiddleware': 400,
+    'mafengwo.middlewares.RandomDelayMiddleware': 500,
+    'scrapy.downloadermiddlewares.useragent.UserAgentMiddleware': None,
 }
 
 # Enable or disable extensions
@@ -90,16 +89,11 @@ ITEM_PIPELINES = {
 
 # Enable and configure the AutoThrottle extension (disabled by default)
 # See https://docs.scrapy.org/en/latest/topics/autothrottle.html
-#AUTOTHROTTLE_ENABLED = True
-# The initial download delay
-#AUTOTHROTTLE_START_DELAY = 5
-# The maximum download delay to be set in case of high latencies
-#AUTOTHROTTLE_MAX_DELAY = 60
-# The average number of requests Scrapy should be sending in parallel to
-# each remote server
-#AUTOTHROTTLE_TARGET_CONCURRENCY = 1.0
-# Enable showing throttling stats for every response received:
-#AUTOTHROTTLE_DEBUG = False
+AUTOTHROTTLE_ENABLED = True
+AUTOTHROTTLE_START_DELAY = 5
+AUTOTHROTTLE_MAX_DELAY = 60
+AUTOTHROTTLE_TARGET_CONCURRENCY = 1.0
+AUTOTHROTTLE_DEBUG = False
 
 # Enable and configure HTTP caching (disabled by default)
 # See https://docs.scrapy.org/en/latest/topics/downloader-middleware.html#httpcache-middleware-settings
@@ -130,6 +124,10 @@ FEED_URI = 'attractions_distributed.json'
 FEED_EXPORT_ENCODING = 'utf-8'
 FEED_EXPORT_INDENT = 4
 
+# 增加随机延迟范围，避免固定延迟被识别
+RANDOM_DELAY_MINIMUM = 3
+RANDOM_DELAY_MAXIMUM = 8
+
 # ================ Scrapy-Redis 分布式爬虫配置 ================
 
 # 使用Scrapy-Redis的调度器
@@ -143,6 +141,15 @@ SCHEDULER_PERSIST = True
 
 # 使用优先级队列
 SCHEDULER_QUEUE_CLASS = 'scrapy_redis.queue.SpiderPriorityQueue'
+
+# 配置去重持久化
+DUPEFILTER_KEY = '%(spider)s:dupefilter'
+DUPEFILTER_DEBUG = True
+
+# 配置不同类型URL的去重键
+CITIES_DUPEFILTER_KEY = '%(spider)s:cities:dupefilter'
+LIST_DUPEFILTER_KEY = '%(spider)s:list:dupefilter'
+DETAIL_DUPEFILTER_KEY = '%(spider)s:detail:dupefilter'
 
 # Redis连接设置 - 这些设置已被弃用，请使用REDIS_PARAMS
 # REDIS_HOST = 'localhost'  # 替换为您的Redis服务器地址
@@ -182,4 +189,15 @@ LOG_FILE = 'logs/mafengwo_distributed.log'
 
 # 创建日志目录
 import os
-os.makedirs('logs', exist_ok=True) 
+os.makedirs('logs', exist_ok=True)
+
+# 全国景点爬虫起始URL
+START_URLS = [
+    'https://www.mafengwo.cn/mdd/'
+]
+
+# Redis键配置
+REDIS_START_URLS_KEY = '%(name)s:start_urls'
+CITIES_START_URLS_KEY = 'china_attractions_db:cities_start_urls'
+LIST_START_URLS_KEY = 'china_attractions_db:list_start_urls'
+DETAIL_START_URLS_KEY = 'china_attractions_db:detail_start_urls' 
