@@ -1,4 +1,4 @@
-# Scrapy settings for mafengwo project
+# Scrapy settings for mafengwo project (Distributed Version)
 #
 # For simplicity, this file contains only settings considered important or
 # commonly used. You can find more settings consulting the documentation:
@@ -84,9 +84,9 @@ DOWNLOADER_MIDDLEWARES = {
 
 # Configure item pipelines
 # See https://docs.scrapy.org/en/latest/topics/item-pipeline.html
-#ITEM_PIPELINES = {
-#    "mafengwo.pipelines.MafengwoPipeline": 300,
-#}
+ITEM_PIPELINES = {
+    "scrapy_redis.pipelines.RedisPipeline": 300,
+}
 
 # Enable and configure the AutoThrottle extension (disabled by default)
 # See https://docs.scrapy.org/en/latest/topics/autothrottle.html
@@ -126,6 +126,60 @@ RANDOMIZE_DOWNLOAD_DELAY = True
 
 # 配置输出
 FEED_FORMAT = 'json'
-FEED_URI = 'attractions_01.json'
+FEED_URI = 'attractions_distributed.json'
 FEED_EXPORT_ENCODING = 'utf-8'
 FEED_EXPORT_INDENT = 4
+
+# ================ Scrapy-Redis 分布式爬虫配置 ================
+
+# 使用Scrapy-Redis的调度器
+SCHEDULER = "scrapy_redis.scheduler.Scheduler"
+
+# 使用Scrapy-Redis的去重组件
+DUPEFILTER_CLASS = "scrapy_redis.dupefilter.RFPDupeFilter"
+
+# 在爬虫结束后不清空Redis队列
+SCHEDULER_PERSIST = True
+
+# 使用优先级队列
+SCHEDULER_QUEUE_CLASS = 'scrapy_redis.queue.SpiderPriorityQueue'
+
+# Redis连接设置 - 这些设置已被弃用，请使用REDIS_PARAMS
+# REDIS_HOST = 'localhost'  # 替换为您的Redis服务器地址
+# REDIS_PORT = 6379
+# REDIS_DB = 0
+# REDIS_PASSWORD = '3143285505'  # 设置Redis密码
+
+# 使用Redis作为Item Pipeline
+ITEM_PIPELINES = {
+    'scrapy_redis.pipelines.RedisPipeline': 300,
+}
+
+# 设置Redis键的前缀，避免不同爬虫之间的冲突
+REDIS_ITEMS_KEY = '%(spider)s:items'
+REDIS_START_URLS_KEY = '%(name)s:start_urls'
+
+# 设置Redis编码
+REDIS_ENCODING = 'utf-8'
+
+# 设置Redis连接参数 - 使用这个配置替代上面的单独配置
+REDIS_PARAMS = {
+    'host': 'localhost',
+    'port': 6379,
+    'db': 0,
+    'password': '3143285505',  # 添加Redis密码
+    'socket_timeout': 30,
+    'socket_connect_timeout': 30,
+    'retry_on_timeout': True,
+    'encoding': 'utf-8',
+}
+
+# 设置日志级别
+LOG_LEVEL = 'INFO'
+
+# 设置日志文件
+LOG_FILE = 'logs/mafengwo_distributed.log'
+
+# 创建日志目录
+import os
+os.makedirs('logs', exist_ok=True) 
