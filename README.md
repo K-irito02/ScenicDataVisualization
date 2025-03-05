@@ -20,10 +20,14 @@
 - [工作原理](#工作原理)
 - [常见问题排解](#常见问题排解)
 - [注意事项](#注意事项)
+- [性能优化](#性能优化)
+- [更新日志](#更新日志)
 
 ## 项目概述
 
 这是一个基于Scrapy和Redis的马蜂窝景点爬虫系统，用于爬取马蜂窝网站上的全国各地景点信息。该系统采用分布式架构，支持多节点并行爬取，使用Redis作为核心数据存储和消息队列，能够实现高效稳定的大规模数据采集。
+
+本项目特别适合需要获取全国旅游景点数据的研究人员、数据分析师和旅游行业从业者。通过本系统，您可以获取到景点名称、地址、门票信息、开放时间等详细数据，为旅游行业分析和决策提供数据支持。
 
 ## 项目结构
 
@@ -44,15 +48,25 @@ mafengwo/
 └── results/                      # 结果输出目录
 ```
 
+### 核心文件说明
+
+- **china_attractions_db.py**: 爬虫主体实现，包含爬取逻辑和数据处理
+- **run_db_crawler.py**: 爬虫启动脚本，提供命令行接口和参数处理
+- **export_data.py**: 数据导出工具，支持多种格式和筛选条件
+- **settings_distributed.py**: 分布式配置文件，包含Redis和爬虫行为设置
+- **items_distributed.py**: 定义数据结构和字段映射
+
 ## 功能特点
 
-- **全面数据采集**：支持爬取全国各省市的景点信息，包括景点名称、评分、地址、门票信息、开放时间等详细数据
+- **全面数据采集**：支持爬取全国各省市的景点信息，包括景点名称、地址、门票信息、开放时间等详细数据
 - **分布式架构**：基于Scrapy-Redis架构，支持多机器、多节点并行爬取
 - **断点续爬**：自动保存爬取状态，支持中断后从断点恢复爬取
 - **灵活配置**：提供丰富的配置选项，可根据需求调整爬虫行为
 - **数据导出**：支持将爬取结果导出为JSON或CSV格式
 - **监控功能**：实时监控爬虫状态和Redis队列
 - **任务分类**：支持按城市列表、景点列表、景点详情分类爬取
+- **反爬处理**：内置随机User-Agent、随机延迟等反爬策略
+- **数据一致性检查**：提供数据完整性和一致性验证工具
 
 ## 环境要求
 
@@ -65,7 +79,7 @@ mafengwo/
 
 ## 安装依赖
 
-创建虚拟环境（推荐）：
+### 创建虚拟环境（推荐）
 
 ```bash
 # 创建虚拟环境
@@ -78,11 +92,21 @@ venv\Scripts\activate
 source venv/bin/activate
 ```
 
-安装所需包：
+### 安装所需包
 
 ```bash
+# 安装基本依赖
 pip install scrapy scrapy-redis selenium redis
+
+# 安装其他依赖
+pip install pandas requests lxml
 ```
+
+### 安装EdgeDriver
+
+1. 确认您的Edge浏览器版本
+2. 从[Microsoft Edge WebDriver下载页面](https://developer.microsoft.com/en-us/microsoft-edge/tools/webdriver/)下载对应版本的WebDriver
+3. 将下载的EdgeDriver放置在系统PATH路径下或项目目录中
 
 ## 配置说明
 
@@ -103,7 +127,7 @@ pip install scrapy scrapy-redis selenium redis
          'host': 'localhost',
          'port': 6379,
          'db': 0,
-         'password': '3143285505',  # 默认密码
+         'password': '3143285505',  # 默认密码，请修改为您自己的密码
          'socket_timeout': 30,
          'socket_connect_timeout': 30,
          'retry_on_timeout': True,
@@ -195,17 +219,25 @@ python run_db_crawler.py --spider china_attractions_db --master --task-type citi
 2. **从节点启动**（多个工作节点 list\detail）：
 
 ```bash
+# 工作节点1 - 负责爬取景点列表
 python run_db_crawler.py --spider china_attractions_db --task-type list --redis-host localhost --node-id worker1 --monitor
 ```
 
 ```bash
-python run_db_crawler.py --spider china_attractions_db --task-type list --redis-host localhost --node-id worker2 --monitor
+# 工作节点2 - 负责爬取景点详情
+python run_db_crawler.py --spider china_attractions_db --task-type detail --redis-host localhost --node-id worker2 --monitor
+```
+
+```bash
+# 工作节点3 - 负责爬取景点详情
+python run_db_crawler.py --spider china_attractions_db --task-type detail --redis-host localhost --node-id worker3 --monitor
 ```
 
 **注意**：
 - 所有节点必须连接到同一个Redis服务器
 - 只需要一个主节点（--master），其他都是工作节点
 - 每个节点需要设置不同的node-id
+- 可以根据需要调整任务类型分配，例如多个节点都执行detail任务
 
 ### 断点续爬功能
 
@@ -259,6 +291,9 @@ python export_data.py --data-type china --format json --output results/china_att
 | `--export-cities` | 是否导出城市数据 | - | --export-cities |
 | `--city-id` | 要导出的城市ID | - | --city-id 10065 |
 | `--city-name` | 要导出的城市名称 | - | --city-name 北京 |
+| `--redis-host` | Redis服务器地址 | localhost | --redis-host 192.168.1.100 |
+| `--redis-port` | Redis服务器端口 | 6379 | --redis-port 6380 |
+| `--redis-password` | Redis密码 | 3143285505 | --redis-password yourpassword |
 
 可用的数据类型：
 - `beijing`: 北京景点数据
@@ -287,6 +322,18 @@ python export_data.py --data-type=city-name --city-name=北京
 python export_data.py --data-type=all
 ```
 
+4. **导出为CSV格式**：
+
+```bash
+python export_data.py --data-type=china --format=csv --output=results/china_attractions.csv
+```
+
+5. **导出城市数据**：
+
+```bash
+python export_data.py --export-cities --output=results/china_cities.json
+```
+
 这些命令将根据指定的参数导出相应的景点数据，并保存到指定的文件或目录中。
 
 ## 数据结构
@@ -298,7 +345,9 @@ python export_data.py --data-type=all
   "name": "城市名称",
   "link": "城市链接",
   "city_id": "城市ID",
-  "attractions_list_url": "景点列表页URL"
+  "attractions_list_url": "景点列表页URL",
+  "province": "所属省份",
+  "crawl_time": "爬取时间"
 }
 ```
 
@@ -317,7 +366,9 @@ python export_data.py --data-type=all
   "ticket": "门票信息",
   "opening_hours": "开放时间",
   "location": "位置信息",
-  "comments": ["评论1", "评论2", ...]
+  "comments": ["评论1", "评论2", ...],
+  "crawl_time": "爬取时间",
+  "node_id": "爬取节点ID"
 }
 ```
 
@@ -385,6 +436,11 @@ python export_data.py --data-type=all
    - 查看日志文件中的警告和错误信息
    - 使用`--check-consistency`参数检查数据一致性
 
+6. **Selenium相关问题**
+   - 确保已安装正确版本的EdgeDriver
+   - 检查浏览器是否能正常启动
+   - 尝试禁用无头模式进行调试
+
 ## 注意事项
 
 1. **反爬机制**：马蜂窝网站有反爬虫机制，爬虫设置了随机延迟和User-Agent轮换以减少被封风险。请合理设置并发数和延迟时间，避免频繁请求
@@ -397,4 +453,39 @@ python export_data.py --data-type=all
 
 5. **数据备份**：定期导出和备份爬取的数据，避免Redis服务器意外重启导致数据丢失
 
-6. **法律合规**：请遵守网站robots.txt规则和使用条款，合理使用爬虫 
+6. **法律合规**：请遵守网站robots.txt规则和使用条款，合理使用爬虫
+
+## 性能优化
+
+为了提高爬虫性能和稳定性，可以考虑以下优化措施：
+
+1. **调整并发数和延迟**：
+   - 根据服务器性能和网络条件调整`CONCURRENT_REQUESTS`和`DOWNLOAD_DELAY`
+   - 对于高性能服务器，可以适当增加并发数
+   - 对于不稳定网络，可以增加延迟和重试次数
+
+2. **使用代理IP**：
+   - 在`settings_distributed.py`中配置代理IP池
+   - 启用代理中间件轮换使用不同IP
+
+3. **优化Redis配置**：
+   - 调整Redis内存限制和过期策略
+   - 定期清理不需要的数据
+   - 考虑使用Redis集群提高性能
+
+4. **分布式部署优化**：
+   - 根据任务类型合理分配节点
+   - 城市和列表页爬取节点可以少一些
+   - 详情页爬取节点可以多一些
+
+## 更新日志
+
+### v1.0.0 (2024-03-05)
+- 初始版本发布
+- 支持全国景点数据爬取
+- 实现分布式架构和断点续爬
+
+### v0.9.0 (2024-02-22)
+- 测试版本
+- 实现基本爬虫功能
+- 添加数据导出工具 
