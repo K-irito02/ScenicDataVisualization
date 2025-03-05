@@ -21,8 +21,6 @@ class MafengwoDistributedItem(scrapy.Item):
     city = scrapy.Field()
     # 景点图片
     image = scrapy.Field()
-    # 景点评分
-    score = scrapy.Field()
     # 景点简介
     summary = scrapy.Field()
     # 交通信息

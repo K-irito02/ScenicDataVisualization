@@ -248,7 +248,7 @@ def save_checkpoint_status(r, spider_name, node_id, status_data):
 def main():
     """主函数"""
     parser = argparse.ArgumentParser(description="马蜂窝景点爬虫启动脚本")
-    parser.add_argument("--spider", type=str, default="beijing_attractions_db", 
+    parser.add_argument("--spider", type=str, default="china_attractions_db", 
                         choices=["beijing_attractions_db", "china_attractions_db"],
                         help="要运行的爬虫名称")
     parser.add_argument("--redis-host", type=str, default="localhost", help="Redis服务器地址")
@@ -347,7 +347,7 @@ def main():
             print(f"[-] 未找到检查点文件: {latest_checkpoint_file}")
             if not args.auto_resume:  # 如果不是自动恢复模式，则退出
                 return
-    
+
     # 启动爬虫
     process = start_crawler(
         spider_name=args.spider,
@@ -364,11 +364,46 @@ def main():
     # 监控Redis状态
     if args.monitor and process:
         try:
+            print("[!] 正在运行爬虫，按 Ctrl+C 停止")
+            print("[!] 注意：可能需要多按几次 Ctrl+C 才能完全停止所有浏览器窗口")
             monitor_redis(r, args.spider)
         except KeyboardInterrupt:
-            print("\n[!] 程序已停止")
+            print("\n[!] 收到终止信号，正在停止爬虫...")
             if process:
-                process.terminate()
+                try:
+                    # 发送SIGTERM信号
+                    import signal
+                    process.send_signal(signal.SIGTERM)
+                    print("[!] 已发送终止信号")
+                    
+                    # 等待最多30秒
+                    print("[!] 等待爬虫关闭...")
+                    for _ in range(30):
+                        if process.poll() is not None:  # 进程已结束
+                            print("[!] 爬虫已正常关闭")
+                            break
+                        time.sleep(1)
+                    
+                    # 如果30秒后进程仍未结束，强制终止
+                    if process.poll() is None:
+                        print("[!] 爬虫未能正常关闭，强制终止")
+                        process.terminate()
+                        time.sleep(2)
+                        if process.poll() is None:
+                            print("[!] 强制终止失败，尝试使用SIGKILL信号")
+                            try:
+                                # 在Windows上可能不支持SIGKILL
+                                import os
+                                os.kill(process.pid, 9)  # SIGKILL
+                            except:
+                                print("[!] 无法使用SIGKILL信号，请手动关闭浏览器窗口")
+                except Exception as e:
+                    print(f"[!] 终止爬虫时出错: {str(e)}")
+                    try:
+                        process.terminate()
+                    except:
+                        pass
+            print("[!] 程序已停止")
 
 if __name__ == "__main__":
     main() 

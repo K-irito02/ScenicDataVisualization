@@ -13,6 +13,8 @@ import random
 import redis
 import threading
 import os
+import signal
+import sys
 from datetime import datetime
 from urllib.parse import urljoin
 
@@ -64,6 +66,12 @@ class ChinaAttractionsDBSpider(scrapy.Spider):
         super(ChinaAttractionsDBSpider, self).__init__(*args, **kwargs)
         self.node_id = node_id
         
+        # 添加一个列表来跟踪所有活动的浏览器实例
+        self.active_drivers = []
+        
+        # 注册信号处理器
+        self.setup_signal_handlers()
+        
         # 确保is_master参数正确转换为布尔值
         if isinstance(is_master, str):
             self.is_master = is_master.lower() == 'true'
@@ -79,6 +87,8 @@ class ChinaAttractionsDBSpider(scrapy.Spider):
         self.options = webdriver.EdgeOptions()
         
         # 添加浏览器参数
+        # 设置无头模式
+        self.options.add_argument('--headless')
         self.options.add_argument('--disable-gpu')
         self.options.add_argument('--no-sandbox')
         self.options.add_argument('--disable-dev-shm-usage')
@@ -90,6 +100,7 @@ class ChinaAttractionsDBSpider(scrapy.Spider):
         self.options.add_argument('--ignore-ssl-errors')
         self.options.add_argument('--enable-unsafe-swiftshader')
         self.options.add_argument('--disable-software-rasterizer')
+        self.options.add_argument('--window-size=1920,1080')
         
         # 创建Service对象
         self.service = Service(executable_path="E:\\edgedriver\\msedgedriver.exe")
@@ -144,6 +155,52 @@ class ChinaAttractionsDBSpider(scrapy.Spider):
             self.logger.error(f"Redis连接初始化失败: {str(e)}")
             self.redis_client = None
     
+    def setup_signal_handlers(self):
+        """设置信号处理器"""
+        self.logger.info("设置信号处理器")
+        try:
+            # 注册SIGINT和SIGTERM信号处理器
+            signal.signal(signal.SIGINT, self.handle_shutdown_signal)
+            signal.signal(signal.SIGTERM, self.handle_shutdown_signal)
+            self.logger.info("已注册SIGINT和SIGTERM信号处理器")
+        except Exception as e:
+            self.logger.error(f"注册信号处理器失败: {str(e)}")
+
+    def handle_shutdown_signal(self, signum, frame):
+        """处理关闭信号"""
+        signal_names = {signal.SIGINT: 'SIGINT', signal.SIGTERM: 'SIGTERM'}
+        signal_name = signal_names.get(signum, f'信号 {signum}')
+        
+        self.logger.info(f"收到 {signal_name} 信号，正在关闭爬虫...")
+        
+        # 关闭所有活动的浏览器实例
+        if hasattr(self, 'active_drivers'):
+            for driver in list(self.active_drivers):
+                try:
+                    self.logger.info("正在关闭浏览器实例...")
+                    driver.quit()
+                    self.active_drivers.remove(driver)
+                except Exception as e:
+                    self.logger.error(f"关闭浏览器实例时出错: {str(e)}")
+        
+        # 停止定期保存检查点的线程
+        self.stop_checkpoint_thread = True
+        if hasattr(self, 'checkpoint_thread') and self.checkpoint_thread.is_alive():
+            self.checkpoint_thread.join(timeout=5)
+            self.logger.info("已停止定期保存检查点线程")
+        
+        # 保存检查点
+        self.save_checkpoint()
+        
+        # 记录爬虫结束状态
+        self.save_spider_status(f"closed: received {signal_name}")
+        
+        # 退出进程
+        self.logger.info("爬虫正在退出...")
+        
+        # 给Scrapy一个机会完成正常关闭过程
+        # 不要直接调用sys.exit，让Scrapy自己处理关闭
+    
     def periodic_checkpoint_saver(self):
         """定期保存检查点的线程函数"""
         while not self.stop_checkpoint_thread:
@@ -172,11 +229,6 @@ class ChinaAttractionsDBSpider(scrapy.Spider):
                 f"{self.name}:status:{self.node_id}", 
                 json.dumps(status_data, ensure_ascii=False)
             )
-            
-            # 保存到本地文件
-            status_file = os.path.join(self.checkpoint_dir, f"status_{self.node_id}.json")
-            with open(status_file, 'w', encoding='utf-8') as f:
-                json.dump(status_data, f, ensure_ascii=False, indent=4)
                 
             self.logger.info(f"已保存爬虫状态: {status}")
         except Exception as e:
@@ -318,9 +370,14 @@ class ChinaAttractionsDBSpider(scrapy.Spider):
 
     def process_cities_urls(self):
         """处理城市列表页URL队列"""
-        # 从Redis队列中获取一个城市列表页URL
-        url_data = self.redis_client.rpop(f"{self.name}:cities_urls")
-        if url_data:
+        # 循环处理队列中的所有URL，直到队列为空
+        while True:
+            # 从Redis队列中获取一个城市列表页URL
+            url_data = self.redis_client.rpop(f"{self.name}:cities_urls")
+            if not url_data:
+                self.logger.info("城市列表页URL队列为空")
+                break
+                
             try:
                 url = url_data.decode('utf-8')
                 # 检查URL是否已经被处理过
@@ -336,9 +393,7 @@ class ChinaAttractionsDBSpider(scrapy.Spider):
                 self.logger.error(f"处理城市列表页URL时出错: {str(e)}")
                 # 如果处理出错，将URL放回队列
                 self.redis_client.lpush(f"{self.name}:cities_urls", url_data)
-        else:
-            self.logger.info("城市列表页URL队列为空")
-            
+        
         # 如果任务类型包含列表页，则处理列表页URL队列
         if self.task_type == 'all' or self.task_type == 'list':
             self.process_list_urls()
@@ -349,6 +404,8 @@ class ChinaAttractionsDBSpider(scrapy.Spider):
         try:
             # 初始化 Selenium WebDriver
             driver = webdriver.Edge(service=self.service, options=self.options)
+            # 将driver添加到活动列表中
+            self.active_drivers.append(driver)
             
             # 访问城市列表页面
             driver.get(url)
@@ -414,8 +471,14 @@ class ChinaAttractionsDBSpider(scrapy.Spider):
                                     "attractions_list_url": attractions_list_url
                                 }
                                 
-                                # 将景点列表页URL添加到Redis队列
-                                self.redis_client.lpush(f"{self.name}:list_urls", attractions_list_url)
+                                # 修改这里：将URL和城市信息一起添加到队列
+                                url_data = json.dumps({
+                                    'url': attractions_list_url,
+                                    'city_info': city_info
+                                }, ensure_ascii=False)
+                                
+                                # 使用lpush将URL数据添加到队列
+                                self.redis_client.lpush(f"{self.name}:list_urls", url_data)
                                 self.logger.info(f"已将城市 {name} 的景点列表页URL添加到队列: {attractions_list_url}")
                                 
                                 # 同时将城市基本信息存储到Redis
@@ -430,7 +493,6 @@ class ChinaAttractionsDBSpider(scrapy.Spider):
             try:
                 # 统计省份总数
                 total_provinces = 0
-                provinces = []
                 
                 # 遍历两个div区域
                 for div_index in [1, 2]:
@@ -470,8 +532,14 @@ class ChinaAttractionsDBSpider(scrapy.Spider):
                                         "attractions_list_url": attractions_list_url
                                     }
                                     
-                                    # 将景点列表页URL添加到Redis队列
-                                    self.redis_client.lpush(f"{self.name}:list_urls", attractions_list_url)
+                                    # 修改这里：将URL和城市信息一起添加到队列
+                                    url_data = json.dumps({
+                                        'url': attractions_list_url,
+                                        'city_info': city_info
+                                    }, ensure_ascii=False)
+                                    
+                                    # 使用lpush将URL数据添加到队列
+                                    self.redis_client.lpush(f"{self.name}:list_urls", url_data)
                                     self.logger.info(f"已将省份 {name} 的景点列表页URL添加到队列: {attractions_list_url}")
                                     
                                     # 同时将城市基本信息存储到Redis
@@ -479,7 +547,6 @@ class ChinaAttractionsDBSpider(scrapy.Spider):
                                     self.redis_client.set(info_key, json.dumps(city_info, ensure_ascii=False))
                                     
                                     # 添加到省份列表
-                                    provinces.append(city_info)
                                     total_provinces += 1
                             except Exception as e:
                                 self.logger.error(f"处理省份信息时出错: {str(e)}")
@@ -491,17 +558,28 @@ class ChinaAttractionsDBSpider(scrapy.Spider):
             
             # 关闭driver
             driver.quit()
+            # 从活动列表中移除
+            if driver in self.active_drivers:
+                self.active_drivers.remove(driver)
             
         except Exception as e:
             self.logger.error(f"爬取城市列表时出错: {str(e)}")
             if 'driver' in locals():
                 driver.quit()
+                # 从活动列表中移除
+                if driver in self.active_drivers:
+                    self.active_drivers.remove(driver)
 
     def process_list_urls(self):
         """处理景点列表页URL队列"""
-        # 从Redis队列中获取一个景点列表页URL
-        url_data = self.redis_client.rpop(f"{self.name}:list_urls")
-        if url_data:
+        # 循环处理队列中的所有URL，直到队列为空
+        while True:
+            # 从Redis队列中获取一个景点列表页URL
+            url_data = self.redis_client.rpop(f"{self.name}:list_urls")
+            if not url_data:
+                self.logger.info("景点列表页URL队列为空")
+                break
+                
             try:
                 # 尝试解析为JSON，如果失败则直接使用字符串
                 try:
@@ -530,14 +608,12 @@ class ChinaAttractionsDBSpider(scrapy.Spider):
                 self.logger.error(f"处理景点列表页URL时出错: {str(e)}")
                 # 如果处理出错，将URL放回队列
                 self.redis_client.lpush(f"{self.name}:list_urls", url_data)
-        else:
-            self.logger.info("景点列表页URL队列为空")
-            
+        
         # 如果任务类型包含详情页，则处理详情页URL队列
         if self.task_type == 'all' or self.task_type == 'detail':
             self.process_detail_urls()
 
-    def parse_attractions_list(self, url, city_info=None):
+    def parse_attractions_list(self, url, city_info):
         """使用selenium爬取马蜂窝景点列表页面"""
         city_name = city_info.get('name', '未知城市') if city_info else '未知城市'
         city_id = city_info.get('city_id', 'unknown') if city_info else 'unknown'
@@ -546,6 +622,8 @@ class ChinaAttractionsDBSpider(scrapy.Spider):
         try:
             # 初始化 Selenium WebDriver
             driver = webdriver.Edge(service=self.service, options=self.options)
+            # 将driver添加到活动列表中
+            self.active_drivers.append(driver)
             
             # 直接访问景点页面
             driver.get(url)
@@ -610,40 +688,36 @@ class ChinaAttractionsDBSpider(scrapy.Spider):
                         if "/poi/" in link:
                             poi_id = link.split("/poi/")[1].split(".html")[0]
                         
-                        try:
-                            score_element = attraction.find_element(By.CSS_SELECTOR, ".score")
-                            if score_element:
-                                score = score_element.text.strip()
-                        except:
-                            score = None
-                            
-                        try:
-                            intro_element = attraction.find_element(By.CSS_SELECTOR, ".summary")
-                            if intro_element:
-                                intro = intro_element.text.strip()
-                        except:
-                            intro = None
                         
                         attraction_info = {
                             "name": name,
                             "link": link,
                             "poi_id": poi_id,
-                            "score": score,
-                            "intro": intro,
                             "city": city_name,
                             "city_id": city_id
                         }
                         
                         # 将景点详情页URL添加到Redis队列
                         if link and poi_id:
-                            # 使用lpush将URL添加到队列
-                            self.redis_client.lpush(f"{self.name}:detail_urls", link)
+                            # 修改这里：将URL和城市信息一起添加到队列
+                            url_data = json.dumps({
+                                'url': link,
+                                'attraction_info': {
+                                    'name': name,
+                                    'poi_id': poi_id,
+                                    'city': city_name,
+                                    'city_id': city_id
+                                }
+                            }, ensure_ascii=False)
+                            
+                            # 使用lpush将URL数据添加到队列
+                            self.redis_client.lpush(f"{self.name}:detail_urls", url_data)
                             self.logger.info(f"已将景点详情页URL添加到队列: {link}")
                             
                             # 同时将基本信息存储到Redis
                             info_key = f"china:attraction:info:{poi_id}"
                             self.redis_client.set(info_key, json.dumps(attraction_info, ensure_ascii=False))
-                        
+ 
                     except Exception as e:
                         self.logger.error(f"提取景点信息时出错: {str(e)}")
                         continue
@@ -655,7 +729,6 @@ class ChinaAttractionsDBSpider(scrapy.Spider):
                     next_page_selectors = [
                         "//div[contains(@class, 'm-pagination')]/a[@title='后一页']",
                         "//div[contains(@class, 'paginator')]/a[text()='后一页']",
-                        "/html/body/div[2]/div[5]/div/div[2]/div/a[text()='后一页']"
                     ]
                     
                     for selector in next_page_selectors:
@@ -687,194 +760,307 @@ class ChinaAttractionsDBSpider(scrapy.Spider):
                 except Exception as e:
                     self.logger.info(f"{city_name} 翻页出错，爬取完成: {str(e)}")
                     break
-                
-                # 限制最多爬取10页或200个景点
-                if page_num > 10:
-                    self.logger.info(f"{city_name} 已达到页数限制（页数: {page_num}），停止爬取")
-                    break
             
             # 关闭driver
             driver.quit()
+            # 从活动列表中移除
+            if driver in self.active_drivers:
+                self.active_drivers.remove(driver)
             
         except Exception as e:
             self.logger.error(f"爬取 {city_name} 景点列表时出错: {str(e)}")
             if 'driver' in locals():
                 driver.quit()
+                # 从活动列表中移除
+                if driver in self.active_drivers:
+                    self.active_drivers.remove(driver)
 
     def process_detail_urls(self):
         """处理景点详情页URL队列"""
-        # 从Redis队列中获取一个景点详情页URL
-        url_data = self.redis_client.rpop(f"{self.name}:detail_urls")
-        if url_data:
-            try:
-                # 尝试解析为JSON，如果失败则直接使用字符串
-                try:
-                    url_info = json.loads(url_data.decode('utf-8'))
-                    url = url_info.get('url')
-                    attraction_info = url_info.get('attraction_info')
-                except (json.JSONDecodeError, UnicodeDecodeError):
-                    # 如果不是JSON格式，则直接使用字符串
-                    url = url_data.decode('utf-8')
-                    attraction_info = {'name': '未知景点', 'poi_id': None}
-                    
-                # 确保URL不为空
-                if not url:
-                    url = url_data.decode('utf-8')
+        # 设置一个计数器，用于定期检查是否需要退出
+        processed_count = 0
+        max_urls_per_batch = 10  # 每批处理的URL数量
+        
+        try:
+            # 循环处理队列中的所有URL，直到队列为空
+            while True:
+                # 检查是否接收到了退出信号
+                if hasattr(self, 'stop_checkpoint_thread') and self.stop_checkpoint_thread:
+                    self.logger.info("检测到退出信号，停止处理详情页URL")
+                    break
                 
-                # 检查URL是否已经被处理过
-                if not self.redis_client.sismember(f"{self.name}:detail:dupefilter", url):
-                    self.logger.info(f"处理景点详情页: {url}")
-                    # 将URL标记为已处理
-                    self.redis_client.sadd(f"{self.name}:detail:dupefilter", url)
-                    # 解析景点详情页
-                    self.parse_attraction_detail(url, attraction_info)
-                else:
-                    self.logger.info(f"景点详情页已处理过: {url}")
-            except Exception as e:
-                self.logger.error(f"处理景点详情页URL时出错: {str(e)}")
-                # 如果处理出错，将URL放回队列
-                self.redis_client.lpush(f"{self.name}:detail_urls", url_data)
-        else:
-            self.logger.info("景点详情页URL队列为空")
+                # 从Redis队列中获取一个景点详情页URL
+                url_data = self.redis_client.rpop(f"{self.name}:detail_urls")
+                if not url_data:
+                    self.logger.info("景点详情页URL队列为空")
+                    break
+                    
+                try:
+                    # 尝试解析为JSON，如果失败则直接使用字符串
+                    try:
+                        url_info = json.loads(url_data.decode('utf-8'))
+                        url = url_info.get('url')
+                        attraction_info = url_info.get('attraction_info')
+                    except (json.JSONDecodeError, UnicodeDecodeError):
+                        # 如果不是JSON格式，则直接使用字符串
+                        url = url_data.decode('utf-8')
+                        attraction_info = {'name': '未知景点', 'poi_id': None}
+                        
+                    # 确保URL不为空
+                    if not url:
+                        url = url_data.decode('utf-8')
+                    
+                    # 检查URL是否已经被处理过
+                    if not self.redis_client.sismember(f"{self.name}:detail:dupefilter", url):
+                        self.logger.info(f"处理景点详情页: {url}")
+                        # 将URL标记为已处理
+                        self.redis_client.sadd(f"{self.name}:detail:dupefilter", url)
+                        # 解析景点详情页
+                        self.parse_attraction_detail(url, attraction_info)
+                    else:
+                        self.logger.info(f"景点详情页已处理过: {url}")
+                    
+                    # 更新计数器
+                    processed_count += 1
+                    
+                    # 每处理一定数量的URL后，检查是否需要退出并保存检查点
+                    if processed_count >= max_urls_per_batch:
+                        self.logger.info(f"已处理 {processed_count} 个URL，保存检查点")
+                        self.save_checkpoint()
+                        processed_count = 0
+                        
+                        # 短暂休息，避免过度消耗资源
+                        time.sleep(1)
+                        
+                except Exception as e:
+                    self.logger.error(f"处理景点详情页URL时出错: {str(e)}")
+                    # 如果处理出错，将URL放回队列
+                    self.redis_client.lpush(f"{self.name}:detail_urls", url_data)
+        except KeyboardInterrupt:
+            self.logger.info("收到键盘中断，停止处理详情页URL")
+            # 保存检查点
+            self.save_checkpoint()
+        except Exception as e:
+            self.logger.error(f"处理详情页URL队列时出错: {str(e)}")
+            # 保存检查点
+            self.save_checkpoint()
 
     def parse_attraction_detail(self, url, attraction_info):
-        """解析景点详情页面（使用Selenium）"""
-        self.logger.info(f"正在爬取景点详情: {attraction_info.get('name', '未知景点')}")
-        
+        """使用selenium爬取马蜂窝景点详情页面，并使用Scrapy选择器解析"""
         try:
             # 初始化 Selenium WebDriver
             driver = webdriver.Edge(service=self.service, options=self.options)
+            # 将driver添加到活动列表中
+            self.active_drivers.append(driver)
             
             # 访问景点详情页面
             driver.get(url)
             
-            # 增加初始等待时间
-            time.sleep(random.uniform(5, 8))
-            
-            # 执行JavaScript来模拟真实浏览器
-            driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-            
-            wait = WebDriverWait(driver, 20)
-            
-            # 创建详情对象
-            detail = {
-                'name': attraction_info.get('name', '未知景点'),
-                'poi_id': attraction_info.get('poi_id'),
-                'link': url,
-                'city': attraction_info.get('city', '未知城市'),
-                'city_id': attraction_info.get('city_id')
-            }
-            
-            # 提取景点名称（如果之前未获取）
-            if detail['name'] == '未知景点' or detail['name'] == '待获取':
+            # 等待页面加载完成
+            try:
+                wait = WebDriverWait(driver, 15)  # 等待最多15秒
+                
+                # 初始化详情字典
+                detail = {
+                    'name': attraction_info.get('name', '未知景点'),
+                    'poi_id': attraction_info.get('poi_id'),
+                    'link': url,
+                    'city': attraction_info.get('city', '未知城市'),
+                    'city_id': attraction_info.get('city_id'),
+                    'crawl_time': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                }
+                
+                # 爬取景点图片
                 try:
-                    name_element = wait.until(
-                        EC.presence_of_element_located((By.XPATH, '//div[contains(@class, "title")]/h1'))
-                    )
-                    detail['name'] = name_element.text.strip()
-                except:
-                    pass
-            
-            # 提取图片
-            try:
-                image_element = wait.until(
-                    EC.presence_of_element_located((By.XPATH, '//div[contains(@class, "pic-big")]/img'))
-                )
-                detail['image'] = image_element.get_attribute('src')
-            except:
+                    # 尝试第一种页面结构
+                    try:
+                        image_element = wait.until(
+                            EC.presence_of_element_located((By.XPATH, '//div[contains(@class, "pic-big")]/img'))
+                        )
+                        detail['image'] = image_element.get_attribute('src')
+                    except (TimeoutException, NoSuchElementException):
+                        # 尝试第二种页面结构
+                        image_element = wait.until(
+                            EC.presence_of_element_located((By.XPATH, '/html/body/div[3]/div[2]/div[1]/div[3]/a/img'))
+                        )
+                        detail['image'] = image_element.get_attribute('src')
+                except (TimeoutException, NoSuchElementException) as e:
+                    self.logger.warning(f"获取景点图片时出错: {str(e)}")
+                    detail['image'] = ''
+                
+                # 提取简介
                 try:
-                    image_element = driver.find_element(By.XPATH, '/html/body/div[2]/div[3]/div[1]/div/a/div/div[1]/img')
-                    detail['image'] = image_element.get_attribute('src')
+                    # 尝试第一种页面结构
+                    try:
+                        summary_element = wait.until(
+                            EC.presence_of_element_located((By.CLASS_NAME, 'summary'))
+                        )
+                        detail['summary'] = summary_element.text.replace('\n', ' ').strip()
+                    except:
+                        # 如果第一种页面结构失败，尝试第二种页面结构
+                        summary_element = wait.until(
+                            EC.presence_of_element_located((By.XPATH, '/html/body/div[3]/div[2]/div[3]/div[2]/div[2]/p[1]'))
+                        )
+                        detail['summary'] = summary_element.text.replace('\n', ' ').strip()
                 except:
-                    detail['image'] = None
-            
-            # 提取简介
-            try:
-                summary_element = wait.until(
-                    EC.presence_of_element_located((By.CLASS_NAME, 'summary'))
-                )
-                detail['summary'] = summary_element.text.replace('\n', ' ').strip()
-            except:
-                detail['summary'] = None
-            
-            # 提取交通信息
-            try:
-                transport_element = driver.find_element(By.XPATH, '//dl[contains(.//dt, "交通")]/dd')
-                detail['transport'] = transport_element.text.strip()
-            except:
-                detail['transport'] = None
-            
-            # 提取门票信息
-            try:
-                ticket_element = driver.find_element(By.XPATH, '//dl[contains(.//dt, "门票")]/dd')
-                ticket_text = ticket_element.text.strip()
-                # 处理门票信息，去除tips等
-                ticket_lines = [line.strip() for line in ticket_text.split('\n') 
-                              if line.strip() and not line.startswith('tips')]
-                detail['ticket'] = ticket_lines[:2] if ticket_lines else None  # 取前两条有效信息
-            except:
-                detail['ticket'] = None
-            
-            # 提取开放时间
-            try:
-                opening_hours_element = driver.find_element(By.XPATH, '//dl[contains(.//dt, "开放时间")]/dd')
-                detail['opening_hours'] = opening_hours_element.text.strip()
-            except:
-                detail['opening_hours'] = None
-            
-            # 提取位置信息
-            try:
-                location_element = driver.find_element(By.XPATH, '//div[contains(@class, "mod-location")]/div/p')
-                detail['location'] = location_element.text.strip()
-            except:
-                detail['location'] = None
-            
-            # 提取评论
-            detail['comments'] = []
-            
-            # 滚动到评论区域
-            try:
-                driver.execute_script("window.scrollTo(0, document.body.scrollHeight/2);")
-                time.sleep(random.uniform(2, 3))
+                    detail['summary'] = None
                 
-                # 等待评论列表加载
-                comment_selectors = [
-                    '//div[contains(@class, "rev-list")]/ul/li',
-                    '//ul[contains(@class, "rev-list")]/li',
-                    '/html/body/div[2]/div[4]/div/div/div[4]/div[1]/ul/li'
-                ]
+                # 提取交通信息
+                try:
+                    # 尝试第一种页面结构
+                    transport_element = driver.find_element(By.XPATH, '//dl[contains(.//dt, "交通")]/dd')
+                    detail['transport'] = transport_element.text.strip()
+                except:
+                    try:
+                        # 如果第一种页面结构失败，尝试第二种页面结构
+                        transport_element = driver.find_element(By.XPATH, '/html/body/div[3]/div[2]/div[3]/div[2]/div[2]/p[5]')
+                        detail['transport'] = transport_element.text.strip()
+                    except:
+                        detail['transport'] = None
                 
-                comment_elements = None
-                for selector in comment_selectors:
-                    elements = driver.find_elements(By.XPATH, selector)
-                    if elements:
-                        comment_elements = elements
-                        break
+                # 提取门票信息
+                try:
+                    ticket_element = driver.find_element(By.XPATH, '//dl[contains(.//dt, "门票")]/dd')
+                    ticket_text = ticket_element.text.strip()
+                    # 处理门票信息，去除tips等
+                    ticket_lines = [line.strip() for line in ticket_text.split('\n') 
+                                  if line.strip() and not line.startswith('tips')]
+                    detail['ticket'] = ticket_lines[:2] if ticket_lines else None  # 取前两条有效信息
+                except:
+                    detail['ticket'] = None
                 
-                if comment_elements:
-                    # 提取评论文本
-                    for comment_element in comment_elements[:10]:  # 限制为前10条评论
+                # 提取开放时间
+                try:
+                    opening_hours_element = driver.find_element(By.XPATH, '//dl[contains(.//dt, "开放时间")]/dd')
+                    detail['opening_hours'] = opening_hours_element.text.strip()
+                except:
+                    detail['opening_hours'] = None
+                
+                # 提取位置信息
+                try:
+                    # 尝试第一种页面结构
+                    try:
+                        location_element = driver.find_element(By.XPATH, '//div[contains(@class, "mod-location")]/div/p')
+                        detail['location'] = location_element.text.strip()
+                    except:
+                        # 如果第一种页面结构失败，尝试第二种页面结构
+                        location_element = driver.find_element(By.XPATH, '/html/body/div[3]/div[2]/div[3]/div[2]/div[2]/p[3]')
+                        detail['location'] = location_element.text.strip()
+                except:
+                    detail['location'] = None
+                
+                # 提取评论
+                detail['comments'] = []
+                detail['comment_count'] = 0  # 初始化评论数量
+                try:
+                    # 设置最大评论数
+                    max_comments = 75  # 最多获取75条评论
+                    
+                    while len(detail['comments']) < max_comments:
                         try:
-                            comment_text_element = comment_element.find_element(By.XPATH, './/p[contains(@class, "rev-txt")]')
-                            comment_text = comment_text_element.text.strip()
-                            if comment_text:
-                                detail['comments'].append(comment_text)
-                        except:
-                            continue
+                            # 尝试第一种页面结构
+                            try:
+                                # 等待评论列表加载
+                                comment_list = WebDriverWait(driver, 10).until(
+                                    EC.presence_of_element_located((By.XPATH, '/html/body/div[2]/div[4]/div/div/div[4]/div[1]/ul'))
+                                )
+                                
+                                # 获取当前页面的所有评论
+                                comment_items = comment_list.find_elements(By.TAG_NAME, 'li')
+                                
+                                if not comment_items:
+                                    self.logger.info("第一种结构没有找到评论项，尝试第二种结构")
+                                    raise Exception("没有找到评论项")
+                                
+                                # 提取每条评论的内容
+                                for item in comment_items:
+                                    try:
+                                        comment_text = item.find_element(By.TAG_NAME, 'p').text
+                                        if comment_text:
+                                            detail['comments'].append(comment_text)
+                                            detail['comment_count'] += 1
+                                            self.logger.debug(f"已获取评论: {comment_text[:20]}...")
+                                            
+                                            # 如果已经达到75条评论，就停止
+                                            if len(detail['comments']) >= max_comments:
+                                                break
+                                    except Exception as e:
+                                        self.logger.error(f"提取评论文本时出错: {e}")
+                            
+                            except Exception:
+                                # 尝试第二种页面结构
+                                self.logger.info("尝试第二种页面结构获取评论")
+                                comment_container = WebDriverWait(driver, 10).until(
+                                    EC.presence_of_element_located((By.XPATH, '/html/body/div[3]/div[2]/div[3]/div[4]/div[4]'))
+                                )
+                                
+                                # 获取所有评论div
+                                comment_divs = comment_container.find_elements(By.XPATH, './div')
+                                
+                                if not comment_divs:
+                                    self.logger.info("第二种结构没有找到评论项")
+                                    break
+                                
+                                # 提取每条评论的内容
+                                for div in comment_divs:
+                                    try:
+                                        comment_text = div.find_element(By.XPATH, './/div[2]/div/div[1]/p').text
+                                        if comment_text:
+                                            detail['comments'].append(comment_text)
+                                            detail['comment_count'] += 1
+                                            self.logger.debug(f"已获取评论(第二种结构): {comment_text[:20]}...")
+                                            
+                                            # 如果已经达到75条评论，就停止
+                                            if len(detail['comments']) >= max_comments:
+                                                break
+                                    except Exception as e:
+                                        self.logger.error(f"提取第二种结构评论文本时出错: {e}")
+                            
+                            # 如果已经达到75条评论，就停止
+                            if len(detail['comments']) >= max_comments:
+                                break
+                            
+                            # 尝试查找"后一页"按钮
+                            try:
+                                try:
+                                    # 第一种页面结构
+                                    pagination_div = driver.find_element(By.XPATH, '/html/body/div[2]/div[4]/div/div/div[4]/div[2]')
+                                    next_page = pagination_div.find_element(By.XPATH, './/a[@class="pi pg-next" and @title="后一页"]')
+                                    driver.execute_script("arguments[0].click();", next_page)
+                                except Exception:
+                                    # 第二种页面结构
+                                    self.logger.info("尝试第二种页面结构的分页")
+                                    pagination_div = driver.find_element(By.XPATH, '/html/body/div[3]/div[2]/div[3]/div[4]/div[5]/div')
+                                    next_page = pagination_div.find_element(By.XPATH, './/a[contains(text(), "Next")]')
+                                    driver.execute_script("arguments[0].click();", next_page)
+                                
+                                # 等待新页面加载
+                                time.sleep(random.uniform(2, 4))
+
+                            except Exception as e:
+                                self.logger.error(f"翻页时出错: {e}")
+                                break
+                            
+                        except Exception as e:
+                            self.logger.error(f"获取评论列表时出错: {e}")
+                            break
+                    
+                    self.logger.info(f"共获取了 {len(detail['comments'])} 条评论")
+                    
+                except Exception as e:
+                    self.logger.warning(f"提取评论时出错: {str(e)}")
+                
+                # 保存到Redis
+                self.save_attraction_detail_to_redis(detail)
+                
             except Exception as e:
-                self.logger.warning(f"提取评论时出错: {str(e)}")
-            
-            # 保存到Redis
-            self.save_attraction_detail_to_redis(detail)
-            
-            # 关闭driver
+                self.logger.error(f"爬取景点详情页时出错: {str(e)}")
+        finally:
             driver.quit()
-            
-        except Exception as e:
-            self.logger.error(f"爬取景点详情时出错: {str(e)}")
-            if 'driver' in locals():
-                driver.quit()
-    
+            # 从活动列表中移除
+            if driver in self.active_drivers:
+                self.active_drivers.remove(driver)
+        
     def save_attraction_detail_to_redis(self, detail):
         """将景点详情保存到Redis"""
         try:
@@ -933,6 +1119,16 @@ class ChinaAttractionsDBSpider(scrapy.Spider):
             self.checkpoint_thread.join(timeout=5)
             self.logger.info("已停止定期保存检查点线程")
         
+        # 关闭所有活动的浏览器实例
+        if hasattr(self, 'active_drivers'):
+            for driver in list(self.active_drivers):
+                try:
+                    self.logger.info("正在关闭浏览器实例...")
+                    driver.quit()
+                    self.active_drivers.remove(driver)
+                except Exception as e:
+                    self.logger.error(f"关闭浏览器实例时出错: {str(e)}")
+        
         # 保存断点续爬检查点
         self.save_checkpoint()
         
@@ -956,44 +1152,8 @@ class ChinaAttractionsDBSpider(scrapy.Spider):
             self.logger.info(f"爬取统计: 处理城市页面 {cities_processed} 个，处理列表页面 {list_processed} 个，处理详情页面 {detail_processed} 个")
             self.logger.info(f"数据统计: 保存城市 {city_count} 个，保存景点 {attraction_count} 个")
             
-            # 导出Redis中的景点数据到JSON文件
-            self.export_attractions_to_json()
-            
         except Exception as e:
             self.logger.error(f"记录爬取统计信息失败: {str(e)}")
-    
-    def export_attractions_to_json(self):
-        """将Redis中的景点数据导出到JSON文件"""
-        try:
-            # 获取所有景点的键
-            attraction_keys = self.redis_client.smembers("china:attractions:all")
-            
-            if not attraction_keys:
-                self.logger.warning("未找到任何景点数据，无法导出")
-                return
-            
-            # 从Redis中获取所有景点数据
-            attractions = []
-            for key in attraction_keys:
-                data = self.redis_client.get(key)
-                if data:
-                    try:
-                        attraction = json.loads(data)
-                        attractions.append(attraction)
-                    except json.JSONDecodeError:
-                        self.logger.error(f"景点数据格式错误: {key}")
-            
-            # 确保输出目录存在
-            os.makedirs('results', exist_ok=True)
-            
-            # 将数据写入JSON文件
-            output_file = 'attractions_distributed.json'
-            with open(output_file, 'w', encoding='utf-8') as f:
-                json.dump(attractions, f, ensure_ascii=False, indent=4)
-            
-            self.logger.info(f"已将 {len(attractions)} 个景点数据导出到 {output_file}")
-        except Exception as e:
-            self.logger.error(f"导出景点数据到JSON文件失败: {str(e)}")
 
 # 如果直接运行此文件，则启动爬虫
 if __name__ == "__main__":
