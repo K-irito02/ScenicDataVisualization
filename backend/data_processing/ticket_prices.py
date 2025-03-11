@@ -140,7 +140,13 @@ class TicketPriceProcessor:
         
         # 处理列表类型的票价数据
         if isinstance(ticket_text, list):
-            ticket_text = ' '.join(str(item) for item in ticket_text)  # 将列表转换为字符串
+            # 过滤掉参考信息和半票说明
+            filtered_text = []
+            for item in ticket_text:
+                if isinstance(item, str):
+                    if not any(x in item.lower() for x in ['仅供参考', '以上信息']):
+                        filtered_text.append(item)
+            ticket_text = ' '.join(filtered_text)
         
         # 处理数字类型的票价
         if isinstance(ticket_text, (int, float)):
@@ -171,17 +177,105 @@ class TicketPriceProcessor:
             'has_time_periods': False
         }
         
-        # 检查是否免费
-        if '免费' in ticket_text:
-            result['ticket'] = '免费'
+        # 检查是否免费（包括各种免费表述方式）
+        free_patterns = [
+            r'免费',
+            r'免票',
+            r'无门票',
+            r'无需门票',
+            r'凭.*参观',
+            r'包括.*内',
+            r'包括.*中',
+            r'包含.*中',
+            r'包含.*内',
+            r'已含.*内',
+            r'已含.*中',
+            r'.*已含',
+        ]
         
+        for pattern in free_patterns:
+            if re.search(pattern, ticket_text):
+                result['ticket'] = '免费'
+                return result
+        
+        # 处理套票并计算单人价格
+        if '套票' in ticket_text or '人）' in ticket_text:
+            prices = re.findall(r'(\d+)元[（\(](\d+)人', ticket_text)
+            if prices:
+                single_prices = [int(price) / int(people) for price, people in prices]
+                if single_prices:
+                    result['ticket'] = ','.join(map(str, single_prices))
+                    return result
+
+        # 处理往返和单程票价
+        if '往返' in ticket_text or '单程' in ticket_text:
+            result['has_other_fees'] = True
+            # 提取往返价格
+            round_trip_prices = re.findall(r'往返[：:]*(\d+(?:\.\d+)?)', ticket_text)
+            # 提取单程价格
+            single_trip_prices = re.findall(r'单程[：:]*(\d+(?:\.\d+)?)', ticket_text)
+            
+            if round_trip_prices or single_trip_prices:
+                all_prices = []
+                if round_trip_prices:
+                    all_prices.extend(round_trip_prices)
+                if single_trip_prices:
+                    all_prices.extend(single_trip_prices)
+                result['ticket'] = ','.join(all_prices)
+
+        # 处理旺季/淡季票价
+        if '旺季' in ticket_text or '淡季' in ticket_text:
+            result['has_time_periods'] = True
+            # 提取旺季价格
+            peak_prices = re.findall(r'旺季[：:]*(\d+(?:\.\d+)?)', ticket_text)
+            # 提取淡季价格
+            off_peak_prices = re.findall(r'淡季[：:]*(\d+(?:\.\d+)?)', ticket_text)
+            
+            if peak_prices or off_peak_prices:
+                all_prices = []
+                if peak_prices:
+                    all_prices.extend(peak_prices)
+                if off_peak_prices:
+                    all_prices.extend(off_peak_prices)
+                result['ticket'] = ','.join(all_prices)
+
+        # 处理平日/周末票价
+        if '平日' in ticket_text or '周末' in ticket_text:
+            result['has_time_periods'] = True
+            # 提取平日价格
+            weekday_prices = re.findall(r'平日[^0-9]*(\d+(?:\.\d+)?)', ticket_text)
+            # 提取周末价格
+            weekend_prices = re.findall(r'周末[^0-9]*(\d+(?:\.\d+)?)', ticket_text)
+            
+            if weekday_prices or weekend_prices:
+                all_prices = []
+                if weekday_prices:
+                    all_prices.extend(weekday_prices)
+                if weekend_prices:
+                    all_prices.extend(weekend_prices)
+                result['ticket'] = ','.join(all_prices)
+
+        # 处理联票/通票
+        if '联票' in ticket_text or '通票' in ticket_text:
+            result['has_other_fees'] = True
+            prices = re.findall(r'[联通]票[：:]*(\d+(?:\.\d+)?)', ticket_text)
+            if prices:
+                result['ticket'] = ','.join(prices)
+
         # 提取票价
         # 通用票价模式
         price_patterns = [
-            r'门票[：:]*(\d+(?:\.\d+)?)',  # 匹配门票价格
-            r'票价[：:]*(\d+(?:\.\d+)?)',  # 匹配票价
-            r'[\(（]?(\d+(?:\.\d+)?)元[\)）]?',  # 匹配元
-            r'价格[：:]*(\d+(?:\.\d+)?)'  # 匹配价格
+            r'普通票[：:]*(\d+(?:\.\d+)?)',
+            r'门票[：:]*(\d+(?:\.\d+)?)',
+            r'票价[：:]*(\d+(?:\.\d+)?)',
+            r'[\(（]?(\d+(?:\.\d+)?)元[\)）]?',
+            r'价格[：:]*(\d+(?:\.\d+)?)',
+            r'(\d+)人民币',
+            r'(\d+)人元',
+            r'(\d+(?:\.\d+)?)\s*元\s*/\s*人',
+            r'(\d+(?:\.\d+)?)/人',
+            r'人均[：:]*(\d+(?:\.\d+)?)',
+            r'^\d+(?:\.\d+)?$',  # 匹配纯数字
         ]
         
         for pattern in price_patterns:
@@ -205,8 +299,9 @@ class TicketPriceProcessor:
         
         # 提取半价票
         half_price_patterns = [
-            r'半价票[：:]*(\d+(?:\.\d+)?)',  # 匹配半价票
-            r'半票[：:]*(\d+(?:\.\d+)?)'  # 匹配半票
+            r'半价票[：:]*(\d+(?:\.\d+)?)[元人民币]',  # 匹配半价票
+            r'半票[：:]*(\d+(?:\.\d+)?)[元人民币]',  # 匹配半票
+            r'半价[：:]*(\d+(?:\.\d+)?)[元人民币]'  # 匹配半价
         ]
         
         for pattern in half_price_patterns:
@@ -252,35 +347,27 @@ class TicketPriceProcessor:
             if discount_prices:
                 result['discount_ticket'] = ','.join(discount_prices)  # 将优惠票用逗号分隔
                 break
-        
+
         # 检查是否有其他费用
-        other_fees_keywords = [
-            '观光车', '游艇', '往返车票', '联票', '展览票', '讲解费'  # 其他费用关键词
+        other_fees_patterns = [
+            '观光车', '游艇', '往返车票', '联票', '通票', '展览票', '讲解费', '缆车', 
+            '索道', '雪具', '清洁费', '出海', r'凭.*参观', r'包括.*内', r'包括.*中', 
+            r'包含.*中', r'包含.*内', r'已含.*内', r'已含.*中', r'.*已含',
         ]
         
-        for keyword in other_fees_keywords:
-            if keyword in ticket_text:
-                result['has_other_fees'] = True  # 如果包含关键词，标记为有其他费用
+        for pattern in other_fees_patterns:
+            if re.search(pattern, ticket_text):
+                result['has_other_fees'] = True
                 break
         
         # 检查是否有免票或优惠
         free_discount_keywords = [
-            '免票', '优惠', '优待', '半票优惠'  # 免票或优惠关键词
+            '免票', '优惠', '优待', '半价', '学生', '老年人', '军人', '残疾人', '半票'  # 免票或优惠关键词
         ]
         
         for keyword in free_discount_keywords:
             if keyword in ticket_text:
                 result['has_free_or_discount'] = True  # 如果包含关键词，标记为有免票或优惠
-                break
-        
-        # 检查是否分时段
-        time_period_keywords = [
-            '旺季', '淡季', '平日', '周末'  # 分时段关键词
-        ]
-        
-        for keyword in time_period_keywords:
-            if keyword in ticket_text:
-                result['has_time_periods'] = True  # 如果包含关键词，标记为分时段
                 break
         
         return result
