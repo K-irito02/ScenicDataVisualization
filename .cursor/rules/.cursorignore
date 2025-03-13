@@ -1,0 +1,25 @@
+
+# 忽略爬虫文件'crawler'
+crawler/
+
+# 忽略数据处理文件'data_processing'
+data_processing/
+
+# 忽略后端文件'backend'
+backend/
+manage.py
+
+# 忽略数据处理测试文件'ceshi.py'
+ceshi.py
+
+# 忽略根目录下的json文件
+*.json
+
+# 忽略数据AI聚合文件'ai_result_cache'
+ai_result_cache/
+
+
+
+
+
+
