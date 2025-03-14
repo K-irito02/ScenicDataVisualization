@@ -13,34 +13,29 @@
           text-color="#bfcbd9"
           active-text-color="#409EFF"
         >
-          <el-menu-item index="/dashboard/overview">
-            <el-icon><DataLine /></el-icon>
-            <span>总览</span>
-          </el-menu-item>
-          
-          <el-menu-item index="/dashboard/geographic">
+          <el-menu-item index="/dashboard/basic">
             <el-icon><MapLocation /></el-icon>
-            <span>地理分布</span>
+            <span>景区基础分布分析</span>
           </el-menu-item>
           
-          <el-menu-item index="/dashboard/attribute">
-            <el-icon><Connection /></el-icon>
-            <span>属性关联</span>
+          <el-menu-item index="/dashboard/classification">
+            <el-icon><TrophyBase /></el-icon>
+            <span>景区等级与分类分析</span>
           </el-menu-item>
           
-          <el-menu-item index="/dashboard/feedback">
+          <el-menu-item index="/dashboard/ticket">
+            <el-icon><Tickets /></el-icon>
+            <span>门票与开放时间分析</span>
+          </el-menu-item>
+          
+          <el-menu-item index="/dashboard/comment">
             <el-icon><ChatDotRound /></el-icon>
-            <span>用户反馈</span>
+            <span>评论与情感分析</span>
           </el-menu-item>
           
-          <el-menu-item index="/dashboard/identity">
-            <el-icon><SetUp /></el-icon>
-            <span>身份交叉</span>
-          </el-menu-item>
-          
-          <el-menu-item index="/dashboard/traffic">
+          <el-menu-item index="/dashboard/transportation">
             <el-icon><Van /></el-icon>
-            <span>交通分析</span>
+            <span>交通与可达性分析</span>
           </el-menu-item>
           
           <el-menu-item index="/dashboard/search">
@@ -94,8 +89,8 @@ import { ref, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessageBox } from 'element-plus'
 import { 
-  DataLine, MapLocation, Connection, ChatDotRound, 
-  SetUp, Van, Search, User, Fold, ArrowDown 
+  MapLocation, ChatDotRound, Van, Search, 
+  User, Fold, ArrowDown, TrophyBase, Tickets 
 } from '@element-plus/icons-vue'
 import { useUserStore } from '@/store/user'
 
@@ -113,12 +108,11 @@ const toggleSidebar = () => {
 const getPageTitle = () => {
   const path = route.path
   const routeMap: Record<string, string> = {
-    '/dashboard/overview': '总览',
-    '/dashboard/geographic': '地理分布',
-    '/dashboard/attribute': '属性关联',
-    '/dashboard/feedback': '用户反馈',
-    '/dashboard/identity': '身份交叉',
-    '/dashboard/traffic': '交通分析',
+    '/dashboard/basic': '景区基础分布分析',
+    '/dashboard/classification': '景区等级与分类分析',
+    '/dashboard/ticket': '门票与开放时间分析',
+    '/dashboard/comment': '评论与情感分析',
+    '/dashboard/transportation': '交通与可达性分析',
     '/dashboard/search': '景区搜索',
     '/dashboard/profile': '个人中心'
   }

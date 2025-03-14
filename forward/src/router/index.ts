@@ -23,37 +23,32 @@ const routes: Array<RouteRecordRaw> = [
     children: [
       {
         path: '',
-        redirect: '/dashboard/overview'
+        redirect: '/dashboard/basic'
       },
       {
-        path: 'overview',
-        name: 'Overview',
-        component: () => import('../views/dashboard/Overview.vue')
+        path: 'basic',
+        name: 'Basic',
+        component: () => import('../views/dashboard/Basic.vue')
       },
       {
-        path: 'geographic',
-        name: 'Geographic',
-        component: () => import('../views/dashboard/Geographic.vue')
+        path: 'classification',
+        name: 'Classification',
+        component: () => import('../views/dashboard/Classification.vue')
       },
       {
-        path: 'attribute',
-        name: 'Attribute',
-        component: () => import('../views/dashboard/Attribute.vue')
+        path: 'ticket',
+        name: 'Ticket',
+        component: () => import('../views/dashboard/Ticket.vue')
       },
       {
-        path: 'feedback',
-        name: 'Feedback',
-        component: () => import('../views/dashboard/Feedback.vue')
+        path: 'comment',
+        name: 'Comment',
+        component: () => import('../views/dashboard/Comment.vue')
       },
       {
-        path: 'identity',
-        name: 'Identity',
-        component: () => import('../views/dashboard/Identity.vue')
-      },
-      {
-        path: 'traffic',
-        name: 'Traffic',
-        component: () => import('../views/dashboard/Traffic.vue')
+        path: 'transportation',
+        name: 'Transportation',
+        component: () => import('../views/dashboard/Transportation.vue')
       },
       {
         path: 'search',
