@@ -12,8 +12,8 @@ manage.py
 # 忽略数据处理测试文件'ceshi.py'
 ceshi.py
 
-# 忽略根目录下的json文件
-*.json
+# 忽略根目录下的'Scenic Area Category'文件
+Scenic Area Category/
 
 # 忽略数据AI聚合文件'ai_result_cache'
 ai_result_cache/

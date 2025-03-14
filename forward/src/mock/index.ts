@@ -10,22 +10,38 @@ interface MockRequest {
 
 // 用户登录API
 Mock.mock('/api/user/login', 'post', (options: MockRequest) => {
-  const { username, password } = JSON.parse(options.body)
+  const { account, password } = JSON.parse(options.body)
   
-  // 简单的用户名密码验证
-  if (username && password) {
+  // 判断是否为邮箱格式
+  const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(account)
+  
+  // 模拟用户数据
+  const users = [
+    { username: 'admin', email: 'admin@example.com', password: 'admin123', role: 'admin' },
+    { username: 'zhangsan', email: 'zhangsan@example.com', password: '123456', role: 'user' },
+    { username: 'lisi', email: 'lisi@example.com', password: '123456', role: 'vip' }
+  ]
+  
+  // 根据账号类型查找用户
+  const user = isEmail 
+    ? users.find(u => u.email === account) 
+    : users.find(u => u.username === account)
+  
+  // 验证密码
+  if (user && user.password === password) {
     return {
       code: 200,
       data: {
-        token: 'user_mock_token_' + Mock.Random.guid(),
-        username: username
+        token: 'mock_token_' + Mock.Random.guid(),
+        username: user.username,
+        isAdmin: user.role === 'admin'
       },
       message: '登录成功'
     }
   } else {
     return {
       code: 401,
-      message: '用户名或密码错误'
+      message: '账号或密码错误'
     }
   }
 })
@@ -250,5 +266,137 @@ Mock.mock('/api/user/favorite', 'delete', () => {
     message: '取消收藏成功'
   }
 })
+
+// 保存验证码和对应邮箱的映射
+const emailVerifyCodes: Record<string, string> = {};
+
+// 获取验证码API
+Mock.mock(/\/api\/user\/verify-code/, 'get', (options: MockRequest) => {
+  const url = options.url;
+  const params = new URLSearchParams(url.split('?')[1]);
+  const email = params.get('email');
+  
+  if (!email) {
+    return {
+      code: 400,
+      message: '邮箱地址不能为空'
+    }
+  }
+  
+  // 生成4位随机数字验证码
+  const verifyCode = Mock.Random.string('0123456789', 4);
+  
+  // 保存验证码，实际项目中通常会设置过期时间
+  emailVerifyCodes[email] = verifyCode;
+  
+  console.log(`邮箱${email}的验证码: ${verifyCode}`);
+  
+  return {
+    code: 200,
+    message: '验证码已发送',
+    data: { 
+      // 正常情况下不应返回验证码，这里为了方便测试
+      verifyCode: verifyCode
+    }
+  }
+});
+
+// 用户注册API
+Mock.mock('/api/user/register', 'post', (options: MockRequest) => {
+  const { username, password, email, verifyCode } = JSON.parse(options.body);
+  
+  // 验证必填字段
+  if (!username || !password || !email || !verifyCode) {
+    return {
+      code: 400,
+      message: '所有字段都必须填写'
+    }
+  }
+  
+  // 验证码校验
+  const savedCode = emailVerifyCodes[email];
+  if (!savedCode || savedCode !== verifyCode) {
+    return {
+      code: 400,
+      message: '验证码错误或已过期'
+    }
+  }
+  
+  // 验证成功后清除验证码
+  delete emailVerifyCodes[email];
+  
+  return {
+    code: 200,
+    message: '注册成功',
+    data: {
+      username: username
+    }
+  }
+});
+
+// 保存重置密码验证码
+const resetPasswordCodes: Record<string, string> = {};
+
+// 获取重置密码验证码API
+Mock.mock(/\/api\/user\/reset-password-code/, 'get', (options: MockRequest) => {
+  const url = options.url;
+  const params = new URLSearchParams(url.split('?')[1]);
+  const email = params.get('email');
+  
+  if (!email) {
+    return {
+      code: 400,
+      message: '邮箱地址不能为空'
+    }
+  }
+  
+  // 生成4位随机数字验证码
+  const verifyCode = Mock.Random.string('0123456789', 4);
+  
+  // 保存验证码
+  resetPasswordCodes[email] = verifyCode;
+  
+  console.log(`重置密码验证码(${email}): ${verifyCode}`);
+  
+  return {
+    code: 200,
+    message: '验证码已发送到邮箱',
+    data: { 
+      // 开发环境返回验证码便于测试
+      verifyCode: verifyCode
+    }
+  }
+});
+
+// 重置密码API
+Mock.mock('/api/user/reset-password', 'post', (options: MockRequest) => {
+  const { email, verifyCode, newPassword } = JSON.parse(options.body);
+  
+  // 验证必填字段
+  if (!email || !verifyCode || !newPassword) {
+    return {
+      code: 400,
+      message: '所有字段都必须填写'
+    }
+  }
+  
+  // 验证码校验
+  const savedCode = resetPasswordCodes[email];
+  if (!savedCode || savedCode !== verifyCode) {
+    return {
+      code: 400,
+      message: '验证码错误或已过期'
+    }
+  }
+  
+  // 验证成功后清除验证码
+  delete resetPasswordCodes[email];
+  
+  return {
+    code: 200,
+    message: '密码重置成功',
+    data: null
+  }
+});
 
 export default Mock 

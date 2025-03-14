@@ -90,6 +90,11 @@ const routes: Array<RouteRecordRaw> = [
     ]
   },
   {
+    path: '/forgot-password',
+    name: 'ForgotPassword',
+    component: () => import('../views/login/ForgotPassword.vue')
+  },
+  {
     path: '/:pathMatch(.*)*',
     name: 'NotFound',
     component: () => import('../views/NotFound.vue')

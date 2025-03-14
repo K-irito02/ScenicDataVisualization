@@ -1,56 +1,34 @@
 <template>
   <div class="register-container">
     <div class="register-box">
-      <div class="title">
-        <h1>全国景区数据可视化系统</h1>
-        <h3>用户注册</h3>
-      </div>
+      <h2 class="title">全国景区数据可视化系统</h2>
+      <h3 class="subtitle">用户注册</h3>
       
-      <el-form :model="registerForm" :rules="registerRules" ref="registerFormRef">
+      <el-form ref="registerFormRef" :model="registerForm" :rules="registerRules" class="register-form">
         <el-form-item prop="username">
           <el-input 
             v-model="registerForm.username" 
-            placeholder="请输入用户名" 
-            @blur="validateField('username')"
-          >
-            <template #prefix>
-              <el-icon><User /></el-icon>
-            </template>
-            <template #suffix v-if="validStatus.username === 'valid'">
-              <el-icon class="valid-icon"><Check /></el-icon>
-            </template>
-          </el-input>
+            placeholder="请输入用户名"
+            prefix-icon="User"
+          />
         </el-form-item>
         
         <el-form-item prop="email">
           <el-input 
             v-model="registerForm.email" 
-            placeholder="请输入邮箱" 
-            @blur="validateField('email')"
-          >
-            <template #prefix>
-              <el-icon><Message /></el-icon>
-            </template>
-            <template #suffix v-if="validStatus.email === 'valid'">
-              <el-icon class="valid-icon"><Check /></el-icon>
-            </template>
-          </el-input>
+            placeholder="请输入邮箱"
+            prefix-icon="Message"
+          />
         </el-form-item>
         
         <el-form-item prop="password">
           <el-input 
             v-model="registerForm.password" 
             type="password" 
-            placeholder="请输入密码" 
-            @blur="validateField('password')"
-          >
-            <template #prefix>
-              <el-icon><Lock /></el-icon>
-            </template>
-            <template #suffix v-if="validStatus.password === 'valid'">
-              <el-icon class="valid-icon"><Check /></el-icon>
-            </template>
-          </el-input>
+            placeholder="请输入密码"
+            prefix-icon="Lock"
+            show-password
+          />
         </el-form-item>
         
         <el-form-item prop="confirmPassword">
@@ -58,25 +36,43 @@
             v-model="registerForm.confirmPassword" 
             type="password" 
             placeholder="请确认密码"
-            @blur="validateField('confirmPassword')"
+            prefix-icon="Lock"
+            show-password
+          />
+        </el-form-item>
+        
+        <el-form-item prop="verifyCode" class="verify-code-item">
+          <el-input 
+            v-model="registerForm.verifyCode" 
+            placeholder="请输入验证码"
+            prefix-icon="Key"
+            maxlength="4"
+          />
+          <el-button 
+            :disabled="cooldown > 0" 
+            @click="getCode" 
+            class="get-code-btn"
           >
-            <template #prefix>
-              <el-icon><Lock /></el-icon>
-            </template>
-            <template #suffix v-if="validStatus.confirmPassword === 'valid'">
-              <el-icon class="valid-icon"><Check /></el-icon>
-            </template>
-          </el-input>
+            {{ cooldown > 0 ? `${cooldown}秒后重新获取` : '获取验证码' }}
+          </el-button>
         </el-form-item>
         
         <el-form-item>
-          <el-button type="primary" class="register-btn" @click="handleRegister" :loading="loading">注册</el-button>
+          <el-button 
+            type="primary" 
+            :loading="loading" 
+            class="register-button" 
+            @click="handleRegister"
+          >
+            注册
+          </el-button>
         </el-form-item>
+        
+        <div class="options">
+          <span>已有账号？</span>
+          <router-link to="/login" class="login-link">返回登录</router-link>
+        </div>
       </el-form>
-      
-      <div class="actions">
-        <span class="back-to-login" @click="$router.push('/login')">返回登录</span>
-      </div>
     </div>
   </div>
 </template>
@@ -84,45 +80,37 @@
 <script setup lang="ts">
 import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
-import type { FormInstance } from 'element-plus'
 import { ElMessage } from 'element-plus'
-import { User, Lock, Message, Check } from '@element-plus/icons-vue'
-import { register } from '@/api/user'
+import type { FormInstance, FormRules } from 'element-plus'
+import { register, getVerifyCode } from '@/api/user'
 
 const router = useRouter()
-const registerFormRef = ref<FormInstance>()
 const loading = ref(false)
+const cooldown = ref(0)
+const registerFormRef = ref<FormInstance>()
 
+// 注册表单数据
 const registerForm = reactive({
   username: '',
   email: '',
   password: '',
-  confirmPassword: ''
+  confirmPassword: '',
+  verifyCode: ''
 })
 
-// 验证状态对象：未验证|验证中|验证通过
-const validStatus = reactive({
-  username: '',
-  email: '',
-  password: '',
-  confirmPassword: ''
-})
-
-// 验证确认密码
-const validateConfirmPassword = (_: any, value: string, callback: any) => {
-  if (value === '') {
-    callback(new Error('请再次输入密码'))
-  } else if (value !== registerForm.password) {
-    callback(new Error('两次输入密码不一致'))
+// 表单验证规则
+const validateConfirmPassword = (_rule: any, value: string, callback: any) => {
+  if (value !== registerForm.password) {
+    callback(new Error('两次输入的密码不一致'))
   } else {
     callback()
   }
 }
 
-const registerRules = {
+const registerRules = reactive<FormRules>({
   username: [
     { required: true, message: '请输入用户名', trigger: 'blur' },
-    { min: 3, max: 20, message: '用户名长度应在3-20个字符之间', trigger: 'blur' }
+    { min: 3, max: 20, message: '用户名长度在3到20个字符之间', trigger: 'blur' }
   ],
   email: [
     { required: true, message: '请输入邮箱', trigger: 'blur' },
@@ -130,40 +118,69 @@ const registerRules = {
   ],
   password: [
     { required: true, message: '请输入密码', trigger: 'blur' },
-    { min: 6, max: 20, message: '密码长度应在6-20个字符之间', trigger: 'blur' }
+    { min: 6, message: '密码长度不能小于6位', trigger: 'blur' }
   ],
   confirmPassword: [
     { required: true, message: '请确认密码', trigger: 'blur' },
     { validator: validateConfirmPassword, trigger: 'blur' }
+  ],
+  verifyCode: [
+    { required: true, message: '请输入验证码', trigger: 'blur' },
+    { len: 4, message: '验证码为4位数字', trigger: 'blur' }
   ]
+})
+
+// 获取验证码
+const getCode = async () => {
+  // 首先验证邮箱
+  registerFormRef.value?.validateField('email', async (valid) => {
+    if (!valid) {
+      try {
+        const res = await getVerifyCode(registerForm.email)
+        ElMessage.success('验证码已发送')
+        
+        // 开始倒计时
+        cooldown.value = 60
+        const timer = setInterval(() => {
+          cooldown.value--
+          if (cooldown.value <= 0) {
+            clearInterval(timer)
+          }
+        }, 1000)
+        
+        // 如果在开发环境下，自动填充验证码（便于测试）
+        if (import.meta.env.MODE === 'development' && res.data?.verifyCode) {
+          registerForm.verifyCode = res.data.verifyCode
+        }
+      } catch (error: any) {
+        console.error('获取验证码失败:', error)
+        ElMessage.error('获取验证码失败')
+      }
+    }
+  })
 }
 
-// 验证单个字段
-const validateField = async (field: string) => {
-  if (!registerFormRef.value) return
-  
-  try {
-    await registerFormRef.value.validateField(field)
-    validStatus[field as keyof typeof validStatus] = 'valid'
-  } catch (error) {
-    validStatus[field as keyof typeof validStatus] = 'invalid'
-  }
-}
-
+// 注册处理函数
 const handleRegister = async () => {
   if (!registerFormRef.value) return
   
   await registerFormRef.value.validate(async (valid) => {
     if (valid) {
       loading.value = true
+      
       try {
-        const { username, email, password } = registerForm
-        await register(username, password, email)
+        const res = await register(
+          registerForm.username,
+          registerForm.password,
+          registerForm.email,
+          registerForm.verifyCode
+        )
         
-        ElMessage.success('注册成功，请登录')
+        ElMessage.success(res.data?.message || '注册成功')
         router.push('/login')
-      } catch (error) {
+      } catch (error: any) {
         console.error('注册失败:', error)
+        ElMessage.error(error.message || '注册失败')
       } finally {
         loading.value = false
       }
@@ -174,57 +191,68 @@ const handleRegister = async () => {
 
 <style scoped>
 .register-container {
+  height: 100vh;
+  width: 100%;
+  background-color: #409EFF;
   display: flex;
   justify-content: center;
   align-items: center;
-  height: 100vh;
-  background: linear-gradient(135deg, #1976d2, #64b5f6);
 }
 
 .register-box {
   width: 400px;
-  padding: 40px;
+  padding: 30px;
   background-color: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+  border-radius: 4px;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
 }
 
 .title {
   text-align: center;
-  margin-bottom: 30px;
-}
-
-.title h1 {
-  color: #333;
-  font-size: 24px;
   margin-bottom: 10px;
+  color: #333;
+  font-size: 22px;
 }
 
-.title h3 {
+.subtitle {
+  text-align: center;
+  margin-bottom: 20px;
   color: #666;
   font-size: 16px;
 }
 
-.register-btn {
-  width: 100%;
-}
-
-.actions {
-  display: flex;
-  justify-content: flex-end;
+.register-form {
   margin-top: 20px;
 }
 
-.back-to-login {
-  color: #1976d2;
-  cursor: pointer;
+.verify-code-item :deep(.el-form-item__content) {
+  display: flex;
+  gap: 10px;
 }
 
-.back-to-login:hover {
+.get-code-btn {
+  width: 120px;
+  flex-shrink: 0;
+}
+
+.register-button {
+  width: 100%;
+}
+
+.options {
+  display: flex;
+  justify-content: center;
+  margin-top: 15px;
+  color: #666;
+}
+
+.login-link {
+  margin-left: 5px;
+  color: #409EFF;
+  text-decoration: none;
+}
+
+.login-link:hover {
   text-decoration: underline;
-}
-
-.valid-icon {
-  color: #67c23a;
 }
 </style> 

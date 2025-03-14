@@ -1,20 +1,29 @@
 import request from './request'
 
 // 用户登录
-export function login(username: string, password: string) {
+export function login(account: string, password: string) {
   return request({
     url: '/user/login',
     method: 'post',
-    data: { username, password }
+    data: { account, password }
   })
 }
 
 // 用户注册
-export function register(username: string, password: string, email: string) {
+export function register(username: string, password: string, email: string, verifyCode: string) {
   return request({
     url: '/user/register',
     method: 'post',
-    data: { username, password, email }
+    data: { username, password, email, verifyCode }
+  })
+}
+
+// 获取注册验证码
+export function getVerifyCode(email: string) {
+  return request({
+    url: '/user/verify-code',
+    method: 'get',
+    params: { email }
   })
 }
 
@@ -65,5 +74,23 @@ export function getUserActivities(userId: string) {
     url: '/admin/user-activities',
     method: 'get',
     params: { userId }
+  })
+}
+
+// 发送重置密码验证码
+export function getResetPasswordCode(email: string) {
+  return request({
+    url: '/user/reset-password-code',
+    method: 'get',
+    params: { email }
+  })
+}
+
+// 重置密码
+export function resetPassword(email: string, verifyCode: string, newPassword: string) {
+  return request({
+    url: '/user/reset-password',
+    method: 'post',
+    data: { email, verifyCode, newPassword }
   })
 } 
