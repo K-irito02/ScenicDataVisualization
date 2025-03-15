@@ -1,8 +1,0 @@
-{
-  "dependencies": {
-    "echarts-wordcloud": "^2.1.0"
-  },
-  "devDependencies": {
-    "@types/node": "^22.13.10"
-  }
-}
