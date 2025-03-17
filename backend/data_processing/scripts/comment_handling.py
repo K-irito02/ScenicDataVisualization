@@ -193,8 +193,8 @@ class CommentHandler:
             emo_tend VARCHAR(10) COMMENT '情感倾向（良、中、优）',
             emo_score FLOAT COMMENT '情感得分',
             emo_inten FLOAT COMMENT '情感强度',
-            keywords TEXT COMMENT '关键词（多个关键字用英文逗号隔开）',
-            highFre_words TEXT COMMENT '高频词（多个高频词用英文逗号隔开）',
+            keywords TEXT COMMENT '关键词及其频次（格式：词:频次，用英文逗号隔开）',
+            highFre_words TEXT COMMENT '高频词及其频次（格式：词:频次，用英文逗号隔开）',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='景区评论处理结果表';
         """.format(self.mysql_config['table_name'])
@@ -424,7 +424,7 @@ class CommentHandler:
             for_keywords: 是否是提取关键词（True）还是高频词（False）
             
         Returns:
-            list: 关键词列表
+            list: 关键词及其频次列表
         """
         if not words_with_pos or len(words_with_pos) == 0:
             return []
@@ -444,8 +444,8 @@ class CommentHandler:
         # 获取出现频率最高的词
         top_words = word_counter.most_common(top_n)
         
-        # 提取关键词
-        keywords = [word for word, _ in top_words]
+        # 提取关键词及其频次
+        keywords = [f"{word}:{count}" for word, count in top_words]
         
         return keywords
 

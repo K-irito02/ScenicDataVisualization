@@ -189,6 +189,7 @@ import { View, Delete } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import ElMessageBox from 'element-plus/es/components/message-box/index'
 import type { EChartsOption } from 'echarts'
+import axios from 'axios'
 
 export default defineComponent({
   name: 'UserRecords',
@@ -225,150 +226,65 @@ export default defineComponent({
     
     // 获取记录数据
     const fetchRecords = async () => {
-      loading.value = true
+      loading.value = true;
       
       try {
-        // 实际项目中应该从API获取数据
-        // 这里使用模拟数据
-        await new Promise(resolve => setTimeout(resolve, 500)) // 模拟请求延迟
+        // 从API获取数据
+        const response = await axios.get('/api/admin/user-records', {
+          params: {
+            page: currentPage.value,
+            pageSize: pageSize.value,
+            userId: filterForm.userId || undefined,
+            recordType: filterForm.recordType || undefined,
+            startDate: filterForm.timeRange && filterForm.timeRange[0] ? filterForm.timeRange[0].toISOString() : undefined,
+            endDate: filterForm.timeRange && filterForm.timeRange[1] ? filterForm.timeRange[1].toISOString() : undefined
+          }
+        });
         
-        // 生成模拟数据并应用筛选
-        let mockData = generateMockRecords()
-        
-        // 应用筛选条件
-        if (filterForm.userId) {
-          mockData = mockData.filter(item => item.userId.includes(filterForm.userId))
-        }
-        
-        if (filterForm.recordType) {
-          mockData = mockData.filter(item => item.recordType === filterForm.recordType)
-        }
-        
-        if (filterForm.timeRange && filterForm.timeRange[0] && filterForm.timeRange[1]) {
-          const startDate = new Date(filterForm.timeRange[0]).getTime()
-          const endDate = new Date(filterForm.timeRange[1]).getTime()
-          
-          mockData = mockData.filter(item => {
-            const recordDate = new Date(item.time).getTime()
-            return recordDate >= startDate && recordDate <= endDate
-          })
-        }
+        // 更新数据
+        recordsData.value = response.data.records;
+        totalRecords.value = response.data.total;
         
         // 更新统计数据
-        updateSummary(mockData)
-        
-        // 分页处理
-        totalRecords.value = mockData.length
-        recordsData.value = mockData.slice(
-          (currentPage.value - 1) * pageSize.value,
-          currentPage.value * pageSize.value
-        )
+        updateSummary(response.data.summary);
       } catch (error) {
-        console.error('获取记录数据失败:', error)
-        ElMessage.error('获取记录数据失败')
+        console.error('获取记录数据失败:', error);
+        ElMessage.error('获取记录数据失败');
       } finally {
-        loading.value = false
+        loading.value = false;
       }
-    }
+    };
     
     // 更新统计数据
-    const updateSummary = (data: any[]) => {
-      summary.totalRecords = data.length
-      summary.searchRecords = data.filter(item => item.recordType === 'search').length
-      summary.favoriteRecords = data.filter(item => item.recordType === 'favorite').length
+    const updateSummary = (summaryData: any) => {
+      summary.totalRecords = summaryData.totalRecords || 0;
+      summary.searchRecords = summaryData.searchRecords || 0;
+      summary.favoriteRecords = summaryData.favoriteRecords || 0;
       
       summary.searchPercentage = summary.totalRecords === 0 ? 0 : 
-        Math.round((summary.searchRecords / summary.totalRecords) * 100)
+        Math.round((summary.searchRecords / summary.totalRecords) * 100);
       
       summary.favoritePercentage = summary.totalRecords === 0 ? 0 : 
-        Math.round((summary.favoriteRecords / summary.totalRecords) * 100)
-    }
-    
-    // 生成模拟记录数据
-    const generateMockRecords = () => {
-      const mockRecords = []
-      const recordTypes = ['search', 'favorite']
-      const searchContents = [
-        '北京故宫', '颐和园', '西湖', '黄山', '长城', 
-        '五A景区', '博物馆', '自然风景', '历史遗迹', '文化古迹'
-      ]
-      const favoriteContents = [
-        '故宫博物院', '颐和园', '八达岭长城', '西湖风景区', '黄山风景区',
-        '泰山风景区', '峨眉山', '九寨沟', '桂林山水', '张家界'
-      ]
-      
-      for (let i = 1; i <= 200; i++) {
-        const recordType = recordTypes[Math.floor(Math.random() * 2)]
-        const userId = Math.floor(Math.random() * 20) + 1
-        const content = recordType === 'search' 
-          ? searchContents[Math.floor(Math.random() * searchContents.length)]
-          : favoriteContents[Math.floor(Math.random() * favoriteContents.length)]
-        
-        // 生成随机日期 (过去90天内)
-        const recordDate = new Date()
-        recordDate.setDate(recordDate.getDate() - Math.floor(Math.random() * 90))
-        
-        mockRecords.push({
-          id: i,
-          userId: `user_${userId}`,
-          username: `用户${userId}`,
-          recordType,
-          content: recordType === 'search' ? `搜索: ${content}` : `收藏: ${content}`,
-          time: recordDate.toLocaleString()
-        })
-      }
-      
-      return mockRecords
-    }
+        Math.round((summary.favoriteRecords / summary.totalRecords) * 100);
+    };
     
     // 获取记录类型分布图表数据
     const getRecordTypePieData = () => {
       return [
         { value: summary.searchRecords, name: '搜索记录' },
         { value: summary.favoriteRecords, name: '收藏记录' }
-      ]
-    }
+      ];
+    };
     
     // 获取时间趋势数据
     const getTimeLineData = () => {
-      // 按月统计数据
-      const months: Record<string, { search: number, favorite: number }> = {}
-      
-      // 收集过去6个月的数据
-      const today = new Date()
-      for (let i = 5; i >= 0; i--) {
-        const targetMonth = new Date(today)
-        targetMonth.setMonth(today.getMonth() - i)
-        const monthKey = `${targetMonth.getFullYear()}-${String(targetMonth.getMonth() + 1).padStart(2, '0')}`
-        months[monthKey] = { search: 0, favorite: 0 }
-      }
-      
-      // 统计每个月的记录数量
-      const allRecords = [...recordsData.value]
-      allRecords.forEach(record => {
-        const recordDate = new Date(record.time)
-        const monthKey = `${recordDate.getFullYear()}-${String(recordDate.getMonth() + 1).padStart(2, '0')}`
-        
-        if (months[monthKey]) {
-          if (record.recordType === 'search') {
-            months[monthKey].search++
-          } else {
-            months[monthKey].favorite++
-          }
-        }
-      })
-      
-      // 准备图表数据
-      const xAxisData = Object.keys(months)
-      const searchData = xAxisData.map(month => months[month].search)
-      const favoriteData = xAxisData.map(month => months[month].favorite)
-      
+      // 从API获取时间趋势数据
       return {
-        xAxisData,
-        searchData,
-        favoriteData
-      }
-    }
+        xAxisData: [],
+        searchData: [],
+        favoriteData: []
+      };
+    };
     
     // 饼图配置
     const pieChartOptions = computed<EChartsOption>(() => {

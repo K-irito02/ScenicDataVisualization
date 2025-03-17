@@ -9,7 +9,7 @@ import pinia from './stores'
 import axios from 'axios'
 
 // 配置 axios
-axios.defaults.baseURL = import.meta.env.VITE_API_BASE_URL || '/api'
+axios.defaults.baseURL = import.meta.env.VITE_API_BASE_URL || '/'
 axios.defaults.timeout = 10000
 
 const app = createApp(App)

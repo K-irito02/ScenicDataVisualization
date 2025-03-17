@@ -235,6 +235,9 @@ Authorization: Bearer {token}
 
 ### 2. 景区数据相关
 
+在MySQL`scenic_area`数据库的`summary_table`表中，
+
+
 ```
 GET /api/scenic/list/
 请求参数：
@@ -261,8 +264,8 @@ GET /api/scenic/list/
       "city": "所在城市",
       "type": "景区类型",
       "level": "景区级别",
-      "price": "票价",
-      "rating": "评分",
+      "price": "最低票价",
+      "rating": "情感倾向",
       "image": "图片URL"
     }
   ]
@@ -274,15 +277,13 @@ GET /api/scenic/detail/{id}/
   "id": "景区ID",
   "name": "景区名称",
   "images": ["图片URL1", "图片URL2"],
-  "province": "所在省份",
-  "city": "所在城市",
-  "address": "详细地址",
-  "price": "票价",
-  "opening_hours": "开放时间",
+  "address": "地址原数据",
+  "price": "票价原数据",
+  "opening_hours": "开放时间原数据",
   "type": "景区类型",
   "level": "景区级别",
-  "description": "景区描述",
-  "suggested_duration": "建议游玩时长",
+  "description": "景区简介",
+  "comment_count": "评论数量",
   "sentiment": {
     "score": "情感得分",
     "intensity": "情感强度",
@@ -291,14 +292,7 @@ GET /api/scenic/detail/{id}/
   "transportation": [
     {
       "type": "交通方式",
-      "description": "交通描述"
-    }
-  ],
-  "facilities": [
-    {
-      "type": "设施类型",
-      "name": "设施名称",
-      "distance": "距离"
+      "description": "交通原数据"
     }
   ]
 }
@@ -315,8 +309,8 @@ GET /api/scenic/recommend/{id}/
       "id": "景区ID",
       "name": "景区名称",
       "image": "图片URL",
-      "price": "票价",
-      "rating": "评分"
+      "price": "最低票价",
+      "rating": "情感倾向"
     }
   ]
 }
@@ -351,13 +345,6 @@ GET /api/comment/wordcloud/{scenic_id}/
       "name": "词语",
       "value": "词频"
     }
-  ],
-  "aspects": [
-    {
-      "name": "关注点名称",
-      "description": "关注点描述",
-      "sentiment": "关注点情感得分"
-    }
   ]
 }
 
@@ -371,18 +358,7 @@ GET /api/comment/list/{scenic_id}/
 {
   "total": "总数量",
   "data": [
-    {
-      "id": "评论ID",
-      "user": {
-        "id": "用户ID",
-        "username": "用户名",
-        "avatar": "头像URL"
-      },
-      "content": "评论内容",
-      "rating": "评分",
-      "sentiment_score": "情感得分",
-      "created_at": "创建时间"
-    }
+    "content": "评论原数据",
   ]
 }
 ```
@@ -393,20 +369,20 @@ GET /api/comment/list/{scenic_id}/
 GET /api/transportation/sankey/
 请求参数：
 {
-  "region": "地区(all/华北/华东等)"
+  "region": "地区(中国省份)"
 }
 返回数据：
 {
   "nodes": [
     {
-      "name": "节点名称(城市或交通方式)"
+      "name": "节点名称(省份或交通方式)"
     }
   ],
   "links": [
     {
-      "source": "源节点名称",
-      "target": "目标节点名称",
-      "value": "数值"
+      "source": "源节点名称",         // province
+      "target": "目标节点名称",       // transport_frequency中`:`前的数据
+      "value": "数值"                // // transport_frequency中`:`后的数据
     }
   ]
 }
@@ -421,13 +397,12 @@ GET /api/transportation/accessibility/
   "data": [
     {
       "name": "省份名称",
-      "value": "可达性评分"
+      "liaison_count": "交通类型数量"
     }
   ],
   "facilities": [
     {
       "type": "设施类型",
-      "name": "设施名称",
       "count": "数量" 
     }
   ]
@@ -455,7 +430,6 @@ GET /api/admin/users/
       "id": "用户ID",
       "username": "用户名",
       "email": "邮箱",
-      "phone": "手机号",
       "status": "状态(active/disabled)",
       "role": "角色(user/admin)",
       "avatar": "头像URL",
@@ -471,7 +445,6 @@ POST /api/admin/users/create/
 {
   "username": "用户名",
   "email": "邮箱",
-  "phone": "手机号",
   "password": "密码",
   "role": "角色(user/admin)",
   "status": "状态(active/disabled)"
@@ -482,7 +455,6 @@ PUT /api/admin/users/{id}/
 {
   "username": "用户名",
   "email": "邮箱",
-  "phone": "手机号",
   "role": "角色(user/admin)",
   "status": "状态(active/disabled)"
 }
@@ -600,7 +572,7 @@ GET /api/user/favorites/
         "id": "景区ID",
         "name": "景区名称",
         "image": "图片URL",
-        "price": "票价",
+        "price": "最低票价",
         "province": "省份",
         "city": "城市"
       },
@@ -617,3 +589,192 @@ GET /api/user/favorites/
 3. 需要认证的接口在请求头中添加`Authorization: Bearer {token}`
 4. 管理员相关接口只有管理员用户可以访问
 5. 前端开发过程中遇到类型定义问题请在项目中添加适当的类型声明文件
+
+## 前后端交互说明
+
+下面详细说明每个API接口与前端组件的交互关系，以及这些请求对应的前端变化。
+
+### 1. 用户认证相关接口
+
+#### `POST /api/login/`
+- **前端组件**: `Login.vue`
+- **交互流程**:
+  1. 用户在登录页面输入用户名/邮箱和密码，点击登录按钮
+  2. 前端通过`userStore.login()`发送登录请求
+  3. 后端验证成功后返回用户信息和JWT令牌
+  4. 前端将令牌和用户信息存储在Pinia store和localStorage中
+  5. 前端根据用户角色跳转到对应的页面（普通用户到仪表盘页面，管理员到管理后台）
+
+#### `POST /api/register/`
+- **前端组件**: `Register.vue`
+- **交互流程**:
+  1. 用户在注册页面填写用户名、邮箱、密码和验证码
+  2. 用户点击注册按钮后，前端通过`userStore.register()`发送注册请求
+  3. 后端创建用户账号并返回成功信息
+  4. 前端显示注册成功提示，并引导用户前往登录页面
+
+#### `POST /api/email/send-code/`
+- **前端组件**: `Register.vue`
+- **交互流程**:
+  1. 用户在注册页面输入邮箱
+  2. 点击"获取验证码"按钮后，前端发送请求
+  3. 后端生成验证码并发送到用户邮箱
+  4. 前端显示倒计时，禁用获取验证码按钮一段时间
+  5. 前端显示验证码已发送的提示信息
+
+#### `PUT /api/users/profile/`
+- **前端组件**: `Profile.vue`
+- **交互流程**:
+  1. 用户在个人中心页面修改个人信息（用户名、头像、所在地、邮箱等）
+  2. 点击保存按钮后，前端通过`userStore.updateProfile()`发送更新请求
+  3. 后端更新用户信息并返回成功信息
+  4. 前端更新本地存储的用户信息并显示更新成功提示
+
+### 2. 景区数据相关接口
+
+#### `GET /api/scenic/list/`
+- **前端组件**: `Search.vue`
+- **交互流程**:
+  1. 用户进入搜索页面或在搜索页使用筛选器（关键词、地区、类型、价格等）
+  2. 前端发送带筛选参数的请求到后端
+  3. 后端根据筛选条件查询数据库并返回匹配的景区列表
+  4. 前端将数据渲染为景区卡片列表
+  5. 前端根据总数据量自动计算分页并显示分页控件
+
+#### `GET /api/scenic/detail/{id}/`
+- **前端组件**: `ScenicDetail.vue`
+- **交互流程**:
+  1. 用户点击景区卡片或从其他页面跳转到景区详情页
+  2. 前端根据URL中的景区ID发送请求获取详细信息
+  3. 后端返回完整的景区信息（包括图片、描述、价格、开放时间等）
+  4. 前端渲染景区信息，包括：
+     - 图片轮播展示
+     - 基本信息（名称、价格、级别等）展示
+     - 开放时间、交通方式等实用信息展示
+     - 情感分析结果展示
+  5. 前端同时检查该景区是否在用户的收藏列表中，更新收藏按钮状态
+
+#### `GET /api/scenic/recommend/{id}/`
+- **前端组件**: `ScenicDetail.vue`底部的推荐部分
+- **交互流程**:
+  1. 用户查看景区详情页时，前端自动发送请求获取相关推荐
+  2. 后端根据当前景区特征（位置、类型等）推荐相似景区
+  3. 前端将推荐景区渲染为横向滚动的卡片列表
+  4. 用户可点击推荐景区跳转到对应详情页
+
+### 3. 评论数据相关接口
+
+#### `GET /api/comment/analysis/`
+- **前端组件**: `CommentAnalysis.vue`
+- **交互流程**:
+  1. 用户进入评论分析页面
+  2. 前端发送请求获取景区评论统计数据
+  3. 后端返回景区评论数量、情感得分等数据
+  4. 前端使用ECharts渲染散点图，展示景区评论数量与情感得分的关系
+  5. 用户可通过下拉菜单切换排序方式，页面数据实时更新
+
+#### `GET /api/comment/wordcloud/{scenic_id}/`
+- **前端组件**: `CommentAnalysis.vue`, `ScenicDetail.vue`
+- **交互流程**:
+  1. 用户点击景区详情页中的"查看词云"按钮或在评论分析页选择特定景区
+  2. 前端发送请求获取该景区的评论词云数据
+  3. 后端分析该景区的评论文本，提取高频词并计算词频
+  4. 前端使用ECharts词云图组件渲染数据
+  5. 前端同时展示游客关注点（如环境、服务、价格等）及其情感倾向
+
+#### `GET /api/comment/list/{scenic_id}/`
+- **前端组件**: `ScenicDetail.vue`中的评论部分
+- **交互流程**:
+  1. 用户查看景区详情页中的评论部分
+  2. 前端发送请求获取该景区的评论列表
+  3. 后端返回分页的评论数据（包含用户信息、评论内容、评分等）
+  4. 前端渲染评论列表，显示用户头像、名称、评论内容、评分和时间
+  5. 用户可点击分页控件查看更多评论
+
+### 4. 交通数据相关接口
+
+#### `GET /api/transportation/sankey/`
+- **前端组件**: `Transportation.vue`
+- **交互流程**:
+  1. 用户进入交通与可达性分析页面
+  2. 前端发送请求获取桑基图数据
+  3. 后端返回节点（城市、交通方式）和链接数据
+  4. 前端使用ECharts桑基图组件可视化不同地区和交通方式之间的流量关系
+  5. 用户可选择不同地区，前端重新发送请求并更新图表
+
+#### `GET /api/transportation/accessibility/`
+- **前端组件**: `Transportation.vue`
+- **交互流程**:
+  1. 用户在交通页面中选择交通类型（如汽车、火车、公交等）
+  2. 前端发送带交通类型参数的请求
+  3. 后端返回各省份的可达性评分和交通设施分布
+  4. 前端使用中国地图组件以热力图形式展示可达性数据
+  5. 前端同时展示交通设施分布的饼图或条形图
+
+### 5. 用户管理相关接口
+
+#### `GET /api/admin/users/`
+- **前端组件**: `admin/Users.vue`
+- **交互流程**:
+  1. 管理员登录后进入用户管理页面
+  2. 前端发送请求获取用户列表数据
+  3. 后端返回用户数据和统计信息（总数、活跃用户数等）
+  4. 前端渲染用户列表表格和统计卡片
+  5. 管理员可通过搜索框搜索特定用户，前端重新发送带查询参数的请求
+
+#### 用户创建、更新和删除接口
+- **前端组件**: `admin/Users.vue`中的表单对话框
+- **交互流程**:
+  1. 管理员点击"新建用户"按钮或用户行中的编辑/删除按钮
+  2. 对于创建/编辑，弹出表单对话框填写信息
+  3. 提交后，前端发送对应的POST/PUT请求
+  4. 后端处理请求并返回结果
+  5. 前端根据结果显示成功/错误提示，并刷新用户列表
+
+#### `PATCH /api/admin/users/{id}/status/`
+- **前端组件**: `admin/Users.vue`中的状态开关
+- **交互流程**:
+  1. 管理员点击用户行中的状态开关
+  2. 前端发送更新状态的请求
+  3. 后端更新用户状态并返回结果
+  4. 前端显示操作结果提示，并更新表格中该用户的状态显示
+
+### 6. 用户记录管理相关接口
+
+#### `GET /api/admin/user_records/`
+- **前端组件**: `admin/UserRecords.vue`
+- **交互流程**:
+  1. 管理员进入用户记录管理页面
+  2. 前端发送请求获取用户记录数据
+  3. 后端返回记录列表和统计信息
+  4. 前端渲染记录表格和统计图表（如类型分布饼图、时间趋势线图）
+  5. 管理员可使用筛选器（用户ID、记录类型、日期范围）筛选数据
+
+#### `GET /api/admin/user_records/{id}/` 和 `DELETE /api/admin/user_records/{id}/`
+- **前端组件**: `admin/UserRecords.vue`中的详情对话框和删除按钮
+- **交互流程**:
+  1. 管理员点击记录行中的"查看"按钮或"删除"按钮
+  2. 对于查看，前端发送GET请求获取详细信息并在对话框中显示
+  3. 对于删除，前端弹出确认对话框后发送DELETE请求
+  4. 后端处理请求并返回结果
+  5. 前端显示操作结果提示，并更新记录列表
+
+### 7. 用户个人相关接口
+
+#### `POST /api/user/favorite/` 和 `DELETE /api/user/favorite/{scenic_id}/`
+- **前端组件**: `ScenicDetail.vue`中的收藏按钮
+- **交互流程**:
+  1. 用户在景区详情页点击收藏/取消收藏按钮
+  2. 前端通过`userStore.toggleFavorite()`发送添加/删除收藏请求
+  3. 后端更新用户收藏数据并返回结果
+  4. 前端更新按钮状态（已收藏/未收藏）并显示操作成功提示
+  5. 前端同时更新Pinia store中的收藏列表数据
+
+#### `GET /api/user/favorites/`
+- **前端组件**: `Profile.vue`中的收藏部分
+- **交互流程**:
+  1. 用户进入个人中心页面
+  2. 前端发送请求获取用户的收藏列表
+  3. 后端返回收藏景区的信息（包括景区名称、图片、价格等）
+  4. 前端渲染收藏景区的卡片列表
+  5. 用户可点击卡片跳转到景区详情，或点击取消收藏按钮移除收藏

@@ -31,7 +31,7 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, computed, ref } from 'vue'
+import { defineComponent, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { Location, Star, StarFilled } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
@@ -60,12 +60,18 @@ export default defineComponent({
     
     // 检查是否已收藏
     const isFavorite = computed(() => {
-      return userStore.favorites.some((id: string) => id === props.scenic.id)
+      const scenicId = props.scenic.scenic_id || props.scenic.id
+      return userStore.favorites.some((id: string) => id === scenicId)
     })
     
     // 跳转到景区详情页
     const navigateToDetail = () => {
-      router.push(`/dashboard/scenic/${props.scenic.id}`)
+      const scenicId = props.scenic.scenic_id || props.scenic.id
+      if (!scenicId) {
+        ElMessage.warning('景区ID不存在')
+        return
+      }
+      router.push(`/dashboard/scenic/${scenicId}`)
     }
     
     // 切换收藏状态
@@ -75,8 +81,14 @@ export default defineComponent({
         return
       }
       
+      const scenicId = props.scenic.scenic_id || props.scenic.id
+      if (!scenicId) {
+        ElMessage.warning('景区ID不存在')
+        return
+      }
+      
       try {
-        await userStore.toggleFavorite(props.scenic.id)
+        await userStore.toggleFavorite(scenicId)
         ElMessage.success(isFavorite.value ? '已取消收藏' : '收藏成功')
       } catch (error) {
         ElMessage.error('操作失败，请重试')

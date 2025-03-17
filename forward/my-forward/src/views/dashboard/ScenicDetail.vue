@@ -180,6 +180,7 @@ import {
   ShoppingCart,
   OfficeBuilding
 } from '@element-plus/icons-vue'
+import axios from 'axios'
 
 export default defineComponent({
   name: 'ScenicDetail',
@@ -204,128 +205,56 @@ export default defineComponent({
     const scenicStore = useScenicStore()
     const userStore = useUserStore()
     const loading = ref(true)
-    const scenic = ref<any>({})
+    const scenic = ref<any>({
+      sentimentScore: 0,
+      sentimentIntensity: 0,
+      commentCount: 0,
+      positiveRate: 0,
+      comments: [],
+      trafficInfo: [],
+      facilities: [],
+      recommendations: [],
+      images: []
+    })
     
-    const scenicId = computed(() => route.params.id as string)
-    const isFavorite = computed(() => userStore.favorites.some((item: any) => item.id === scenicId.value))
+    const scenicId = computed(() => {
+      const id = route.params.id as string
+      if (!id || id === 'undefined') {
+        // 如果ID为undefined，重定向到搜索页面
+        ElMessage.warning('未指定景区ID，请先搜索选择景区')
+        router.push('/dashboard/search')
+        return ''
+      }
+      return id
+    })
+    
+    const isFavorite = computed(() => userStore.favorites.some((item: any) => {
+      // 检查item是字符串还是对象
+      if (typeof item === 'string') {
+        return item === scenicId.value
+      }
+      return item.id === scenicId.value
+    }))
     const isLoggedIn = computed(() => !!userStore.token)
     
     // 获取景区详情
     const fetchScenicDetail = async () => {
-      loading.value = true
+      if (!scenicId.value) {
+        return;
+      }
+      
+      loading.value = true;
       
       try {
-        // 实际项目中应该从API获取数据
-        // 这里使用模拟数据
-        await new Promise(resolve => setTimeout(resolve, 800)) // 模拟请求延迟
-        
-        scenic.value = generateMockScenicDetail(scenicId.value)
+        const response = await axios.get(`/scenic/${scenicId.value}/`);
+        scenic.value = response.data;
+        loading.value = false;
       } catch (error) {
-        console.error('获取景区详情失败:', error)
-        ElMessage.error('获取景区详情失败')
-      } finally {
-        loading.value = false
+        console.error('获取景区详情失败:', error);
+        ElMessage.error('获取景区详情失败');
+        loading.value = false;
       }
-    }
-    
-    // 生成模拟景区数据
-    const generateMockScenicDetail = (id: string) => {
-      // 生成一个模拟的景区详情数据
-      return {
-        id,
-        name: '故宫博物院',
-        province: '北京',
-        city: '北京',
-        address: '东城区景山前街4号',
-        level: '5A',
-        type: '历史文化',
-        price: 80,
-        openingHours: '4月1日-10月31日 8:30-17:00，11月1日-次年3月31日 8:30-16:30，周一闭馆（国家法定节假日除外）',
-        suggestedDuration: '3-4小时',
-        description: '故宫博物院是中国最大的古代宫殿建筑群，位于北京市中心，是明清两代24位皇帝的皇家宫殿，是中国古代宫廷文化收藏和展示的场所。故宫始建于明朝永乐四年（1406年），是中国现存最完整、规模最大的木质结构古建筑群，占地面积72万平方米，建筑面积约15万平方米，有大小宫殿七十多座，房屋九千余间。故宫于1987年被联合国教科文组织列为"世界文化遗产"。',
-        images: [
-          '/images/forbidden-city-1.jpg',
-          '/images/forbidden-city-2.jpg',
-          '/images/forbidden-city-3.jpg',
-          '/images/forbidden-city-4.jpg',
-        ],
-        commentCount: 10862,
-        sentimentScore: 4.7,
-        sentimentIntensity: 0.82,
-        positiveRate: 0.93,
-        comments: [
-          {
-            user: '旅行者12345',
-            content: '故宫真的太壮观了，建筑气势恢宏，历史感很强，值得一去。门票价格合理，讲解器很有用，建议租一个。',
-            sentiment: 0.9,
-            date: '2023-05-15'
-          },
-          {
-            user: '文化爱好者',
-            content: '作为中国传统文化的爱好者，故宫是必去的地方。建议早上去，人少一些。文物展示很精彩，但是人真的很多，特别是黄金周期间。',
-            sentiment: 0.7,
-            date: '2023-04-28'
-          },
-          {
-            user: '历史研究者',
-            content: '故宫是了解中国明清历史的窗口，建筑群保存完好，文物丰富。但是游客太多，有些区域拍照很困难，建议避开节假日。',
-            sentiment: 0.5,
-            date: '2023-04-10'
-          },
-          {
-            user: '摄影爱好者',
-            content: '故宫的建筑非常适合摄影，尤其是在阳光明媚的天气。不过人流量大，需要耐心等待拍摄时机。票价合理，整体体验满意。',
-            sentiment: 0.8,
-            date: '2023-03-22'
-          }
-        ],
-        trafficInfo: [
-          {
-            type: 'subway',
-            typeName: '地铁',
-            description: '1号线天安门东站下车，步行约10分钟；1号线天安门西站下车，步行约15分钟。'
-          },
-          {
-            type: 'bus',
-            typeName: '公交',
-            description: '乘坐1、2、4、10、20、52、59、82、120路到天安门东站下车。'
-          },
-          {
-            type: 'car',
-            typeName: '自驾',
-            description: '自驾游客可将车辆停放在王府井停车场或天安门地下停车场，步行前往故宫。'
-          }
-        ],
-        facilities: [
-          { type: 'toilet', name: '公共厕所' },
-          { type: 'rest', name: '休息区' },
-          { type: 'store', name: '纪念品商店' },
-          { type: 'food', name: '餐饮服务' },
-          { type: 'museum', name: '展览馆' },
-          { type: 'guide', name: '导游服务' }
-        ],
-        recommendations: [
-          {
-            id: 'scenic_2',
-            name: '天坛公园',
-            image: '/images/temple-of-heaven.jpg',
-            price: 30
-          },
-          {
-            id: 'scenic_3',
-            name: '颐和园',
-            image: '/images/summer-palace.jpg',
-            price: 40
-          },
-          {
-            id: 'scenic_4',
-            name: '北海公园',
-            image: '/images/beihai-park.jpg',
-            price: 20
-          }
-        ]
-      }
-    }
+    };
     
     // 切换收藏状态
     const toggleFavorite = async () => {
@@ -345,6 +274,10 @@ export default defineComponent({
     
     // 导航到其他景区
     const navigateToScenic = (id: string) => {
+      if (!id) {
+        ElMessage.warning('景区ID不存在')
+        return
+      }
       router.push(`/dashboard/scenic/${id}`)
     }
     

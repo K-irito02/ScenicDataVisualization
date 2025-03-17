@@ -105,7 +105,7 @@ const router = createRouter({
   routes
 })
 
-router.beforeEach((to: RouteLocationNormalized, from: RouteLocationNormalized, next: NavigationGuardNext) => {
+router.beforeEach((to: RouteLocationNormalized, _from: RouteLocationNormalized, next: NavigationGuardNext) => {
   // 简单的路由守卫，可以在这里做登录验证
   const token = localStorage.getItem('token')
   const isAdmin = localStorage.getItem('isAdmin')

@@ -75,6 +75,7 @@ import { useScenicStore } from '@/stores/scenic'
 import type { EChartsOption } from 'echarts'
 import { ElMessage } from 'element-plus'
 import 'echarts-wordcloud'
+import axios from 'axios'
 
 export default defineComponent({
   name: 'CommentAnalysis',
@@ -88,6 +89,9 @@ export default defineComponent({
     const wordCloudData = ref<any[]>([])
     const sortType = ref('commentCount')
     const selectedScenic = ref<any>(null)
+    const loading = ref(false)
+    const wordcloudLoading = ref(false)
+    const currentScenicId = ref('')
     
     // 模拟顶级关注点数据
     const topAspects = ref([
@@ -242,69 +246,36 @@ export default defineComponent({
       }]
     } as any))
     
-    // 获取评论分析数据
+    // 获取评论数据
     const fetchCommentData = async () => {
+      loading.value = true;
+      
       try {
-        // 应该从API获取数据，这里使用模拟数据
-        const mockData = generateMockCommentData()
-        commentData.value = mockData
-        
-        // 加载完成后排序
-        sortCommentData()
+        const response = await axios.get('/api/data/comment-analysis/');
+        commentData.value = response.data;
+        loading.value = false;
       } catch (error) {
-        console.error('获取评论数据失败:', error)
-        ElMessage.error('获取评论数据失败')
+        console.error('获取评论数据失败:', error);
+        ElMessage.error('获取评论数据失败');
+        loading.value = false;
       }
-    }
+    };
     
     // 获取词云数据
     const fetchWordCloudData = async (scenicId: string) => {
+      wordcloudLoading.value = true;
+      
       try {
-        // 应该从API获取数据，这里使用模拟数据
-        const mockData = generateMockWordCloudData()
-        wordCloudData.value = mockData
+        const response = await axios.get(`/api/data/word-cloud/${scenicId}/`);
+        wordCloudData.value = response.data;
+        currentScenicId.value = scenicId;
+        wordcloudLoading.value = false;
       } catch (error) {
-        console.error('获取词云数据失败:', error)
-        ElMessage.error('获取词云数据失败')
+        console.error('获取词云数据失败:', error);
+        ElMessage.error('获取词云数据失败');
+        wordcloudLoading.value = false;
       }
-    }
-    
-    // 生成模拟评论数据
-    const generateMockCommentData = () => {
-      const scenicNames = [
-        '故宫博物院', '颐和园', '八达岭长城', '西湖风景区', '黄山风景区',
-        '泰山风景区', '峨眉山', '九寨沟', '桂林山水', '张家界', '敦煌莫高窟',
-        '布达拉宫', '三亚湾', '鼓浪屿', '秦始皇兵马俑', '乐山大佛', '承德避暑山庄'
-      ]
-      
-      return scenicNames.map((name, index) => {
-        const commentCount = Math.floor(Math.random() * 3000) + 500
-        const sentimentScore = Math.random() * 0.5 + 0.5  // 0.5-1.0
-        const sentimentIntensity = Math.random() * 0.8 + 0.2  // 0.2-1.0
-        
-        return {
-          scenicId: 'scenic_' + (index + 1),
-          scenicName: name,
-          commentCount,
-          sentimentScore,
-          sentimentIntensity
-        }
-      })
-    }
-    
-    // 生成模拟词云数据
-    const generateMockWordCloudData = () => {
-      const words = [
-        '美丽', '壮观', '震撼', '人多', '值得', '壮丽', '惊艳', '历史', '文化',
-        '自然', '景色', '服务', '环境', '交通', '方便', '价格', '实惠', '拥挤',
-        '清净', '古老', '独特', '奇特', '舒适', '气势', '磅礴', '宏伟', '辉煌'
-      ]
-      
-      return words.map(word => ({
-        name: word,
-        value: Math.floor(Math.random() * 500) + 100
-      }))
-    }
+    };
     
     // 排序评论数据
     const sortCommentData = () => {

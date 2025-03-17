@@ -6,8 +6,8 @@ crawler/
 data_processing/
 
 # 忽略后端文件'backend'
-backend/
-manage.py
+# backend/
+# manage.py
 
 # 忽略数据处理测试文件'ceshi.py'
 ceshi.py
@@ -18,8 +18,14 @@ Scenic Area Category/
 # 忽略数据AI聚合文件'ai_result_cache'
 ai_result_cache/
 
+# 忽略前端文件'frontend'
+# frontend/
 
+# 忽略记事本文件夹
+Notepads/
 
+# 忽略后端README.md文件
+backend/README.md
 
-
-
+# 忽略前端README.md文件
+frontend/my-forward/README.md

@@ -161,6 +161,7 @@ import CardContainer from '@/components/common/CardContainer.vue'
 import ScenicCard from '@/components/common/ScenicCard.vue'
 import { useScenicStore } from '@/stores/scenic'
 import { ElMessage } from 'element-plus'
+import axios from 'axios'
 
 export default defineComponent({
   name: 'Search',
@@ -215,130 +216,49 @@ export default defineComponent({
       return (filterOptions.cities as CitiesRecord)[searchForm.province] || []
     })
     
-    // 模拟搜索结果的生成
-    const generateMockSearchResult = () => {
-      const mockScenics = []
-      const scenicNames = [
-        '故宫博物院', '颐和园', '八达岭长城', '西湖风景区', '黄山风景区',
-        '泰山风景区', '峨眉山', '九寨沟', '桂林山水', '张家界', '敦煌莫高窟',
-        '布达拉宫', '三亚湾', '鼓浪屿', '秦始皇兵马俑', '乐山大佛', '承德避暑山庄',
-        '千岛湖', '武夷山', '庐山', '雁荡山', '长白山', '神农架', '五台山',
-        '三清山', '龙虎山', '鸣沙山月牙泉', '天山天池', '丽江古城', '香格里拉'
-      ]
-      
-      const provinces = filterOptions.provinces
-      const types = filterOptions.types
-      const levels = filterOptions.levels
-      
-      for (let i = 0; i < 50; i++) {
-        const randomIndex = Math.floor(Math.random() * scenicNames.length)
-        const randomProvince = provinces[Math.floor(Math.random() * provinces.length)]
-        const randomCities = (filterOptions.cities as CitiesRecord)[randomProvince]
-        const randomCity = randomCities[Math.floor(Math.random() * randomCities.length)]
-        const randomType = types[Math.floor(Math.random() * types.length)]
-        const randomLevel = levels[Math.floor(Math.random() * levels.length)]
-        const randomPrice = Math.floor(Math.random() * 400) + 50
-        
-        mockScenics.push({
-          id: 'scenic_' + (i + 1),
-          name: scenicNames[randomIndex],
-          province: randomProvince,
-          city: randomCity,
-          type: randomType,
-          level: randomLevel,
-          price: randomPrice,
-          image: `/images/scenic_${(i % 10) + 1}.jpg`
-        })
+    // 搜索景区
+    const handleSearch = async () => {
+      if (!searchForm.keyword.trim() && !searchForm.province && !searchForm.city && !searchForm.type && !searchForm.level && !searchForm.priceRange[0] && !searchForm.priceRange[1]) {
+        return;
       }
       
-      return mockScenics
-    }
-    
-    // 搜索函数
-    const handleSearch = async () => {
-      loading.value = true
-      currentPage.value = 1
+      loading.value = true;
       
       try {
-        // 在实际应用中应该调用API进行搜索
-        // 这里使用模拟数据并进行简单的客户端过滤
-        await new Promise(resolve => setTimeout(resolve, 800)) // 模拟请求延迟
+        // 构建筛选参数
+        const params: any = {
+          keyword: searchForm.keyword.trim() || undefined,
+          province: searchForm.province || undefined,
+          city: searchForm.city || undefined,
+          type: searchForm.type || undefined,
+          level: searchForm.level || undefined,
+          priceRange: searchForm.priceRange.join(',') || undefined
+        };
         
-        const mockData = generateMockSearchResult()
-        
-        // 应用筛选条件
-        let filteredResult = mockData.filter(item => {
-          // 关键词筛选
-          if (searchForm.keyword && !item.name.includes(searchForm.keyword)) {
-            return false
-          }
-          
-          // 省份筛选
-          if (searchForm.province && item.province !== searchForm.province) {
-            return false
-          }
-          
-          // 城市筛选
-          if (searchForm.city && item.city !== searchForm.city) {
-            return false
-          }
-          
-          // 类型筛选
-          if (searchForm.type && item.type !== searchForm.type) {
-            return false
-          }
-          
-          // 级别筛选
-          if (searchForm.level && item.level !== searchForm.level) {
-            return false
-          }
-          
-          // 价格范围筛选
-          if (
-            item.price < searchForm.priceRange[0] ||
-            item.price > searchForm.priceRange[1]
-          ) {
-            return false
-          }
-          
-          return true
-        })
-        
-        // 应用排序
-        applySort(filteredResult)
-        
-        totalCount.value = filteredResult.length
-        
-        // 分页
-        const startIndex = (currentPage.value - 1) * pageSize.value
-        searchResult.value = filteredResult.slice(startIndex, startIndex + pageSize.value)
-        
+        const response = await axios.get('/api/scenic/search/', { params });
+        searchResult.value = response.data;
+        totalCount.value = response.data.length;
       } catch (error) {
-        console.error('搜索失败:', error)
-        ElMessage.error('搜索失败，请重试')
+        console.error('搜索失败:', error);
+        ElMessage.error('搜索失败，请重试');
       } finally {
-        loading.value = false
+        loading.value = false;
       }
-    }
+    };
     
-    // 排序函数
-    const applySort = (results: any[]) => {
-      if (sortType.value === 'price_asc') {
-        results.sort((a, b) => a.price - b.price)
-      } else if (sortType.value === 'price_desc') {
-        results.sort((a, b) => b.price - a.price)
-      } else if (sortType.value === 'rating') {
-        // 模拟评分数据（实际应该从API获取）
-        results.sort((a, b) => {
-          const ratingA = Math.random() * 2 + 3 // 3-5分随机评分
-          const ratingB = Math.random() * 2 + 3
-          return ratingB - ratingA
-        })
-      } else {
-        // 默认按热度（随机）
-        results.sort(() => Math.random() - 0.5)
+    // 获取筛选选项
+    const fetchFilterOptions = async () => {
+      try {
+        const response = await axios.get('/data/filter-options/');
+        // 更新filterOptions中的各项数据
+        filterOptions.provinces = response.data.provinces || [];
+        filterOptions.cities = response.data.cities || {};
+        filterOptions.types = response.data.types || [];
+        filterOptions.levels = response.data.levels || [];
+      } catch (error) {
+        console.error('获取筛选选项失败:', error);
       }
-    }
+    };
     
     // 重置筛选条件
     const handleReset = () => {
@@ -367,17 +287,6 @@ export default defineComponent({
     // 处理省份变更
     const handleProvinceChange = () => {
       searchForm.city = ''
-    }
-    
-    // 获取筛选选项数据
-    const fetchFilterOptions = async () => {
-      try {
-        // 在实际应用中应该从API获取筛选选项
-        // 这里使用预设的模拟数据
-      } catch (error) {
-        console.error('获取筛选选项失败:', error)
-        ElMessage.error('获取筛选选项失败')
-      }
     }
     
     onMounted(() => {

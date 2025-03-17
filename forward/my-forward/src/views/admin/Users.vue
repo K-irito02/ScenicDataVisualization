@@ -218,6 +218,7 @@ import { User, UserFilled, Edit, View, Plus, CircleClose, CircleCheck } from '@e
 import { ElMessage } from 'element-plus'
 import ElMessageBox from 'element-plus/es/components/message-box/index'
 import type { FormInstance } from 'element-plus'
+import axios from 'axios'
 
 export default defineComponent({
   name: 'Users',
@@ -284,70 +285,57 @@ export default defineComponent({
       )
     })
     
-    // 获取用户列表
+    // 获取用户数据
     const fetchUsers = async () => {
-      loading.value = true
+      loading.value = true;
       
       try {
-        // 实际项目中应该从API获取数据
-        // 这里使用模拟数据
-        await new Promise(resolve => setTimeout(resolve, 500)) // 模拟请求延迟
+        // 从API获取用户数据
+        const response = await axios.get('/api/admin/users', {
+          params: {
+            page: currentPage.value,
+            pageSize: pageSize.value,
+            username: searchQuery.value || undefined
+          }
+        });
         
-        // 生成模拟用户数据
-        const mockUsers = generateMockUsers()
-        users.value = mockUsers.slice(
-          (currentPage.value - 1) * pageSize.value,
-          currentPage.value * pageSize.value
-        )
-        
-        totalUsers.value = mockUsers.length
+        // 更新用户数据和总数
+        users.value = response.data.users;
+        totalUsers.value = response.data.total;
         
         // 更新统计数据
-        statistics.totalUsers = mockUsers.length
-        statistics.activeUsers = mockUsers.filter(user => user.status === 'active').length
-        statistics.disabledUsers = mockUsers.filter(user => user.status === 'disabled').length
-        statistics.newUsers = mockUsers.filter(user => {
+        statistics.totalUsers = totalUsers.value;
+        statistics.activeUsers = users.value.filter(user => user.status === 'active').length;
+        statistics.disabledUsers = users.value.filter(user => user.status === 'disabled').length;
+        statistics.newUsers = users.value.filter(user => {
           const registerDate = new Date(user.registerTime)
           const thirtyDaysAgo = new Date()
           thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
           return registerDate > thirtyDaysAgo
-        }).length
+        }).length;
       } catch (error) {
-        console.error('获取用户列表失败:', error)
-        ElMessage.error('获取用户列表失败')
+        console.error('获取用户数据失败:', error);
+        ElMessage.error('获取用户数据失败');
       } finally {
-        loading.value = false
+        loading.value = false;
       }
-    }
+    };
     
-    // 生成模拟用户数据
-    const generateMockUsers = () => {
-      const mockUsers = []
-      
-      for (let i = 1; i <= 100; i++) {
-        // 生成随机日期
-        const registerDate = new Date()
-        registerDate.setDate(registerDate.getDate() - Math.floor(Math.random() * 365))
+    // 获取用户统计数据
+    const fetchStats = async () => {
+      try {
+        const response = await axios.get('/api/admin/user-stats');
+        const stats = response.data;
         
-        const lastLoginDate = new Date(registerDate)
-        lastLoginDate.setDate(lastLoginDate.getDate() + Math.floor(Math.random() * 30))
-        
-        mockUsers.push({
-          id: `user_${i}`,
-          username: `user_${i}`,
-          email: `user${i}@example.com`,
-          avatar: i % 5 === 0 ? '' : `/images/avatar_${(i % 10) + 1}.jpg`,
-          location: ['北京', '上海', '广州', '深圳', '杭州', '南京', '武汉', '成都', '西安', '重庆'][i % 10],
-          registerTime: registerDate.toLocaleString(),
-          lastLoginTime: lastLoginDate.toLocaleString(),
-          status: i % 10 === 0 ? 'disabled' : 'active',
-          favorites: Math.floor(Math.random() * 20),
-          searches: Math.floor(Math.random() * 50)
-        })
+        // 更新统计数据
+        statistics.totalUsers = stats.totalUsers || 0;
+        statistics.activeUsers = stats.activeUsers || 0;
+        statistics.disabledUsers = stats.disabledUsers || 0;
+        statistics.newUsers = stats.newUsers || 0;
+      } catch (error) {
+        console.error('获取用户统计数据失败:', error);
       }
-      
-      return mockUsers
-    }
+    };
     
     // 处理搜索
     const handleSearch = () => {
