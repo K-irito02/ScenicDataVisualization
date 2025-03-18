@@ -2,6 +2,7 @@ from rest_framework import serializers
 from django.contrib.auth.models import User
 from .models import UserProfile, UserFavorite, UserActionRecord
 from django.contrib.auth import authenticate
+from .utils import redis_client
 
 class UserSerializer(serializers.ModelSerializer):
     """用户序列化器"""
@@ -45,30 +46,93 @@ class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(
         style={'input_type': 'password'},
         write_only=True,
-        min_length=6
+        min_length=6,
+        error_messages={
+            'min_length': '密码长度不能少于6个字符'
+        }
     )
     code = serializers.CharField(write_only=True)
     
     class Meta:
         model = User
         fields = ('username', 'email', 'password', 'code')
+        error_messages = {
+            'username': {
+                'unique': '该用户名已被使用',
+                'required': '请输入用户名',
+                'blank': '用户名不能为空'
+            },
+            'email': {
+                'unique': '该邮箱已被注册',
+                'required': '请输入邮箱地址',
+                'blank': '邮箱地址不能为空',
+                'invalid': '请输入有效的邮箱地址'
+            }
+        }
     
     def validate_code(self, value):
-        # 这里可以添加验证码验证逻辑
-        # 简单实现，可以设置一个固定验证码或接入验证码服务
-        if value != '123456':  # 示例，实际使用中应换成真实验证逻辑
-            raise serializers.ValidationError("验证码无效")
+        email = self.initial_data.get('email')
+        print(f"验证码验证 - 邮箱: {email}, 输入的验证码: {value}")
+        
+        if not email:
+            raise serializers.ValidationError("请先输入邮箱地址")
+        
+        # 从Redis获取验证码
+        redis_key = f'email_code:{email}'
+        stored_code = redis_client.get(redis_key)
+        print(f"Redis中的验证码: {stored_code}")
+        
+        if not stored_code:
+            print(f"Redis中不存在该邮箱的验证码: {redis_key}")
+            raise serializers.ValidationError("验证码已过期，请重新获取")
+        
+        print(f"验证码比较: 输入={value}, 存储={stored_code}")
+        
+        if value != stored_code:
+            print(f"验证码不匹配: 输入={value}, 存储={stored_code}")
+            raise serializers.ValidationError("验证码错误")
+        
+        # 验证成功后删除验证码
+        redis_client.delete(redis_key)
+        print(f"验证码验证成功，已从Redis中删除: {redis_key}")
         return value
     
     def create(self, validated_data):
-        validated_data.pop('code')
-        user = User.objects.create_user(
-            username=validated_data['username'],
-            email=validated_data['email'],
-            password=validated_data['password']
-        )
-        UserProfile.objects.create(user=user)
-        return user
+        print(f"创建用户 - 数据: {validated_data}")
+        try:
+            # 移除验证码字段
+            validated_data.pop('code')
+            
+            # 检查用户名是否已存在
+            if User.objects.filter(username=validated_data['username']).exists():
+                raise serializers.ValidationError({'username': ['该用户名已被使用']})
+            
+            # 检查邮箱是否已存在
+            if User.objects.filter(email=validated_data['email']).exists():
+                raise serializers.ValidationError({'email': ['该邮箱已被注册']})
+            
+            # 创建用户
+            user = User.objects.create_user(
+                username=validated_data['username'],
+                email=validated_data['email'],
+                password=validated_data['password']
+            )
+            print(f"用户创建成功: {user.username}")
+            
+            # 创建用户资料
+            try:
+                UserProfile.objects.create(user=user)
+                print(f"用户资料创建成功: {user.username}")
+            except Exception as e:
+                print(f"用户资料创建失败: {str(e)}")
+                # 如果创建资料失败，删除已创建的用户
+                user.delete()
+                raise serializers.ValidationError({'profile': ['创建用户资料失败']})
+            
+            return user
+        except Exception as e:
+            print(f"用户创建失败: {str(e)}")
+            raise
 
 class UserUpdateSerializer(serializers.ModelSerializer):
     """用户更新序列化器"""

@@ -5,6 +5,10 @@ from rest_framework.views import APIView
 from rest_framework.authtoken.models import Token
 from django.utils import timezone
 from django.db import transaction
+from django.core.mail import send_mail
+from django.conf import settings
+import random
+from .utils import redis_client  # 从utils导入redis_client
 
 from .models import UserProfile, UserFavorite, UserActionRecord
 from django.contrib.auth.models import User
@@ -57,27 +61,41 @@ class RegisterView(APIView):
     permission_classes = [permissions.AllowAny]
     
     def post(self, request):
+        print(f"收到注册请求，数据: {request.data}")
         serializer = RegisterSerializer(data=request.data)
-        if serializer.is_valid():
-            user = serializer.save()
-            
-            # 记录注册操作
-            UserActionRecord.objects.create(
-                user=user,
-                action_type='register',
-                details='用户注册'
-            )
-            
-            return Response({
-                'success': True,
-                'message': '注册成功'
-            }, status=status.HTTP_201_CREATED)
         
-        return Response({
-            'success': False,
-            'message': '注册失败',
-            'errors': serializer.errors
-        }, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            if serializer.is_valid():
+                print("数据验证通过，开始创建用户")
+                user = serializer.save()
+                print(f"用户创建成功: {user.username}")
+                
+                # 记录注册操作
+                UserActionRecord.objects.create(
+                    user=user,
+                    action_type='register',
+                    details='用户注册'
+                )
+                print("注册操作记录已创建")
+                
+                return Response({
+                    'success': True,
+                    'message': '注册成功'
+                }, status=status.HTTP_201_CREATED)
+            else:
+                print(f"数据验证失败，错误信息: {serializer.errors}")
+                return Response({
+                    'success': False,
+                    'message': '注册失败',
+                    'errors': serializer.errors
+                }, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            print(f"注册过程发生异常: {str(e)}")
+            return Response({
+                'success': False,
+                'message': f'注册失败: {str(e)}',
+                'errors': {'detail': str(e)}
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class ProfileUpdateView(APIView):
     """用户资料更新视图"""
@@ -165,3 +183,43 @@ class UserFavoritesView(generics.ListAPIView):
     
     def get_queryset(self):
         return UserFavorite.objects.filter(user=self.request.user)
+
+class SendEmailCodeView(APIView):
+    """发送邮箱验证码视图"""
+    permission_classes = [permissions.AllowAny]
+    
+    def post(self, request):
+        email = request.data.get('email')
+        if not email:
+            return Response({
+                'success': False,
+                'message': '请提供邮箱地址'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # 生成6位随机验证码
+        code = ''.join(random.choices('0123456789', k=6))
+        
+        try:
+            # 发送邮件
+            send_mail(
+                subject='景区数据分析系统 - 验证码',
+                message=f'您的验证码是：{code}，有效期为5分钟。请勿将验证码泄露给他人。',
+                from_email=settings.EMAIL_HOST_USER,
+                recipient_list=[email],
+                fail_silently=False,
+            )
+            
+            # 将验证码保存到Redis，设置5分钟过期
+            redis_key = f'email_code:{email}'
+            redis_client.setex(redis_key, 300, code)
+            
+            return Response({
+                'success': True,
+                'message': '验证码已发送，请查收邮件'
+            })
+            
+        except Exception as e:
+            return Response({
+                'success': False,
+                'message': '验证码发送失败，请稍后重试'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

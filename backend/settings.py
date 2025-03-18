@@ -166,3 +166,16 @@ MEDIA_ROOT = BASE_DIR / 'media'
 
 # 数据库路由器配置
 DATABASE_ROUTERS = ['db_routers.DatabaseRouter']
+
+# Email settings
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.qq.com'  # 使用QQ邮箱的SMTP服务器
+EMAIL_PORT = 587  # QQ邮箱的SMTP端口
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = '2412311965@qq.com'  # 你的QQ邮箱地址
+EMAIL_HOST_PASSWORD = 'whlnoylzdopeechd'  # 你的QQ邮箱授权码
+
+# Redis settings
+REDIS_HOST = 'localhost'
+REDIS_PORT = 6379
+REDIS_DB = 0

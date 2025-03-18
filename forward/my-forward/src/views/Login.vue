@@ -5,6 +5,13 @@ import { useUserStore } from '@/stores/user'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 
+interface LoginResponse {
+  token?: string
+  user_id?: string
+  username?: string
+  is_admin?: boolean
+}
+
 const router = useRouter()
 const userStore = useUserStore()
 
@@ -38,7 +45,7 @@ const handleLogin = async (formEl: FormInstance | undefined) => {
           // 模拟普通用户登录
           const mockResponse = {
             data: {
-              token: 'mock-user-token',
+              token: 'mock-user-token-' + new Date().getTime(), // 添加时间戳避免使用旧token
               user_id: 'user-001',
               username: 'user',
               email: 'user@example.com',
@@ -48,7 +55,18 @@ const handleLogin = async (formEl: FormInstance | undefined) => {
             }
           }
           
-          userStore.setUserInfo({
+          // 直接设置localStorage，避免依赖Store
+          localStorage.setItem('token', mockResponse.data.token)
+          localStorage.setItem('userId', mockResponse.data.user_id)
+          localStorage.setItem('username', mockResponse.data.username)
+          localStorage.setItem('email', mockResponse.data.email)
+          localStorage.setItem('avatar', mockResponse.data.avatar || '')
+          localStorage.setItem('location', mockResponse.data.location || '')
+          localStorage.setItem('isAdmin', mockResponse.data.is_admin.toString())
+          localStorage.setItem('favorites', JSON.stringify([]))
+          
+          // 同时也更新Store
+          await userStore.setUserInfo({
             token: mockResponse.data.token,
             userId: mockResponse.data.user_id,
             username: mockResponse.data.username,
@@ -62,20 +80,60 @@ const handleLogin = async (formEl: FormInstance | undefined) => {
           ElMessage.success('登录成功，正在跳转...')
           
           // 确保状态已更新
-          console.log('登录成功，用户状态:', userStore.getUserInfo())
+          console.log('登录成功，localStorage状态:', {
+            token: localStorage.getItem('token') ? '已设置' : '未设置',
+            userId: localStorage.getItem('userId'),
+            username: localStorage.getItem('username')
+          })
+          console.log('登录成功，Store状态:', userStore.getUserInfo())
           
-          // 使用setTimeout确保状态已更新后再跳转
+          // 使用延时确保状态更新
           setTimeout(() => {
-            console.log('尝试跳转到用户仪表板')
+            console.log('准备跳转到dashboard页面...')
             router.push('/dashboard')
           }, 500)
           return
         }
         
         // 原有的API调用登录逻辑
-        await userStore.login(loginForm.username, loginForm.password)
-        router.push('/dashboard')
+        console.log('开始调用登录API...')
+        const loginResult = await userStore.login(loginForm.username, loginForm.password)
+        console.log('登录API调用成功:', loginResult)
+        
+        // 确保token直接保存到localStorage
+        const responseData = loginResult as LoginResponse
+        if (responseData.token) {
+          console.log('API返回了token，确保保存到localStorage')
+          localStorage.setItem('token', responseData.token)
+          localStorage.setItem('userId', responseData.user_id || '')
+          localStorage.setItem('username', responseData.username || '')
+          localStorage.setItem('isAdmin', (responseData.is_admin || false).toString())
+        } else {
+          console.error('API返回中没有找到token:', loginResult)
+        }
+        
+        // 检查登录状态
+        const userInfo = userStore.getUserInfo()
+        console.log('登录后用户状态:', {
+          isLoggedIn: !!userInfo.token,
+          token: userInfo.token ? `${userInfo.token.substring(0, 10)}...` : 'null',
+          username: userInfo.username
+        })
+        
+        // 检查localStorage
+        console.log('localStorage状态:', {
+          token: localStorage.getItem('token') ? '已设置' : '未设置',
+          userId: localStorage.getItem('userId'),
+          username: localStorage.getItem('username')
+        })
+        
+        // 使用延时确保状态已完全更新
+        setTimeout(() => {
+          console.log('准备跳转到dashboard页面...')
+          router.push('/dashboard')
+        }, 500)
       } catch (error: any) {
+        console.error('登录失败:', error)
         ElMessage.error(error.response?.data?.message || '登录失败，请检查用户名和密码')
       } finally {
         loading.value = false

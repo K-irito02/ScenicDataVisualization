@@ -1,5 +1,16 @@
 import { defineStore } from 'pinia'
-import axios from 'axios'
+import { 
+  getProvinceDistribution, 
+  getScenicLevels, 
+  getTicketPrices, 
+  getOpenTimes, 
+  getCommentAnalysis, 
+  getWordCloud, 
+  getTransportation, 
+  searchScenic as apiSearchScenic, 
+  getFilterOptions as apiGetFilterOptions,
+  getScenicDetail
+} from '../api'
 
 interface ProvinceData {
   name: string
@@ -94,14 +105,17 @@ export const useScenicStore = defineStore('scenic', {
       types: [] as string[],
       levels: [] as string[],
       priceRange: [0, 1000]
-    }
+    },
+    
+    // 景区详情
+    scenicDetail: null as any
   }),
   
   actions: {
     // 获取省份景区分布数据
     async getProvinceData() {
       try {
-        const response = await axios.get('/api/data/province-distribution/')
+        const response = await getProvinceDistribution()
         this.provinceData = response.data
         return response.data
       } catch (error) {
@@ -113,7 +127,7 @@ export const useScenicStore = defineStore('scenic', {
     // 获取景区等级数据
     async getScenicLevels() {
       try {
-        const response = await axios.get('/api/data/scenic-levels/')
+        const response = await getScenicLevels()
         const data = response.data
         
         this.scenicLevels = data.scenic_levels
@@ -142,7 +156,7 @@ export const useScenicStore = defineStore('scenic', {
     // 获取门票价格数据
     async getTicketData() {
       try {
-        const response = await axios.get('/api/data/ticket-prices/')
+        const response = await getTicketPrices()
         this.ticketPrices = response.data
         return response.data
       } catch (error) {
@@ -154,7 +168,7 @@ export const useScenicStore = defineStore('scenic', {
     // 获取开放时间数据
     async getOpenTimeData() {
       try {
-        const response = await axios.get('/api/data/open-times/')
+        const response = await getOpenTimes()
         this.openTimeData = response.data.time_ranges
         this.openTimeScenicMap = response.data.scenic_map
         return response.data
@@ -167,7 +181,7 @@ export const useScenicStore = defineStore('scenic', {
     // 获取评论情感数据
     async getCommentData() {
       try {
-        const response = await axios.get('/api/data/comment-analysis/')
+        const response = await getCommentAnalysis()
         this.commentData = response.data
         return response.data
       } catch (error) {
@@ -179,7 +193,7 @@ export const useScenicStore = defineStore('scenic', {
     // 获取词云数据
     async getWordCloudData(scenicId: string) {
       try {
-        const response = await axios.get(`/api/data/word-cloud/${scenicId}/`)
+        const response = await getWordCloud(scenicId)
         this.wordCloudData = response.data
         this.currentScenicId = scenicId
         return response.data
@@ -192,7 +206,7 @@ export const useScenicStore = defineStore('scenic', {
     // 获取交通方式数据
     async getTransportationData() {
       try {
-        const response = await axios.get('/api/data/transportation/')
+        const response = await getTransportation()
         this.transportationFlows = response.data
         return response.data
       } catch (error) {
@@ -205,12 +219,7 @@ export const useScenicStore = defineStore('scenic', {
     async searchScenic(keyword: string, filters?: any) {
       this.searchLoading = true
       try {
-        const response = await axios.get('/api/scenic/search/', { 
-          params: { 
-            keyword,
-            ...filters
-          } 
-        })
+        const response = await apiSearchScenic(keyword, filters)
         this.searchResults = response.data
         this.searchLoading = false
         return response.data
@@ -224,12 +233,25 @@ export const useScenicStore = defineStore('scenic', {
     // 获取筛选选项
     async getFilterOptions() {
       try {
-        const response = await axios.get('/api/data/filter-options/')
+        const response = await apiGetFilterOptions()
         this.filterOptions = response.data
         return response.data
       } catch (error) {
         console.error('获取筛选选项失败:', error)
         return {}
+      }
+    },
+    
+    // 获取景区详情
+    async getScenicDetail(scenicId: string) {
+      try {
+        const response = await getScenicDetail(scenicId)
+        this.scenicDetail = response.data
+        return response.data
+      } catch (error) {
+        console.error('获取景区详情失败:', error)
+        this.scenicDetail = null
+        return null
       }
     }
   }

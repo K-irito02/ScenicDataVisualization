@@ -55,12 +55,12 @@ admin_management/                 # 管理员应用
 
 1. **scenic_area**：存储主要的景区数据
    - `summary_table`: 景区主要信息表
-   - `price_process`: 门票价格表
+   - `price_process_Django`: 门票价格表
    - `province_traffic`: 省份交通数据表
    - `time_process`: 开放时间表
    - `traffic_add`: 交通数据表
 
-2. **hierarchy_TicketAnalysis**：存储景区等级与票价关系数据
+2. **hierarchy_ticketanalysis**：存储景区等级与票价关系数据
    - `scenic_level_price`: 景区等级票价表
    - `museum_level_price`: 博物馆等级票价表
    - `geological_park_level_price`: 地质公园等级票价表

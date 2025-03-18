@@ -4,6 +4,10 @@ import type { RouteRecordRaw, RouteLocationNormalized, NavigationGuardNext } fro
 const routes: Array<RouteRecordRaw> = [
   {
     path: '/',
+    redirect: '/dashboard'
+  } as RouteRecordRaw,
+  {
+    path: '/login',
     name: 'Login',
     component: () => import('@/views/Login.vue')
   },
@@ -110,12 +114,45 @@ router.beforeEach((to: RouteLocationNormalized, _from: RouteLocationNormalized, 
   const token = localStorage.getItem('token')
   const isAdmin = localStorage.getItem('isAdmin')
   
-  console.log('路由守卫:', {
+  // 强制重新读取所有localStorage项，防止缓存问题
+  const allStorage = {
+    token: localStorage.getItem('token'),
+    userId: localStorage.getItem('userId'),
+    username: localStorage.getItem('username'),
+    isAdmin: localStorage.getItem('isAdmin')
+  }
+  
+  console.log('路由守卫详细信息:', {
     to: to.path,
-    token: !!token,
+    from: _from.path,
+    token: token ? `${token.substring(0, 10)}...` : 'null',
     isAdmin: isAdmin === 'true', 
-    localStorage_isAdmin: isAdmin
+    localStorage_isAdmin: isAdmin,
+    allStorage
   })
+  
+  // 处理登录后的循环重定向问题
+  if (to.path === '/login' && token) {
+    console.log('已登录用户尝试访问登录页，重定向到dashboard')
+    next({ path: '/dashboard' }) 
+    return
+  }
+
+  // 注入到Vue对象，方便调试
+  if (window && !(window as any).vueDebug) {
+    (window as any).vueDebug = {
+      localStorage,
+      router,
+      getTokenInfo: () => {
+        return {
+          token: localStorage.getItem('token'),
+          isAdmin: localStorage.getItem('isAdmin'),
+          username: localStorage.getItem('username')
+        }
+      }
+    }
+    console.log('已为window对象添加vueDebug属性，可在控制台查看认证信息')
+  }
   
   if (to.path.startsWith('/dashboard') && !token) {
     console.log('未登录，重定向到登录页')

@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import axios from 'axios'
+import { login as apiLogin, register as apiRegister, updateProfile as apiUpdateProfile, toggleFavorite as apiToggleFavorite, getFavorites as apiGetFavorites } from '../api'
 
 interface UserState {
   token: string
@@ -13,23 +13,37 @@ interface UserState {
 }
 
 export const useUserStore = defineStore('user', {
-  state: (): UserState => ({
-    token: localStorage.getItem('token') || '',
-    userId: localStorage.getItem('userId') || '',
-    username: localStorage.getItem('username') || '',
-    email: localStorage.getItem('email') || '',
-    avatar: localStorage.getItem('avatar') || '',
-    location: localStorage.getItem('location') || '',
-    isAdmin: localStorage.getItem('isAdmin') === 'true',
-    favorites: JSON.parse(localStorage.getItem('favorites') || '[]')
-  }),
+  state: (): UserState => {
+    const token = localStorage.getItem('token') || ''
+    console.log('初始化用户store状态，获取到token:', token ? `${token.substring(0, 10)}...` : 'null')
+    
+    return {
+      token,
+      userId: localStorage.getItem('userId') || '',
+      username: localStorage.getItem('username') || '',
+      email: localStorage.getItem('email') || '',
+      avatar: localStorage.getItem('avatar') || '',
+      location: localStorage.getItem('location') || '',
+      isAdmin: localStorage.getItem('isAdmin') === 'true',
+      favorites: JSON.parse(localStorage.getItem('favorites') || '[]')
+    }
+  },
   
   actions: {
     login(username: string, password: string) {
+      console.log('用户store: 开始登录流程', { username })
+      
       return new Promise((resolve, reject) => {
-        axios.post('/api/login/', { username, password })
+        apiLogin(username, password)
           .then(response => {
+            console.log('用户store: 登录API返回成功', { status: response.status })
+            
             const { token, user_id, username: name, email, avatar, location, is_admin } = response.data
+            console.log('用户store: 解析用户数据', { 
+              token: token ? `${token.substring(0, 10)}...` : 'null',
+              user_id, 
+              name
+            })
             
             this.setUserInfo({
               token,
@@ -44,6 +58,7 @@ export const useUserStore = defineStore('user', {
             resolve(response)
           })
           .catch(error => {
+            console.error('用户store: 登录API返回错误', error)
             reject(error)
           })
       })
@@ -51,7 +66,7 @@ export const useUserStore = defineStore('user', {
     
     register(username: string, email: string, password: string, code: string) {
       return new Promise((resolve, reject) => {
-        axios.post('/api/register/', { username, email, password, code })
+        apiRegister(username, email, password, code)
           .then(response => {
             resolve(response)
           })
@@ -62,6 +77,8 @@ export const useUserStore = defineStore('user', {
     },
     
     logout() {
+      console.log('用户store: 执行注销操作')
+      
       this.token = ''
       this.userId = ''
       this.username = ''
@@ -79,17 +96,22 @@ export const useUserStore = defineStore('user', {
       localStorage.removeItem('location')
       localStorage.removeItem('isAdmin')
       localStorage.removeItem('favorites')
+      
+      console.log('用户store: 注销完成，清除了所有用户数据')
     },
     
     updateProfile(profileData: Partial<UserState>) {
       return new Promise((resolve, reject) => {
-        axios.put('/api/users/profile/', profileData, {
-          headers: { Authorization: `Bearer ${this.token}` }
-        })
+        apiUpdateProfile(profileData)
           .then(response => {
+            const userData = response.data.user
             this.setUserInfo({
-              ...this.getUserInfo(),
-              ...profileData
+              userId: userData.id,
+              username: userData.username,
+              email: userData.email,
+              avatar: userData.avatar,
+              location: userData.location,
+              isAdmin: userData.isAdmin
             })
             resolve(response)
           })
@@ -102,25 +124,56 @@ export const useUserStore = defineStore('user', {
     toggleFavorite(scenicId: string) {
       const index = this.favorites.indexOf(scenicId)
       
-      if (index > -1) {
-        // 移除收藏
-        this.favorites.splice(index, 1)
-      } else {
-        // 添加收藏
-        this.favorites.push(scenicId)
-      }
-      
-      localStorage.setItem('favorites', JSON.stringify(this.favorites))
-      
-      return axios.post('/api/favorites/toggle/', { scenic_id: scenicId }, {
-        headers: { Authorization: `Bearer ${this.token}` }
+      return new Promise((resolve, reject) => {
+        apiToggleFavorite(scenicId)
+          .then(response => {
+            if (response.data.is_favorite) {
+              // 添加收藏
+              if (index === -1) {
+                this.favorites.push(scenicId)
+              }
+            } else {
+              // 取消收藏
+              if (index > -1) {
+                this.favorites.splice(index, 1)
+              }
+            }
+            
+            localStorage.setItem('favorites', JSON.stringify(this.favorites))
+            resolve(response)
+          })
+          .catch(error => {
+            reject(error)
+          })
+      })
+    },
+    
+    fetchFavorites() {
+      return new Promise((resolve, reject) => {
+        apiGetFavorites()
+          .then(response => {
+            const favoriteIds = response.data.map((item: any) => item.scenic_id)
+            this.favorites = favoriteIds
+            localStorage.setItem('favorites', JSON.stringify(favoriteIds))
+            resolve(response)
+          })
+          .catch(error => {
+            reject(error)
+          })
       })
     },
     
     setUserInfo(user: Partial<UserState>) {
+      console.log('用户store: 设置用户信息', {
+        hasToken: !!user.token,
+        userId: user.userId,
+        username: user.username
+      })
+      
       if (user.token) {
         this.token = user.token
         localStorage.setItem('token', user.token)
+        console.log('用户store: 已保存token到localStorage')
       }
       
       if (user.userId) {

@@ -2,7 +2,7 @@
 import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
-import axios from 'axios'
+import { request } from '@/api'
 import type { FormInstance, FormRules } from 'element-plus'
 import { ElMessage } from 'element-plus'
 
@@ -77,7 +77,11 @@ const sendCode = async () => {
     sendingCode.value = true
     
     try {
-      await axios.post('/api/email/send-code/', { email: registerForm.email })
+      await request({
+        url: '/email/send-code/',
+        method: 'post',
+        data: { email: registerForm.email }
+      })
       ElMessage.success('验证码已发送，请查收邮件')
       
       // 开始倒计时
@@ -90,11 +94,22 @@ const sendCode = async () => {
         }
       }, 1000)
     } catch (error: any) {
-      ElMessage.error(error.response?.data?.message || '发送验证码失败，请稍后重试')
+      console.error('发送验证码错误详情:', error.response?.data)
+      if (error.response?.data?.errors) {
+        const errors = error.response.data.errors
+        Object.keys(errors).forEach(key => {
+          ElMessage.error(`${key}: ${errors[key].join(', ')}`)
+        })
+      } else if (error.response?.data?.message) {
+        ElMessage.error(error.response.data.message)
+      } else {
+        ElMessage.error('发送验证码失败，请稍后重试')
+      }
       sendingCode.value = false
     }
   } catch (error) {
     // 邮箱验证失败
+    sendingCode.value = false
   }
 }
 
@@ -106,6 +121,12 @@ const handleRegister = async (formEl: FormInstance | undefined) => {
     if (valid) {
       loading.value = true
       try {
+        console.log('发送注册请求，数据:', {
+          username: registerForm.username,
+          email: registerForm.email,
+          code: registerForm.code
+        })
+        
         await userStore.register(
           registerForm.username,
           registerForm.email,
@@ -115,7 +136,31 @@ const handleRegister = async (formEl: FormInstance | undefined) => {
         ElMessage.success('注册成功，请登录')
         router.push('/')
       } catch (error: any) {
-        ElMessage.error(error.response?.data?.message || '注册失败，请稍后重试')
+        console.error('注册错误详情:', error.response?.data)
+        console.error('请求数据:', error.response?.config?.data)
+        console.error('完整错误对象:', {
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          data: error.response?.data,
+          headers: error.response?.headers
+        })
+        
+        if (error.response?.data?.errors) {
+          const errors = error.response.data.errors
+          Object.entries(errors).forEach(([key, value]) => {
+            if (Array.isArray(value)) {
+              ElMessage.error(`${key}: ${value.join(', ')}`)
+            } else if (typeof value === 'string') {
+              ElMessage.error(`${key}: ${value}`)
+            } else {
+              ElMessage.error(`${key}: 验证失败`)
+            }
+          })
+        } else if (error.response?.data?.message) {
+          ElMessage.error(error.response.data.message)
+        } else {
+          ElMessage.error('注册失败，请稍后重试')
+        }
       } finally {
         loading.value = false
       }
