@@ -9,10 +9,24 @@ import {
   getTransportation, 
   searchScenic as apiSearchScenic, 
   getFilterOptions as apiGetFilterOptions,
-  getScenicDetail
+  getScenicDetail,
+  getProvinceCityDistribution,
+  getDistrictDistribution
 } from '../api'
 
 interface ProvinceData {
+  name: string
+  value: number
+  scenics?: Array<{
+    id: string
+    name: string
+    city?: string
+    longitude: number
+    latitude: number
+  }>
+}
+
+interface CityData {
   name: string
   value: number
   scenics?: Array<{
@@ -252,6 +266,28 @@ export const useScenicStore = defineStore('scenic', {
         console.error('获取景区详情失败:', error)
         this.scenicDetail = null
         return null
+      }
+    },
+
+    // 获取省份城市景区分布数据
+    async getProvinceCityDistribution(provinceName: string) {
+      try {
+        const response = await getProvinceCityDistribution(provinceName)
+        return response.data
+      } catch (error) {
+        console.error('获取省份城市景区分布数据失败:', error)
+        return []
+      }
+    },
+    
+    // 获取区县景区分布数据
+    async getDistrictDistribution(provinceName: string, cityName: string) {
+      try {
+        const response = await getDistrictDistribution(provinceName, cityName)
+        return response.data
+      } catch (error) {
+        console.error('获取区县景区分布数据失败:', error)
+        return []
       }
     }
   }

@@ -1,0 +1,1574 @@
+[
+  {
+    "name": "浦东新区",
+    "value": 79,
+    "scenics": [
+      {
+        "id": 31,
+        "name": "艺仓美术馆",
+        "longitude": 121.5065,
+        "latitude": 31.2144
+      },
+      {
+        "id": 103,
+        "name": "上海鲜花港",
+        "longitude": 121.9086,
+        "latitude": 30.9186
+      },
+      {
+        "id": 149,
+        "name": "小飞象",
+        "longitude": 121.4905,
+        "latitude": 31.2222
+      },
+      {
+        "id": 181,
+        "name": "翱翔·飞越地平线",
+        "longitude": 121.6595,
+        "latitude": 31.1433
+      },
+      {
+        "id": 231,
+        "name": "七个小矮人矿山车",
+        "longitude": 121.6575,
+        "latitude": 31.1433
+      },
+      {
+        "id": 299,
+        "name": "上海世纪公园",
+        "longitude": 121.5505,
+        "latitude": 31.2194
+      },
+      {
+        "id": 478,
+        "name": "晶彩奇航",
+        "longitude": 121.6575,
+        "latitude": 31.1433
+      },
+      {
+        "id": 520,
+        "name": "上海滨江森林公园",
+        "longitude": 121.555,
+        "latitude": 31.385
+      },
+      {
+        "id": 528,
+        "name": "船奇戏水滩",
+        "longitude": 121.8995,
+        "latitude": 30.9137
+      },
+      {
+        "id": 534,
+        "name": "幻想曲旋转木马",
+        "longitude": 121.4975,
+        "latitude": 31.2397
+      },
+      {
+        "id": 538,
+        "name": "小飞侠天空奇遇",
+        "longitude": 121.6615,
+        "latitude": 31.1437
+      },
+      {
+        "id": 600,
+        "name": "古迹探索营",
+        "longitude": 121.4905,
+        "latitude": 31.2222
+      },
+      {
+        "id": 621,
+        "name": "南汇桃花村",
+        "longitude": 121.7632,
+        "latitude": 31.0489
+      },
+      {
+        "id": 651,
+        "name": "新场古镇",
+        "longitude": 121.649,
+        "latitude": 31.045
+      },
+      {
+        "id": 748,
+        "name": "外滩观光隧道",
+        "longitude": 121.4965,
+        "latitude": 31.2397
+      },
+      {
+        "id": 929,
+        "name": "东方明珠广播电视塔",
+        "longitude": 121.4997,
+        "latitude": 31.2397
+      },
+      {
+        "id": 1044,
+        "name": "滴水湖",
+        "longitude": 121.9333,
+        "latitude": 30.9083
+      },
+      {
+        "id": 1185,
+        "name": "中国航海博物馆",
+        "longitude": 121.9083,
+        "latitude": 30.8886
+      },
+      {
+        "id": 1297,
+        "name": "加勒比海盗—沉落宝藏之战",
+        "longitude": 121.6615,
+        "latitude": 31.1435
+      },
+      {
+        "id": 1379,
+        "name": "上海野生动物园",
+        "longitude": 121.7235,
+        "latitude": 31.05
+      },
+      {
+        "id": 1461,
+        "name": "梦幻世界(上海迪士尼乐园)",
+        "longitude": 121.6577,
+        "latitude": 31.1433
+      },
+      {
+        "id": 1672,
+        "name": "上海迪士尼《美女与野兽》",
+        "longitude": 121.6578,
+        "latitude": 31.1433
+      },
+      {
+        "id": 1680,
+        "name": "昊美术馆",
+        "longitude": 121.567,
+        "latitude": 31.223
+      },
+      {
+        "id": 1828,
+        "name": "后滩公园",
+        "longitude": 121.4705,
+        "latitude": 31.1865
+      },
+      {
+        "id": 1835,
+        "name": "上海迪士尼度假区",
+        "longitude": 121.6578,
+        "latitude": 31.1433
+      },
+      {
+        "id": 1857,
+        "name": "米奇大街",
+        "longitude": 121.6576,
+        "latitude": 31.1434
+      },
+      {
+        "id": 1981,
+        "name": "风暴来临——杰克船长之惊天特技大冒险",
+        "longitude": 121.6585,
+        "latitude": 31.1436
+      },
+      {
+        "id": 2041,
+        "name": "星愿公园",
+        "longitude": 121.6625,
+        "latitude": 31.1442
+      },
+      {
+        "id": 2047,
+        "name": "十二朋友园",
+        "longitude": 121.689,
+        "latitude": 31.143
+      },
+      {
+        "id": 2128,
+        "name": "滨江大道",
+        "longitude": 121.4975,
+        "latitude": 31.2394
+      },
+      {
+        "id": 2282,
+        "name": "震旦博物馆",
+        "longitude": 121.4975,
+        "latitude": 31.2358
+      },
+      {
+        "id": 2429,
+        "name": "上海海洋水族馆",
+        "longitude": 121.5031,
+        "latitude": 31.2394
+      },
+      {
+        "id": 2642,
+        "name": "上海海昌海洋公园",
+        "longitude": 121.9105,
+        "latitude": 30.9175
+      },
+      {
+        "id": 2984,
+        "name": "上海大自然野生昆虫馆",
+        "longitude": 121.502,
+        "latitude": 31.239
+      },
+      {
+        "id": 3097,
+        "name": "胡迪牛仔嘉年华",
+        "longitude": 121.6585,
+        "latitude": 31.1436
+      },
+      {
+        "id": 3383,
+        "name": "泰迪之家博物馆",
+        "longitude": 121.4975,
+        "latitude": 31.2386
+      },
+      {
+        "id": 3488,
+        "name": "《米奇童话专列》",
+        "longitude": 121.6577,
+        "latitude": 31.1434
+      },
+      {
+        "id": 3680,
+        "name": "宝藏湾",
+        "longitude": 121.6775,
+        "latitude": 31.1425
+      },
+      {
+        "id": 3969,
+        "name": "东方明珠全透明观光廊",
+        "longitude": 121.4997,
+        "latitude": 31.2397
+      },
+      {
+        "id": 4006,
+        "name": "东方艺术中心",
+        "longitude": 121.5447,
+        "latitude": 31.2215
+      },
+      {
+        "id": 4107,
+        "name": "探险岛",
+        "longitude": 121.6575,
+        "latitude": 31.1433
+      },
+      {
+        "id": 4113,
+        "name": "弹簧狗团团转",
+        "longitude": 121.487899,
+        "latitude": 31.249162
+      },
+      {
+        "id": 4225,
+        "name": "创极速光轮",
+        "longitude": 121.6595,
+        "latitude": 31.1436
+      },
+      {
+        "id": 4318,
+        "name": "上海中心大厦上海之巅观光厅",
+        "longitude": 121.505,
+        "latitude": 31.239
+      },
+      {
+        "id": 4320,
+        "name": "上海世纪大道",
+        "longitude": 121.527328,
+        "latitude": 31.227014
+      },
+      {
+        "id": 4377,
+        "name": "上海喜玛拉雅美术馆",
+        "longitude": 121.5615,
+        "latitude": 31.2132
+      },
+      {
+        "id": 4383,
+        "name": "迪士尼·皮克斯玩具总动员",
+        "longitude": 121.6573,
+        "latitude": 31.1433
+      },
+      {
+        "id": 4696,
+        "name": "南汇嘴观海公园",
+        "longitude": 121.9575,
+        "latitude": 30.8536
+      }
+    ]
+  },
+  {
+    "name": "黄浦区",
+    "value": 59,
+    "scenics": [
+      {
+        "id": 91,
+        "name": "中共代表团驻沪办事处旧址纪念馆(周公馆)",
+        "longitude": 121.4515,
+        "latitude": 31.2227
+      },
+      {
+        "id": 269,
+        "name": "上海城市规划展示馆",
+        "longitude": 121.473701,
+        "latitude": 31.230416
+      },
+      {
+        "id": 634,
+        "name": "田子坊",
+        "longitude": 121.469,
+        "latitude": 31.207
+      },
+      {
+        "id": 650,
+        "name": "卢浦大桥",
+        "longitude": 121.475,
+        "latitude": 31.195
+      },
+      {
+        "id": 701,
+        "name": "上海琉璃艺术博物馆",
+        "longitude": 121.4692,
+        "latitude": 31.2244
+      },
+      {
+        "id": 729,
+        "name": "上海福州路文化街",
+        "longitude": 121.48,
+        "latitude": 31.2333
+      },
+      {
+        "id": 913,
+        "name": "石库门",
+        "longitude": 121.4737,
+        "latitude": 31.2304
+      },
+      {
+        "id": 988,
+        "name": "上海人民广场",
+        "longitude": 121.475,
+        "latitude": 31.233
+      },
+      {
+        "id": 1276,
+        "name": "上海音乐厅",
+        "longitude": 121.4706,
+        "latitude": 31.2304
+      },
+      {
+        "id": 1320,
+        "name": "上海和平饭店",
+        "longitude": 121.4875,
+        "latitude": 31.2386
+      },
+      {
+        "id": 1553,
+        "name": "豫园-九曲桥",
+        "longitude": 121.4915,
+        "latitude": 31.2272
+      },
+      {
+        "id": 1591,
+        "name": "上海外滩星空错觉艺术馆",
+        "longitude": 121.4905,
+        "latitude": 31.2354
+      },
+      {
+        "id": 1625,
+        "name": "中共一大会址",
+        "longitude": 121.4737,
+        "latitude": 31.2235
+      },
+      {
+        "id": 1775,
+        "name": "上海市人民英雄纪念塔",
+        "longitude": 121.4925,
+        "latitude": 31.2433
+      },
+      {
+        "id": 1958,
+        "name": "上海市历史博物馆",
+        "longitude": 121.475,
+        "latitude": 31.2304
+      },
+      {
+        "id": 2153,
+        "name": "南京路步行街",
+        "longitude": 121.475,
+        "latitude": 31.233
+      },
+      {
+        "id": 2210,
+        "name": "上海博物馆",
+        "longitude": 121.475,
+        "latitude": 31.2304
+      },
+      {
+        "id": 2298,
+        "name": "复星艺术中心",
+        "longitude": 121.4955,
+        "latitude": 31.2325
+      },
+      {
+        "id": 2410,
+        "name": "复兴公园",
+        "longitude": 121.4692,
+        "latitude": 31.2224
+      },
+      {
+        "id": 2442,
+        "name": "上海世博会博物馆",
+        "longitude": 121.4805,
+        "latitude": 31.1982
+      },
+      {
+        "id": 2613,
+        "name": "上海基督教沐恩堂",
+        "longitude": 121.475,
+        "latitude": 31.2304
+      },
+      {
+        "id": 2678,
+        "name": "黄浦江",
+        "longitude": 121.4905,
+        "latitude": 31.2222
+      },
+      {
+        "id": 2848,
+        "name": "外滩",
+        "longitude": 121.4901,
+        "latitude": 31.2397
+      },
+      {
+        "id": 3024,
+        "name": "上海当代艺术博物馆",
+        "longitude": 121.4954,
+        "latitude": 31.2045
+      },
+      {
+        "id": 3067,
+        "name": "豫园",
+        "longitude": 121.487,
+        "latitude": 31.227
+      },
+      {
+        "id": 3142,
+        "name": "上海杜莎夫人蜡像馆",
+        "longitude": 121.4473,
+        "latitude": 31.2277
+      },
+      {
+        "id": 3146,
+        "name": "思南路",
+        "longitude": 121.47,
+        "latitude": 31.22
+      },
+      {
+        "id": 3229,
+        "name": "上海当代艺术馆",
+        "longitude": 121.472644,
+        "latitude": 31.231706
+      },
+      {
+        "id": 3386,
+        "name": "外白渡桥",
+        "longitude": 121.4933,
+        "latitude": 31.2425
+      },
+      {
+        "id": 3403,
+        "name": "法租界会审公廨旧址",
+        "longitude": 121.45,
+        "latitude": 31.22
+      },
+      {
+        "id": 3520,
+        "name": "圆明园路",
+        "longitude": 121.4905,
+        "latitude": 31.2337
+      },
+      {
+        "id": 3795,
+        "name": "上海都市旅游观光巴士",
+        "longitude": 121.4737,
+        "latitude": 31.2304
+      },
+      {
+        "id": 3801,
+        "name": "上海城隍庙旅游区",
+        "longitude": 121.4879,
+        "latitude": 31.2232
+      },
+      {
+        "id": 3824,
+        "name": "陈毅广场",
+        "longitude": 121.4905,
+        "latitude": 31.2397
+      },
+      {
+        "id": 4046,
+        "name": "黄浦公园",
+        "longitude": 121.4905,
+        "latitude": 31.2397
+      },
+      {
+        "id": 4267,
+        "name": "上海大剧院",
+        "longitude": 121.4706,
+        "latitude": 31.2304
+      },
+      {
+        "id": 4459,
+        "name": "汇丰银行大楼",
+        "longitude": 121.4905,
+        "latitude": 31.2359
+      },
+      {
+        "id": 4472,
+        "name": "上海外滩美术馆",
+        "longitude": 121.4905,
+        "latitude": 31.2354
+      },
+      {
+        "id": 4551,
+        "name": "泰康路",
+        "longitude": 121.47,
+        "latitude": 31.21
+      },
+      {
+        "id": 5121,
+        "name": "淮海中路弄堂",
+        "longitude": 121.4585,
+        "latitude": 31.2228
+      },
+      {
+        "id": 5262,
+        "name": "上海老街",
+        "longitude": 121.487899,
+        "latitude": 31.249162
+      },
+      {
+        "id": 5364,
+        "name": "上海孙中山故居纪念馆",
+        "longitude": 121.4483,
+        "latitude": 31.2237
+      },
+      {
+        "id": 5389,
+        "name": "上海文化广场",
+        "longitude": 121.4706,
+        "latitude": 31.2228
+      },
+      {
+        "id": 5431,
+        "name": "外滩-信号台",
+        "longitude": 121.4905,
+        "latitude": 31.2397
+      },
+      {
+        "id": 5446,
+        "name": "老上海1930风情街",
+        "longitude": 121.477,
+        "latitude": 31.235
+      },
+      {
+        "id": 5785,
+        "name": "上海大世界",
+        "longitude": 121.4752,
+        "latitude": 31.227
+      },
+      {
+        "id": 5849,
+        "name": "万国建筑博览群",
+        "longitude": 121.4901,
+        "latitude": 31.237
+      },
+      {
+        "id": 5908,
+        "name": "上海文庙",
+        "longitude": 121.4855,
+        "latitude": 31.2229
+      },
+      {
+        "id": 5953,
+        "name": "淮海路商业街",
+        "longitude": 121.4692,
+        "latitude": 31.2244
+      },
+      {
+        "id": 6108,
+        "name": "思南公馆",
+        "longitude": 121.4692,
+        "latitude": 31.2204
+      }
+    ]
+  },
+  {
+    "name": "徐汇区",
+    "value": 26,
+    "scenics": [
+      {
+        "id": 542,
+        "name": "上海交通大学(徐汇校区)",
+        "longitude": 121.4325,
+        "latitude": 31.1989
+      },
+      {
+        "id": 905,
+        "name": "桂林公园",
+        "longitude": 121.423,
+        "latitude": 31.17
+      },
+      {
+        "id": 934,
+        "name": "武康路历史文化名街",
+        "longitude": 121.4375,
+        "latitude": 31.2089
+      },
+      {
+        "id": 935,
+        "name": "上海师范大学",
+        "longitude": 121.4183,
+        "latitude": 31.1975
+      },
+      {
+        "id": 1002,
+        "name": "土山湾博物馆",
+        "longitude": 121.4435,
+        "latitude": 31.1932
+      },
+      {
+        "id": 1031,
+        "name": "上海图书馆",
+        "longitude": 121.4443,
+        "latitude": 31.2135
+      },
+      {
+        "id": 1440,
+        "name": "上海图书馆徐家汇藏书楼",
+        "longitude": 121.4385,
+        "latitude": 31.1943
+      },
+      {
+        "id": 1508,
+        "name": "复兴中路",
+        "longitude": 121.4575,
+        "latitude": 31.2156
+      },
+      {
+        "id": 1736,
+        "name": "巴金故居",
+        "longitude": 121.4435,
+        "latitude": 31.2131
+      },
+      {
+        "id": 2630,
+        "name": "华东理工大学(徐汇校区)",
+        "longitude": 121.4265,
+        "latitude": 31.1713
+      },
+      {
+        "id": 2688,
+        "name": "上海工艺美术博物馆",
+        "longitude": 121.4435,
+        "latitude": 31.2133
+      },
+      {
+        "id": 2853,
+        "name": "徐家汇天主堂",
+        "longitude": 121.4383,
+        "latitude": 31.1956
+      },
+      {
+        "id": 4069,
+        "name": "徐家汇公园",
+        "longitude": 121.4375,
+        "latitude": 31.1975
+      },
+      {
+        "id": 4240,
+        "name": "武康庭",
+        "longitude": 121.4386,
+        "latitude": 31.2089
+      },
+      {
+        "id": 4313,
+        "name": "钱学森图书馆",
+        "longitude": 121.4325,
+        "latitude": 31.2
+      },
+      {
+        "id": 4966,
+        "name": "上海话剧艺术中心",
+        "longitude": 121.447,
+        "latitude": 31.213
+      },
+      {
+        "id": 5542,
+        "name": "上海宋庆龄故居",
+        "longitude": 121.4385,
+        "latitude": 31.2181
+      },
+      {
+        "id": 5599,
+        "name": "衡山路",
+        "longitude": 121.4389,
+        "latitude": 31.2042
+      },
+      {
+        "id": 5628,
+        "name": "武康大楼",
+        "longitude": 121.4375,
+        "latitude": 31.2094
+      },
+      {
+        "id": 5795,
+        "name": "龙美术馆(西岸馆)",
+        "longitude": 121.457,
+        "latitude": 31.188
+      },
+      {
+        "id": 5829,
+        "name": "丁香花园",
+        "longitude": 121.4386,
+        "latitude": 31.2156
+      },
+      {
+        "id": 6017,
+        "name": "上海植物园",
+        "longitude": 121.443,
+        "latitude": 31.147
+      },
+      {
+        "id": 6471,
+        "name": "徐汇滨江大道",
+        "longitude": 121.45,
+        "latitude": 31.19
+      },
+      {
+        "id": 6563,
+        "name": "龙华革命烈士纪念地",
+        "longitude": 121.449,
+        "latitude": 31.172
+      },
+      {
+        "id": 6755,
+        "name": "上海电影博物馆",
+        "longitude": 121.4386,
+        "latitude": 31.1944
+      },
+      {
+        "id": 6986,
+        "name": "龙华古寺",
+        "longitude": 121.4475,
+        "latitude": 31.1725
+      }
+    ]
+  },
+  {
+    "name": "静安区",
+    "value": 19,
+    "scenics": [
+      {
+        "id": 1421,
+        "name": "愚园路",
+        "longitude": 121.432,
+        "latitude": 31.223
+      },
+      {
+        "id": 1544,
+        "name": "马勒别墅",
+        "longitude": 121.4487,
+        "latitude": 31.2325
+      },
+      {
+        "id": 1668,
+        "name": "上海吴江路休闲娱乐街",
+        "longitude": 121.462,
+        "latitude": 31.2304
+      },
+      {
+        "id": 2284,
+        "name": "巨鹿路",
+        "longitude": 121.4515,
+        "latitude": 31.2229
+      },
+      {
+        "id": 2287,
+        "name": "静安别墅",
+        "longitude": 121.4505,
+        "latitude": 31.227
+      },
+      {
+        "id": 2780,
+        "name": "上海马戏城",
+        "longitude": 121.4565,
+        "latitude": 31.2765
+      },
+      {
+        "id": 2905,
+        "name": "静安公园",
+        "longitude": 121.4483,
+        "latitude": 31.2244
+      },
+      {
+        "id": 2921,
+        "name": "上海四行仓库八百壮士英勇抗日事迹陈列室",
+        "longitude": 121.4761,
+        "latitude": 31.2396
+      },
+      {
+        "id": 3540,
+        "name": "上海戏剧学院",
+        "longitude": 121.4436,
+        "latitude": 31.2228
+      },
+      {
+        "id": 3560,
+        "name": "Prada荣宅",
+        "longitude": 121.4475,
+        "latitude": 31.227
+      },
+      {
+        "id": 3724,
+        "name": "SKY RING屋顶摩天轮",
+        "longitude": 121.475,
+        "latitude": 31.238
+      },
+      {
+        "id": 4255,
+        "name": "中共二大会址纪念馆",
+        "longitude": 121.4565,
+        "latitude": 31.2304
+      },
+      {
+        "id": 4730,
+        "name": "上海自然博物馆",
+        "longitude": 121.4625,
+        "latitude": 31.2317
+      },
+      {
+        "id": 5215,
+        "name": "静安雕塑公园",
+        "longitude": 121.449,
+        "latitude": 31.229
+      },
+      {
+        "id": 5652,
+        "name": "静安寺",
+        "longitude": 121.445,
+        "latitude": 31.223
+      },
+      {
+        "id": 5855,
+        "name": "上海展览中心",
+        "longitude": 121.4489,
+        "latitude": 31.2278
+      },
+      {
+        "id": 5887,
+        "name": "长乐路",
+        "longitude": 121.4515,
+        "latitude": 31.2229
+      },
+      {
+        "id": 5912,
+        "name": "大宁郁金香公园",
+        "longitude": 121.456,
+        "latitude": 31.276
+      },
+      {
+        "id": 6948,
+        "name": "张爱玲故居",
+        "longitude": 121.4435,
+        "latitude": 31.2304
+      }
+    ]
+  },
+  {
+    "name": "松江区",
+    "value": 15,
+    "scenics": [
+      {
+        "id": 397,
+        "name": "上海欢乐谷",
+        "longitude": 121.2235,
+        "latitude": 31.0967
+      },
+      {
+        "id": 1295,
+        "name": "广富林文化遗址",
+        "longitude": 121.1975,
+        "latitude": 31.0456
+      },
+      {
+        "id": 2550,
+        "name": "佘山天主教堂",
+        "longitude": 121.196,
+        "latitude": 31.096
+      },
+      {
+        "id": 2736,
+        "name": "月湖雕塑公园",
+        "longitude": 121.196,
+        "latitude": 31.103
+      },
+      {
+        "id": 3061,
+        "name": "佘山国家森林公园",
+        "longitude": 121.188,
+        "latitude": 31.096
+      },
+      {
+        "id": 3489,
+        "name": "醉白池公园",
+        "longitude": 121.227,
+        "latitude": 31.003
+      },
+      {
+        "id": 4549,
+        "name": "华东政法大学(松江校区)",
+        "longitude": 121.195,
+        "latitude": 31.048
+      },
+      {
+        "id": 4859,
+        "name": "天马山公园",
+        "longitude": 121.195,
+        "latitude": 31.0706
+      },
+      {
+        "id": 4995,
+        "name": "上海影视乐园",
+        "longitude": 121.3115,
+        "latitude": 31.0155
+      },
+      {
+        "id": 5122,
+        "name": "上海辰山植物园",
+        "longitude": 121.195,
+        "latitude": 31.071
+      },
+      {
+        "id": 6272,
+        "name": "上海方塔园",
+        "longitude": 121.2345,
+        "latitude": 31.0123
+      },
+      {
+        "id": 6277,
+        "name": "上海天文博物馆",
+        "longitude": 121.4875,
+        "latitude": 31.2
+      },
+      {
+        "id": 6618,
+        "name": "上海外国语大学",
+        "longitude": 121.4851,
+        "latitude": 31.2135
+      },
+      {
+        "id": 6936,
+        "name": "泰晤士天主堂",
+        "longitude": 121.213,
+        "latitude": 31.035
+      },
+      {
+        "id": 6993,
+        "name": "泰晤士小镇",
+        "longitude": 121.213,
+        "latitude": 31.035
+      }
+    ]
+  },
+  {
+    "name": "闵行区",
+    "value": 13,
+    "scenics": [
+      {
+        "id": 441,
+        "name": "韩国街",
+        "longitude": 121.375,
+        "latitude": 31.1667
+      },
+      {
+        "id": 824,
+        "name": "七宝老街",
+        "longitude": 121.3495,
+        "latitude": 31.1571
+      },
+      {
+        "id": 1069,
+        "name": "热带风暴水上乐园",
+        "longitude": 121.375,
+        "latitude": 31.1433
+      },
+      {
+        "id": 1597,
+        "name": "浦江郊野公园",
+        "longitude": 121.467,
+        "latitude": 31.045
+      },
+      {
+        "id": 1797,
+        "name": "闵行体育公园",
+        "longitude": 121.375,
+        "latitude": 31.1167
+      },
+      {
+        "id": 2100,
+        "name": "召稼楼古镇",
+        "longitude": 121.567,
+        "latitude": 31.045
+      },
+      {
+        "id": 2456,
+        "name": "宝龙美术馆",
+        "longitude": 121.3925,
+        "latitude": 31.1664
+      },
+      {
+        "id": 2618,
+        "name": "上海银七星室内滑雪场",
+        "longitude": 121.3,
+        "latitude": 31.15
+      },
+      {
+        "id": 2865,
+        "name": "七宝古镇",
+        "longitude": 121.35,
+        "latitude": 31.1583
+      },
+      {
+        "id": 3753,
+        "name": "锦江乐园",
+        "longitude": 121.408,
+        "latitude": 31.142
+      },
+      {
+        "id": 5859,
+        "name": "上海交通大学",
+        "longitude": 121.4329,
+        "latitude": 31.2001
+      },
+      {
+        "id": 5880,
+        "name": "上海浦江郊野奇迹花园",
+        "longitude": 121.4625,
+        "latitude": 31.0458
+      },
+      {
+        "id": 6624,
+        "name": "韩湘水博园",
+        "longitude": 121.3925,
+        "latitude": 31.0456
+      }
+    ]
+  },
+  {
+    "name": "青浦区",
+    "value": 13,
+    "scenics": [
+      {
+        "id": 944,
+        "name": "大清邮局旧址",
+        "longitude": 121.4879,
+        "latitude": 31.2492
+      },
+      {
+        "id": 1348,
+        "name": "朱家角城隍庙",
+        "longitude": 121.0515,
+        "latitude": 31.1117
+      },
+      {
+        "id": 1416,
+        "name": "练塘古镇",
+        "longitude": 121.0333,
+        "latitude": 31.0333
+      },
+      {
+        "id": 2059,
+        "name": "曲水园",
+        "longitude": 121.249444,
+        "latitude": 31.229167
+      },
+      {
+        "id": 2277,
+        "name": "金泽古镇",
+        "longitude": 121.023,
+        "latitude": 31.042
+      },
+      {
+        "id": 2347,
+        "name": "青西郊野公园",
+        "longitude": 121.0833,
+        "latitude": 31.0833
+      },
+      {
+        "id": 2592,
+        "name": "朱家角古镇",
+        "longitude": 121.049,
+        "latitude": 31.111
+      },
+      {
+        "id": 2615,
+        "name": "上海太阳岛旅游度假区",
+        "longitude": 121.061,
+        "latitude": 31.082
+      },
+      {
+        "id": 3120,
+        "name": "上海大观园",
+        "longitude": 121.0833,
+        "latitude": 31.1167
+      },
+      {
+        "id": 4645,
+        "name": "东方绿舟",
+        "longitude": 121.0833,
+        "latitude": 31.0833
+      },
+      {
+        "id": 5140,
+        "name": "淀山湖",
+        "longitude": 121.058,
+        "latitude": 31.107
+      },
+      {
+        "id": 5441,
+        "name": "朱家角北大街",
+        "longitude": 121.053,
+        "latitude": 31.111
+      },
+      {
+        "id": 6091,
+        "name": "余德耀美术馆",
+        "longitude": 121.4465,
+        "latitude": 31.1918
+      }
+    ]
+  },
+  {
+    "name": "嘉定区",
+    "value": 12,
+    "scenics": [
+      {
+        "id": 407,
+        "name": "嘉定紫藤园",
+        "longitude": 121.251,
+        "latitude": 31.383
+      },
+      {
+        "id": 1302,
+        "name": "嘉定法华塔",
+        "longitude": 121.253,
+        "latitude": 31.383
+      },
+      {
+        "id": 1727,
+        "name": "上海汽车博览公园",
+        "longitude": 121.2225,
+        "latitude": 31.2858
+      },
+      {
+        "id": 2979,
+        "name": "南翔老街",
+        "longitude": 121.316667,
+        "latitude": 31.3
+      },
+      {
+        "id": 3242,
+        "name": "汇龙潭公园",
+        "longitude": 121.25,
+        "latitude": 31.3833
+      },
+      {
+        "id": 3925,
+        "name": "州桥老街",
+        "longitude": 121.25,
+        "latitude": 31.3833
+      },
+      {
+        "id": 4348,
+        "name": "秋霞圃",
+        "longitude": 121.251,
+        "latitude": 31.383
+      },
+      {
+        "id": 5283,
+        "name": "嘉北郊野公园",
+        "longitude": 121.213,
+        "latitude": 31.384
+      },
+      {
+        "id": 5722,
+        "name": "古猗园",
+        "longitude": 121.3245,
+        "latitude": 31.2978
+      },
+      {
+        "id": 5791,
+        "name": "上海汽车博物馆",
+        "longitude": 121.227747,
+        "latitude": 31.285472
+      },
+      {
+        "id": 6032,
+        "name": "南翔古镇",
+        "longitude": 121.318,
+        "latitude": 31.297
+      },
+      {
+        "id": 6651,
+        "name": "嘉定孔庙",
+        "longitude": 121.253,
+        "latitude": 31.383
+      }
+    ]
+  },
+  {
+    "name": "崇明区",
+    "value": 10,
+    "scenics": [
+      {
+        "id": 360,
+        "name": "长兴岛",
+        "longitude": 121.685,
+        "latitude": 31.395
+      },
+      {
+        "id": 1491,
+        "name": "横沙岛",
+        "longitude": 121.85,
+        "latitude": 31.32
+      },
+      {
+        "id": 1700,
+        "name": "东滩湿地公园",
+        "longitude": 121.861,
+        "latitude": 31.51
+      },
+      {
+        "id": 2412,
+        "name": "西沙湿地公园",
+        "longitude": 121.8667,
+        "latitude": 31.3833
+      },
+      {
+        "id": 4209,
+        "name": "长兴岛郊野公园",
+        "longitude": 121.689,
+        "latitude": 31.394
+      },
+      {
+        "id": 4950,
+        "name": "西沙明珠湖景区",
+        "longitude": 121.861944,
+        "latitude": 31.093611
+      },
+      {
+        "id": 5478,
+        "name": "前卫生态村",
+        "longitude": 121.8686,
+        "latitude": 31.7425
+      },
+      {
+        "id": 5500,
+        "name": "崇明岛",
+        "longitude": 121.3975,
+        "latitude": 31.6237
+      },
+      {
+        "id": 5635,
+        "name": "紫海鹭缘浪漫爱情主题庄园",
+        "longitude": 121.3975,
+        "latitude": 31.6232
+      },
+      {
+        "id": 6627,
+        "name": "上海崇明东滩鸟类国家级自然保护区",
+        "longitude": 121.966667,
+        "latitude": 31.5
+      }
+    ]
+  },
+  {
+    "name": "虹口区",
+    "value": 10,
+    "scenics": [
+      {
+        "id": 1183,
+        "name": "鲁迅纪念馆",
+        "longitude": 120.5826,
+        "latitude": 29.9887
+      },
+      {
+        "id": 1351,
+        "name": "鲁迅故居",
+        "longitude": 120.5833,
+        "latitude": 29.9833
+      },
+      {
+        "id": 1595,
+        "name": "上海犹太难民纪念馆",
+        "longitude": 121.5065,
+        "latitude": 31.2552
+      },
+      {
+        "id": 2231,
+        "name": "上海邮政博物馆",
+        "longitude": 121.4855,
+        "latitude": 31.2492
+      },
+      {
+        "id": 3166,
+        "name": "鲁迅故居",
+        "longitude": 121.4483,
+        "latitude": 31.2605
+      },
+      {
+        "id": 3636,
+        "name": "1933老场坊",
+        "longitude": 121.4975,
+        "latitude": 31.2603
+      },
+      {
+        "id": 4654,
+        "name": "甜爱路",
+        "longitude": 121.4815,
+        "latitude": 31.2644
+      },
+      {
+        "id": 6415,
+        "name": "多伦路文化名人街",
+        "longitude": 121.4833,
+        "latitude": 31.2667
+      },
+      {
+        "id": 6649,
+        "name": "鲁迅纪念馆",
+        "longitude": 119.301,
+        "latitude": 26.071
+      },
+      {
+        "id": 6991,
+        "name": "鲁迅纪念馆",
+        "longitude": 121.485,
+        "latitude": 31.264
+      }
+    ]
+  },
+  {
+    "name": "杨浦区",
+    "value": 8,
+    "scenics": [
+      {
+        "id": 1202,
+        "name": "复兴岛公园",
+        "longitude": 121.555,
+        "latitude": 31.285
+      },
+      {
+        "id": 2605,
+        "name": "同济大学(四平路校区)",
+        "longitude": 121.506377,
+        "latitude": 31.282569
+      },
+      {
+        "id": 2700,
+        "name": "上海共青森林公园",
+        "longitude": 121.55,
+        "latitude": 31.3167
+      },
+      {
+        "id": 3423,
+        "name": "上海财经大学",
+        "longitude": 121.4851,
+        "latitude": 31.2385
+      },
+      {
+        "id": 4768,
+        "name": "上海安徒生童话乐园",
+        "longitude": 121.3185,
+        "latitude": 31.2986
+      },
+      {
+        "id": 5171,
+        "name": "复旦大学邯郸校区",
+        "longitude": 121.5034,
+        "latitude": 31.2992
+      },
+      {
+        "id": 5892,
+        "name": "顽酷滑雪工厂",
+        "longitude": 121.5025,
+        "latitude": 31.2394
+      },
+      {
+        "id": 7084,
+        "name": "杨浦大桥",
+        "longitude": 121.541,
+        "latitude": 31.259
+      }
+    ]
+  },
+  {
+    "name": "长宁区",
+    "value": 6,
+    "scenics": [
+      {
+        "id": 268,
+        "name": "新华路",
+        "longitude": 121.422,
+        "latitude": 31.202
+      },
+      {
+        "id": 1429,
+        "name": "上海动物园",
+        "longitude": 121.3555,
+        "latitude": 31.1945
+      },
+      {
+        "id": 1469,
+        "name": "华东政法大学长宁校区",
+        "longitude": 121.424,
+        "latitude": 31.22
+      },
+      {
+        "id": 4169,
+        "name": "上生新所",
+        "longitude": 121.4225,
+        "latitude": 31.2136
+      },
+      {
+        "id": 4799,
+        "name": "上海儿童博物馆",
+        "longitude": 121.3975,
+        "latitude": 31.2222
+      },
+      {
+        "id": 5031,
+        "name": "凌空SOHO",
+        "longitude": 121.3125,
+        "latitude": 31.1935
+      }
+    ]
+  },
+  {
+    "name": "普陀区",
+    "value": 6,
+    "scenics": [
+      {
+        "id": 564,
+        "name": "M50创意园",
+        "longitude": 121.4435,
+        "latitude": 31.2438
+      },
+      {
+        "id": 1179,
+        "name": "上海真如寺",
+        "longitude": 121.4075,
+        "latitude": 31.2506
+      },
+      {
+        "id": 1502,
+        "name": "上海乐高探索中心",
+        "longitude": 121.4475,
+        "latitude": 31.2397
+      },
+      {
+        "id": 1783,
+        "name": "玉佛禅寺",
+        "longitude": 121.4325,
+        "latitude": 31.2456
+      },
+      {
+        "id": 3112,
+        "name": "长风公园",
+        "longitude": 121.3975,
+        "latitude": 31.2317
+      },
+      {
+        "id": 3763,
+        "name": "上海长风海洋世界",
+        "longitude": 121.3975,
+        "latitude": 31.2317
+      }
+    ]
+  },
+  {
+    "name": "宝山区",
+    "value": 5,
+    "scenics": [
+      {
+        "id": 1967,
+        "name": "上海玻璃博物馆",
+        "longitude": 121.4532,
+        "latitude": 31.3064
+      },
+      {
+        "id": 1992,
+        "name": "上海吴淞炮台湾国家湿地公园",
+        "longitude": 121.5065,
+        "latitude": 31.3896
+      },
+      {
+        "id": 2727,
+        "name": "顾村公园",
+        "longitude": 121.3625,
+        "latitude": 31.3458
+      },
+      {
+        "id": 3351,
+        "name": "淞沪抗战纪念馆",
+        "longitude": 121.4925,
+        "latitude": 31.3764
+      },
+      {
+        "id": 5390,
+        "name": "上海大学",
+        "longitude": 121.389,
+        "latitude": 31.316
+      }
+    ]
+  },
+  {
+    "name": "金山区",
+    "value": 3,
+    "scenics": [
+      {
+        "id": 1725,
+        "name": "金山嘴渔村",
+        "longitude": 121.338,
+        "latitude": 30.719
+      },
+      {
+        "id": 6856,
+        "name": "枫泾古镇",
+        "longitude": 121.0167,
+        "latitude": 30.8917
+      },
+      {
+        "id": 7100,
+        "name": "金山城市沙滩",
+        "longitude": 121.341,
+        "latitude": 30.728
+      }
+    ]
+  },
+  {
+    "name": "奉贤区",
+    "value": 2,
+    "scenics": [
+      {
+        "id": 5773,
+        "name": "上海海湾国家森林公园",
+        "longitude": 121.6833,
+        "latitude": 30.9167
+      },
+      {
+        "id": 6778,
+        "name": "碧海金沙",
+        "longitude": 121.4985,
+        "latitude": 30.85
+      }
+    ]
+  }
+]

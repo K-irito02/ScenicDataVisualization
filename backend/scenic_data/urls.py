@@ -31,4 +31,10 @@ urlpatterns = [
     
     # 景区详情接口
     path('scenic/<str:pk>/', views.ScenicDetailView.as_view(), name='scenic-detail'),
+    
+    # 省份城市景区分布数据
+    path('data/province-city-distribution/<str:province_name>/', views.ProvinceCityDistributionView.as_view(), name='province-city-distribution'),
+    
+    # 区县景区分布数据
+    path('data/district-distribution/<str:province_name>/<str:city_name>/', views.DistrictDistributionView.as_view(), name='district-distribution'),
 ] 

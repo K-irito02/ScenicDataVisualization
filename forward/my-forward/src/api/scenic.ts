@@ -4,6 +4,12 @@ import request from './axios';
  * 获取省份景区分布数据
  */
 export function getProvinceDistribution() {
+  // // 返回空数据，不使用模拟数据
+  // return Promise.resolve({
+  //   data: []
+  // });
+  
+  // 真实API调用（暂时注释）
   return request({
     url: '/data/province-distribution/',
     method: 'get'
@@ -104,6 +110,29 @@ export function getFilterOptions() {
 export function getScenicDetail(scenicId: string) {
   return request({
     url: `/scenic/${scenicId}/`,
+    method: 'get'
+  });
+}
+
+/**
+ * 获取省份城市景区分布数据
+ * @param provinceName 省份名称
+ */
+export function getProvinceCityDistribution(provinceName: string) {
+  return request({
+    url: `/data/province-city-distribution/${provinceName}/`,
+    method: 'get'
+  });
+}
+
+/**
+ * 获取区县景区分布数据
+ * @param provinceName 省份名称
+ * @param cityName 城市名称
+ */
+export function getDistrictDistribution(provinceName: string, cityName: string) {
+  return request({
+    url: `/data/district-distribution/${provinceName}/${cityName}/`,
     method: 'get'
   });
 } 

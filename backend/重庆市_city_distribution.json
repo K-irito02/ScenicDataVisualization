@@ -1,0 +1,566 @@
+[
+  {
+    "name": "市辖区",
+    "value": 181,
+    "scenics": [
+      {
+        "id": 19,
+        "name": "洪崖滴翠",
+        "longitude": 106.5767,
+        "latitude": 29.5628
+      },
+      {
+        "id": 51,
+        "name": "重庆大学城",
+        "longitude": 106.299,
+        "latitude": 29.608
+      },
+      {
+        "id": 80,
+        "name": "西南政法大学",
+        "longitude": 106.601144,
+        "latitude": 29.564948
+      },
+      {
+        "id": 112,
+        "name": "双江古镇",
+        "longitude": 105.82,
+        "latitude": 30.17
+      },
+      {
+        "id": 150,
+        "name": "东温泉风景区",
+        "longitude": 106.8333,
+        "latitude": 29.3833
+      },
+      {
+        "id": 168,
+        "name": "华岩寺",
+        "longitude": 106.443,
+        "latitude": 29.502
+      },
+      {
+        "id": 176,
+        "name": "钓鱼城景区",
+        "longitude": 106.305,
+        "latitude": 29.978
+      },
+      {
+        "id": 184,
+        "name": "二厂文创公园",
+        "longitude": 106.5435,
+        "latitude": 29.5582
+      },
+      {
+        "id": 236,
+        "name": "乐和乐都动物主题乐园",
+        "longitude": 105.889,
+        "latitude": 29.353
+      },
+      {
+        "id": 294,
+        "name": "重庆国泰艺术中心",
+        "longitude": 106.5762,
+        "latitude": 29.5615
+      },
+      {
+        "id": 344,
+        "name": "慈云寺",
+        "longitude": 106.5825,
+        "latitude": 29.5625
+      },
+      {
+        "id": 380,
+        "name": "鸿恩寺森林公园",
+        "longitude": 106.503,
+        "latitude": 29.586
+      },
+      {
+        "id": 398,
+        "name": "重庆大轰炸惨案遗址",
+        "longitude": 106.5765,
+        "latitude": 29.5585
+      },
+      {
+        "id": 427,
+        "name": "菜园坝长江大桥",
+        "longitude": 106.541,
+        "latitude": 29.549
+      },
+      {
+        "id": 454,
+        "name": "山城巷传统风貌区",
+        "longitude": 106.576,
+        "latitude": 29.558
+      },
+      {
+        "id": 500,
+        "name": "金佛山-绝壁栈道",
+        "longitude": 107.177,
+        "latitude": 29.078
+      },
+      {
+        "id": 501,
+        "name": "李子坝抗战遗址公园",
+        "longitude": 106.531,
+        "latitude": 29.561
+      },
+      {
+        "id": 545,
+        "name": "偏岩古镇",
+        "longitude": 106.45,
+        "latitude": 29.83
+      },
+      {
+        "id": 575,
+        "name": "喵儿石创艺特区",
+        "longitude": 106.537,
+        "latitude": 29.583
+      },
+      {
+        "id": 595,
+        "name": "金刀峡自然风景区",
+        "longitude": 106.5333,
+        "latitude": 29.8333
+      },
+      {
+        "id": 602,
+        "name": "千厮门大桥",
+        "longitude": 106.5833,
+        "latitude": 29.5667
+      },
+      {
+        "id": 612,
+        "name": "武陵仙山",
+        "longitude": 108.75,
+        "latitude": 29.53
+      },
+      {
+        "id": 745,
+        "name": "海兰云天温泉",
+        "longitude": 106.3667,
+        "latitude": 29.5333
+      },
+      {
+        "id": 764,
+        "name": "重庆南开中学",
+        "longitude": 106.5341,
+        "latitude": 29.5333
+      },
+      {
+        "id": 806,
+        "name": "湖广会馆",
+        "longitude": 106.5825,
+        "latitude": 29.5611
+      },
+      {
+        "id": 808,
+        "name": "圣寿寺",
+        "longitude": 106.533,
+        "latitude": 29.583
+      },
+      {
+        "id": 871,
+        "name": "圣灯山森林公园",
+        "longitude": 106.5667,
+        "latitude": 29.2333
+      },
+      {
+        "id": 939,
+        "name": "爱莉丝庄园",
+        "longitude": 108.7135,
+        "latitude": 29.5555
+      },
+      {
+        "id": 1015,
+        "name": "濯水古镇",
+        "longitude": 108.77,
+        "latitude": 29.53
+      },
+      {
+        "id": 1050,
+        "name": "重庆市人民大礼堂",
+        "longitude": 106.5568,
+        "latitude": 29.5631
+      },
+      {
+        "id": 1063,
+        "name": "重庆抗战遗址博物馆",
+        "longitude": 106.6025,
+        "latitude": 29.5636
+      },
+      {
+        "id": 1091,
+        "name": "洪崖洞民俗风貌区",
+        "longitude": 106.5765,
+        "latitude": 29.5628
+      },
+      {
+        "id": 1093,
+        "name": "朝天门长江大桥",
+        "longitude": 106.5833,
+        "latitude": 29.5667
+      },
+      {
+        "id": 1099,
+        "name": "西南大学",
+        "longitude": 106.4305,
+        "latitude": 29.8231
+      },
+      {
+        "id": 1165,
+        "name": "南坪步行街",
+        "longitude": 106.5638,
+        "latitude": 29.5238
+      },
+      {
+        "id": 1274,
+        "name": "重庆九街",
+        "longitude": 106.543,
+        "latitude": 29.583
+      },
+      {
+        "id": 1324,
+        "name": "重庆工商大学(南岸校区)",
+        "longitude": 106.5765,
+        "latitude": 29.5171
+      },
+      {
+        "id": 1383,
+        "name": "中国黔江城市大峡谷",
+        "longitude": 108.782,
+        "latitude": 29.533
+      },
+      {
+        "id": 1401,
+        "name": "禹王宫",
+        "longitude": 108.37,
+        "latitude": 30.8
+      },
+      {
+        "id": 1535,
+        "name": "基德的奇幻花园",
+        "longitude": 106.504962,
+        "latitude": 29.533155
+      },
+      {
+        "id": 1606,
+        "name": "龙头寺公园",
+        "longitude": 106.5505,
+        "latitude": 29.5892
+      },
+      {
+        "id": 1662,
+        "name": "重庆南山风景区",
+        "longitude": 106.6,
+        "latitude": 29.55
+      },
+      {
+        "id": 1696,
+        "name": "重庆环球金融中心观景台",
+        "longitude": 106.5765,
+        "latitude": 29.5585
+      },
+      {
+        "id": 1940,
+        "name": "长寿湖风景区",
+        "longitude": 107.07,
+        "latitude": 29.83
+      },
+      {
+        "id": 1977,
+        "name": "中山古镇",
+        "longitude": 106.3167,
+        "latitude": 28.9167
+      },
+      {
+        "id": 1991,
+        "name": "法国水师兵营旧址",
+        "longitude": 106.5833,
+        "latitude": 29.5628
+      },
+      {
+        "id": 1994,
+        "name": "两路口皇冠大扶梯",
+        "longitude": 106.5495,
+        "latitude": 29.5562
+      },
+      {
+        "id": 2057,
+        "name": "龙鳞石海景区",
+        "longitude": 106.816667,
+        "latitude": 29.083333
+      },
+      {
+        "id": 2069,
+        "name": "重庆永川卫星湖",
+        "longitude": 105.89,
+        "latitude": 29.35
+      },
+      {
+        "id": 2073,
+        "name": "长嘉汇弹子石老街",
+        "longitude": 106.5905,
+        "latitude": 29.5635
+      }
+    ]
+  },
+  {
+    "name": "县",
+    "value": 42,
+    "scenics": [
+      {
+        "id": 348,
+        "name": "蚩尤九黎城",
+        "longitude": 108.661,
+        "latitude": 29.291
+      },
+      {
+        "id": 376,
+        "name": "丰都雪玉洞景区",
+        "longitude": 107.732,
+        "latitude": 29.866
+      },
+      {
+        "id": 450,
+        "name": "石宝寨",
+        "longitude": 108.05,
+        "latitude": 30.3
+      },
+      {
+        "id": 486,
+        "name": "天龙天坑",
+        "longitude": 108.75,
+        "latitude": 29.25
+      },
+      {
+        "id": 508,
+        "name": "宁厂古镇",
+        "longitude": 109.63,
+        "latitude": 31.4
+      },
+      {
+        "id": 510,
+        "name": "奉节天坑地缝",
+        "longitude": 109.47,
+        "latitude": 30.75
+      },
+      {
+        "id": 763,
+        "name": "河湾山寨",
+        "longitude": 108.75,
+        "latitude": 28.83
+      },
+      {
+        "id": 1047,
+        "name": "南天湖景区",
+        "longitude": 108.123456,
+        "latitude": 29.654321
+      },
+      {
+        "id": 1514,
+        "name": "龙潭古镇",
+        "longitude": 108.75,
+        "latitude": 28.83
+      },
+      {
+        "id": 1952,
+        "name": "小小三峡",
+        "longitude": 109.884,
+        "latitude": 31.074
+      },
+      {
+        "id": 2132,
+        "name": "丰都名山",
+        "longitude": 107.7305,
+        "latitude": 29.8694
+      },
+      {
+        "id": 2192,
+        "name": "张飞庙",
+        "longitude": 108.414,
+        "latitude": 30.298
+      },
+      {
+        "id": 2386,
+        "name": "天井峡地缝",
+        "longitude": 109.4667,
+        "latitude": 30.8333
+      },
+      {
+        "id": 2398,
+        "name": "龚滩古镇乌江画廊",
+        "longitude": 108.45,
+        "latitude": 28.83
+      },
+      {
+        "id": 2519,
+        "name": "巫山小三峡",
+        "longitude": 109.878,
+        "latitude": 31.074
+      },
+      {
+        "id": 2554,
+        "name": "神女峰",
+        "longitude": 109.89,
+        "latitude": 30.88
+      },
+      {
+        "id": 2617,
+        "name": "武隆龙水峡地缝",
+        "longitude": 107.7667,
+        "latitude": 29.4333
+      },
+      {
+        "id": 2639,
+        "name": "巫山十二峰",
+        "longitude": 109.878,
+        "latitude": 31.074
+      },
+      {
+        "id": 2726,
+        "name": "天津北少林寺",
+        "longitude": 117.407424,
+        "latitude": 39.904214
+      },
+      {
+        "id": 2857,
+        "name": "白帝城·瞿塘峡景区",
+        "longitude": 109.57,
+        "latitude": 31.04
+      },
+      {
+        "id": 2863,
+        "name": "鬼国神宫",
+        "longitude": 108.37,
+        "latitude": 30.8
+      },
+      {
+        "id": 3012,
+        "name": "重庆千野草场景区",
+        "longitude": 108.25,
+        "latitude": 30.05
+      },
+      {
+        "id": 3046,
+        "name": "黑龙桥",
+        "longitude": 108.4341,
+        "latitude": 29.3257
+      },
+      {
+        "id": 3053,
+        "name": "摩围山风景区",
+        "longitude": 108.75,
+        "latitude": 29.25
+      },
+      {
+        "id": 3359,
+        "name": "酉阳桃花源风景区",
+        "longitude": 108.767,
+        "latitude": 28.841
+      },
+      {
+        "id": 3596,
+        "name": "巫峡",
+        "longitude": 109.878,
+        "latitude": 31.074
+      },
+      {
+        "id": 3710,
+        "name": "酉州古城",
+        "longitude": 108.767,
+        "latitude": 28.841
+      },
+      {
+        "id": 3862,
+        "name": "小寨天坑风景区",
+        "longitude": 109.47,
+        "latitude": 30.83
+      },
+      {
+        "id": 4119,
+        "name": "白帝城景区",
+        "longitude": 109.5703,
+        "latitude": 31.0422
+      },
+      {
+        "id": 4405,
+        "name": "灵巫洞景区",
+        "longitude": 109.57,
+        "latitude": 31.4
+      },
+      {
+        "id": 4557,
+        "name": "黄水国家森林公园",
+        "longitude": 108.41,
+        "latitude": 30.19
+      },
+      {
+        "id": 4872,
+        "name": "重庆长江三峡",
+        "longitude": 108.413439,
+        "latitude": 30.807914
+      },
+      {
+        "id": 4934,
+        "name": "太古洞",
+        "longitude": 108.697,
+        "latitude": 29.522
+      },
+      {
+        "id": 4979,
+        "name": "红池坝国家森林公园",
+        "longitude": 108.75,
+        "latitude": 31.5
+      },
+      {
+        "id": 5103,
+        "name": "武隆天坑地缝国家地质公园",
+        "longitude": 107.76,
+        "latitude": 29.43
+      },
+      {
+        "id": 5513,
+        "name": "阿依河旅游景区",
+        "longitude": 108.202,
+        "latitude": 29.123
+      },
+      {
+        "id": 5554,
+        "name": "重庆乌江·龚滩旅游度假区",
+        "longitude": 108.45,
+        "latitude": 28.83
+      },
+      {
+        "id": 6309,
+        "name": "夔门",
+        "longitude": 109.57,
+        "latitude": 31.04
+      },
+      {
+        "id": 6773,
+        "name": "酉阳伏羲洞",
+        "longitude": 108.767,
+        "latitude": 28.841
+      },
+      {
+        "id": 6883,
+        "name": "丰都鬼城",
+        "longitude": 107.7306,
+        "latitude": 29.8664
+      },
+      {
+        "id": 6953,
+        "name": "重庆云阳龙缸国家地质公园",
+        "longitude": 108.85,
+        "latitude": 30.95
+      },
+      {
+        "id": 7107,
+        "name": "武隆喀斯特旅游区(仙女山)",
+        "longitude": 107.7667,
+        "latitude": 29.4333
+      }
+    ]
+  }
+]

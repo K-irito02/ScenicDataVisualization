@@ -585,52 +585,204 @@ class ScenicDetailView(views.APIView):
     permission_classes = [permissions.AllowAny]
     
     def get(self, request, pk):
+        # 获取景区详情
         try:
-            # 获取景区详情
-            scenic = get_object_or_404(ScenicData, scenic_id=pk)
-            
-            # 记录查看操作(如果用户已登录)
-            try:
-                if request.user.is_authenticated:
-                    UserActionRecord.objects.create(
-                        user=request.user,
-                        action_type='view',
-                        details=f'查看景区详情(ID: {pk}, 名称: {scenic.name})'
-                    )
-            except Exception as e:
-                print(f"记录用户操作失败: {e}")
-            
-            # 序列化景区信息
+            scenic = ScenicData.objects.get(scenic_id=pk)
             serializer = ScenicDetailSerializer(scenic)
             
-            # 获取景区推荐
-            try:
-                # 简单示例：基于相同省份和城市推荐，实际项目可以使用更复杂的推荐算法
-                recommendations = ScenicData.objects.filter(
-                    province=scenic.province,
-                    city=scenic.city
-                ).exclude(
-                    scenic_id=pk
-                ).values(
-                    'scenic_id', 'name', 'image_url', 'min_price'
-                )[:5]  # 限制返回5个推荐
+            # 记录用户操作
+            if request.user.is_authenticated:
+                UserActionRecord.objects.create(
+                    user=request.user,
+                    action_type='view_scenic_detail',
+                    content=f"查看景区详情: {scenic.name}"
+                )
                 
-                # 构建响应数据
-                response_data = serializer.data
-                response_data['recommendations'] = [
-                    {
-                        'id': rec['scenic_id'],
-                        'name': rec['name'],
-                        'image': rec['image_url'],
-                        'price': rec['min_price']
-                    } for rec in recommendations
-                ]
+            return Response(serializer.data)
+        except ScenicData.DoesNotExist:
+            return Response({'detail': '景区不存在'}, status=status.HTTP_404_NOT_FOUND)
+
+class ProvinceCityDistributionView(views.APIView):
+    """省份城市景区分布视图"""
+    permission_classes = [permissions.AllowAny]
+    
+    def get(self, request, province_name):
+        """获取指定省份内各城市的景区分布数据"""
+        try:
+            # 记录请求信息以便调试
+            print(f"请求省份城市分布数据: {province_name}")
+            
+            # 检查省份是否存在
+            if not ScenicData.objects.filter(province=province_name).exists():
+                print(f"省份不存在: {province_name}")
+                return Response({'detail': f'省份 {province_name} 不存在或没有景区数据'}, 
+                               status=status.HTTP_404_NOT_FOUND)
+            
+            # 统计该省份内每个城市的景区数量
+            city_counts = ScenicData.objects.filter(province=province_name)\
+                .values('city')\
+                .annotate(count=Count('scenic_id'))\
+                .order_by('-count')
+            
+            # 打印结果以便调试
+            print(f"找到城市数量: {len(city_counts)}")
+            
+            # 构建结果数据
+            result = []
+            for item in city_counts:
+                if not item['city']:  # 跳过城市为空的记录
+                    continue
+                    
+                city_data = {
+                    'name': item['city'],
+                    'value': item['count'],
+                    'scenics': []
+                }
                 
-                return Response(response_data)
-            except Exception as e:
-                print(f"获取推荐景区时出错: {e}")
-                # 即使获取推荐出错，仍返回基本景区信息
-                return Response(serializer.data)
+                # 获取该城市的景区信息
+                try:
+                    scenics = ScenicData.objects.filter(
+                        province=province_name, 
+                        city=item['city']
+                    ).values('scenic_id', 'name', 'coordinates')[:50]  # 限制数量，避免返回过多数据
+                    
+                    for scenic in scenics:
+                        if scenic['coordinates']:
+                            try:
+                                lon, lat = scenic['coordinates'].split(',')
+                                city_data['scenics'].append({
+                                    'id': scenic['scenic_id'],
+                                    'name': scenic['name'],
+                                    'longitude': float(lon),
+                                    'latitude': float(lat)
+                                })
+                            except (ValueError, TypeError) as coord_error:
+                                print(f"坐标解析错误 ({scenic['scenic_id']}): {coord_error}")
+                                # 错误时继续处理下一条数据
+                                continue
+                except Exception as city_error:
+                    print(f"获取城市景区数据错误 ({item['city']}): {city_error}")
+                    # 错误时继续处理下一个城市
+                    continue
+                
+                result.append(city_data)
+                
+            # 记录用户操作
+            if request.user.is_authenticated:
+                try:
+                    UserActionRecord.objects.create(
+                        user=request.user,
+                        action_type='view_province_city_distribution',
+                        content=f"查看省份城市分布: {province_name}"
+                    )
+                except Exception as record_error:
+                    print(f"记录用户操作失败: {record_error}")
+                    # 忽略记录错误，继续返回数据
+                
+            print(f"成功返回{province_name}的{len(result)}个城市数据")
+            return Response(result)
+            
         except Exception as e:
-            print(f"获取景区详情时出错: {e}")
-            return Response({"error": "获取景区详情失败"}, status=500)
+            print(f"获取{province_name}省市分布数据失败: {e}")
+            import traceback
+            print(traceback.format_exc())
+            return Response({'detail': f'获取数据失败: {str(e)}'}, 
+                           status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class DistrictDistributionView(views.APIView):
+    """区县景区分布视图"""
+    permission_classes = [permissions.AllowAny]
+    
+    def get(self, request, province_name, city_name):
+        """获取指定省份城市内各区县的景区分布数据"""
+        try:
+            # 记录请求信息以便调试
+            print(f"请求区县景区分布数据: {province_name}-{city_name}")
+            
+            # 检查省份和城市是否存在
+            if not ScenicData.objects.filter(province=province_name, city=city_name).exists():
+                print(f"省份城市组合不存在: {province_name}-{city_name}")
+                return Response({'detail': f'{province_name}的{city_name}不存在或没有景区数据'}, 
+                               status=status.HTTP_404_NOT_FOUND)
+            
+            # 统计该城市内每个区县的景区数量
+            district_counts = ScenicData.objects.filter(
+                    province=province_name, 
+                    city=city_name
+                ).values('district')\
+                .annotate(count=Count('scenic_id'))\
+                .order_by('-count')
+            
+            # 打印结果以便调试
+            print(f"找到区县数量: {len(district_counts)}")
+            
+            # 构建结果数据
+            result = []
+            for item in district_counts:
+                district_name = item['district'] if item['district'] else '未知区县'
+                
+                district_data = {
+                    'name': district_name,
+                    'value': item['count'],
+                    'scenics': []
+                }
+                
+                # 获取该区县的景区信息
+                try:
+                    # 处理区县名为空的情况
+                    if item['district']:
+                        scenics = ScenicData.objects.filter(
+                            province=province_name, 
+                            city=city_name,
+                            district=item['district']
+                        ).values('scenic_id', 'name', 'coordinates')[:50]  # 限制数量，避免返回过多数据
+                    else:
+                        # 查询区县字段为空的景区
+                        scenics = ScenicData.objects.filter(
+                            province=province_name, 
+                            city=city_name,
+                            district__isnull=True
+                        ).values('scenic_id', 'name', 'coordinates')[:50]
+                    
+                    for scenic in scenics:
+                        if scenic['coordinates']:
+                            try:
+                                lon, lat = scenic['coordinates'].split(',')
+                                district_data['scenics'].append({
+                                    'id': scenic['scenic_id'],
+                                    'name': scenic['name'],
+                                    'longitude': float(lon),
+                                    'latitude': float(lat)
+                                })
+                            except (ValueError, TypeError) as coord_error:
+                                print(f"坐标解析错误 ({scenic['scenic_id']}): {coord_error}")
+                                # 错误时继续处理下一条数据
+                                continue
+                except Exception as district_error:
+                    print(f"获取区县景区数据错误 ({district_name}): {district_error}")
+                    # 错误时继续处理下一个区县
+                    continue
+                
+                result.append(district_data)
+                
+            # 记录用户操作
+            if request.user.is_authenticated:
+                try:
+                    UserActionRecord.objects.create(
+                        user=request.user,
+                        action_type='view_district_distribution',
+                        content=f"查看区县分布: {province_name}-{city_name}"
+                    )
+                except Exception as record_error:
+                    print(f"记录用户操作失败: {record_error}")
+                    # 忽略记录错误，继续返回数据
+                
+            print(f"成功返回{province_name}{city_name}的{len(result)}个区县数据")
+            return Response(result)
+            
+        except Exception as e:
+            print(f"获取{province_name}{city_name}区县分布数据失败: {e}")
+            import traceback
+            print(traceback.format_exc())
+            return Response({'detail': f'获取数据失败: {str(e)}'}, 
+                           status=status.HTTP_500_INTERNAL_SERVER_ERROR)

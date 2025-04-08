@@ -12,6 +12,9 @@ data_processing/
 # 忽略数据处理测试文件'ceshi.py'
 ceshi.py
 
+# 忽略检查表文件'check_db.py'
+check_db.py
+
 # 忽略根目录下的'Scenic Area Category'文件
 Scenic Area Category/
 

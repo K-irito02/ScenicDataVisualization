@@ -62,21 +62,7 @@ def check_scenic_data_tables():
 if __name__ == '__main__':
     # 列出所有表
     all_tables = list_all_tables()
-    
-    # 检查summary_table表结构
-    if check_table_exists('summary_table'):
-        check_table_columns('summary_table')
-        # 检查city列是否存在
-        check_column_exists('summary_table', 'city')
-    else:
-        print("\nsummary_table表不存在")
-    
-    # 检查scenic_data_scenicdata表
-    if check_table_exists('scenic_data_scenicdata'):
-        check_table_columns('scenic_data_scenicdata')
-    
-    # 检查scenic_data应用相关的表
-    check_scenic_data_tables()
+
     
     # 如果要检查其他表，可以取消下面的注释并填入表名
     # 例如：check_table_columns('user_management_userprofile')

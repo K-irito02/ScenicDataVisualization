@@ -1,0 +1,308 @@
+[
+  {
+    "name": "市辖区",
+    "value": 285,
+    "scenics": [
+      {
+        "id": 6,
+        "name": "中国铁道博物馆东郊馆",
+        "longitude": 116.518,
+        "latitude": 39.916
+      },
+      {
+        "id": 50,
+        "name": "古崖居遗址",
+        "longitude": 116.0833,
+        "latitude": 40.4333
+      },
+      {
+        "id": 54,
+        "name": "天安门广场-人民英雄纪念碑",
+        "longitude": 116.3975,
+        "latitude": 39.9087
+      },
+      {
+        "id": 67,
+        "name": "东交民巷教堂",
+        "longitude": 116.4075,
+        "latitude": 39.9042
+      },
+      {
+        "id": 87,
+        "name": "百望山森林公园",
+        "longitude": 116.235,
+        "latitude": 40.015
+      },
+      {
+        "id": 125,
+        "name": "八达岭野生动物园",
+        "longitude": 116.0186,
+        "latitude": 40.3569
+      },
+      {
+        "id": 129,
+        "name": "居庸关长城",
+        "longitude": 116.0686,
+        "latitude": 40.2883
+      },
+      {
+        "id": 152,
+        "name": "德云社三里屯剧场",
+        "longitude": 116.4567,
+        "latitude": 39.9318
+      },
+      {
+        "id": 154,
+        "name": "野鸭湖国家湿地公园",
+        "longitude": 115.7886,
+        "latitude": 40.4312
+      },
+      {
+        "id": 157,
+        "name": "莲花山滑雪场",
+        "longitude": 116.5583,
+        "latitude": 40.4319
+      },
+      {
+        "id": 174,
+        "name": "太和门",
+        "longitude": 116.397,
+        "latitude": 39.916
+      },
+      {
+        "id": 245,
+        "name": "世贸天阶",
+        "longitude": 116.4507,
+        "latitude": 39.9155
+      },
+      {
+        "id": 247,
+        "name": "爨底下村",
+        "longitude": 115.736,
+        "latitude": 39.975
+      },
+      {
+        "id": 279,
+        "name": "灵山自然风景区",
+        "longitude": 115.75,
+        "latitude": 39.95
+      },
+      {
+        "id": 280,
+        "name": "北京神泉峡景区",
+        "longitude": 115.8333,
+        "latitude": 40.0833
+      },
+      {
+        "id": 331,
+        "name": "颐和园西堤",
+        "longitude": 116.271,
+        "latitude": 39.999
+      },
+      {
+        "id": 336,
+        "name": "元大都城垣遗址公园",
+        "longitude": 116.3705,
+        "latitude": 39.9631
+      },
+      {
+        "id": 377,
+        "name": "颐和园-十七孔桥",
+        "longitude": 116.2719,
+        "latitude": 39.9997
+      },
+      {
+        "id": 385,
+        "name": "慕田峪长城",
+        "longitude": 116.568333,
+        "latitude": 40.431944
+      },
+      {
+        "id": 391,
+        "name": "天坛公园-祈年门",
+        "longitude": 116.4074,
+        "latitude": 39.9042
+      },
+      {
+        "id": 409,
+        "name": "北京鲁迅博物馆",
+        "longitude": 116.3567,
+        "latitude": 39.9244
+      },
+      {
+        "id": 424,
+        "name": "三里河公园",
+        "longitude": 116.3984,
+        "latitude": 39.9042
+      },
+      {
+        "id": 489,
+        "name": "地坛公园",
+        "longitude": 116.416667,
+        "latitude": 39.95
+      },
+      {
+        "id": 495,
+        "name": "南山滑雪滑水度假村",
+        "longitude": 116.4345,
+        "latitude": 40.4005
+      },
+      {
+        "id": 505,
+        "name": "观复博物馆",
+        "longitude": 116.4615,
+        "latitude": 39.9042
+      },
+      {
+        "id": 540,
+        "name": "中华世纪坛",
+        "longitude": 116.3167,
+        "latitude": 39.9139
+      },
+      {
+        "id": 577,
+        "name": "阳台山自然风景区",
+        "longitude": 116.0833,
+        "latitude": 40.0167
+      },
+      {
+        "id": 653,
+        "name": "怀北国际滑雪场",
+        "longitude": 116.5833,
+        "latitude": 40.4333
+      },
+      {
+        "id": 655,
+        "name": "751D·PARK",
+        "longitude": 116.4983,
+        "latitude": 39.9914
+      },
+      {
+        "id": 658,
+        "name": "圆明园-大水法",
+        "longitude": 116.3011,
+        "latitude": 40.0096
+      },
+      {
+        "id": 659,
+        "name": "古观象台",
+        "longitude": 116.4333,
+        "latitude": 39.9083
+      },
+      {
+        "id": 660,
+        "name": "白瀑寺",
+        "longitude": 116.0833,
+        "latitude": 40.3167
+      },
+      {
+        "id": 669,
+        "name": "恭王府",
+        "longitude": 116.3833,
+        "latitude": 39.9333
+      },
+      {
+        "id": 692,
+        "name": "北京野生动物园",
+        "longitude": 116.341,
+        "latitude": 39.763
+      },
+      {
+        "id": 747,
+        "name": "坤宁宫",
+        "longitude": 116.397,
+        "latitude": 39.916
+      },
+      {
+        "id": 799,
+        "name": "呀路古热带植物园",
+        "longitude": 116.558,
+        "latitude": 39.742
+      },
+      {
+        "id": 809,
+        "name": "张各庄银杏林",
+        "longitude": 116.4767,
+        "latitude": 40.1689
+      },
+      {
+        "id": 828,
+        "name": "世界花卉大观园",
+        "longitude": 116.3245,
+        "latitude": 39.8321
+      },
+      {
+        "id": 855,
+        "name": "戒台寺",
+        "longitude": 116.0833,
+        "latitude": 39.8833
+      },
+      {
+        "id": 891,
+        "name": "富国海底世界",
+        "longitude": 116.4617,
+        "latitude": 39.9425
+      },
+      {
+        "id": 953,
+        "name": "北京十三陵国家森林公园",
+        "longitude": 116.213,
+        "latitude": 40.253
+      },
+      {
+        "id": 967,
+        "name": "北京西山国家森林公园——鬼笑石",
+        "longitude": 116.1833,
+        "latitude": 39.9833
+      },
+      {
+        "id": 1008,
+        "name": "天安门华表",
+        "longitude": 116.3975,
+        "latitude": 39.9087
+      },
+      {
+        "id": 1074,
+        "name": "国家奥林匹克中心",
+        "longitude": 116.396574,
+        "latitude": 39.992806
+      },
+      {
+        "id": 1076,
+        "name": "中央美术学院美术馆",
+        "longitude": 116.3519,
+        "latitude": 39.9987
+      },
+      {
+        "id": 1109,
+        "name": "清华大学",
+        "longitude": 116.326,
+        "latitude": 40.0
+      },
+      {
+        "id": 1136,
+        "name": "金海湖风景区",
+        "longitude": 117.258,
+        "latitude": 40.183
+      },
+      {
+        "id": 1194,
+        "name": "北京云蒙山国家森林公园",
+        "longitude": 116.8333,
+        "latitude": 40.5833
+      },
+      {
+        "id": 1198,
+        "name": "军都山滑雪场",
+        "longitude": 116.3917,
+        "latitude": 40.2436
+      },
+      {
+        "id": 1232,
+        "name": "昆明湖",
+        "longitude": 102.8333,
+        "latitude": 24.9167
+      }
+    ]
+  }
+]
