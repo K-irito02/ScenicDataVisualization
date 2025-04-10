@@ -87,7 +87,7 @@ export function searchScenic(keyword: string, filters?: any) {
     url: '/scenic/search/',
     method: 'get',
     params: {
-      query: keyword,
+      keyword: keyword,
       ...filters
     }
   });
@@ -107,7 +107,7 @@ export function getFilterOptions() {
  * 获取景区详情
  * @param scenicId 景区ID
  */
-export function getScenicDetail(scenicId: string) {
+export function getScenicDetail(scenicId: string | number) {
   return request({
     url: `/scenic/${scenicId}/`,
     method: 'get'

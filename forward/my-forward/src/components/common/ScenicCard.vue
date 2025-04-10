@@ -11,8 +11,8 @@
         <span>{{ scenic.province }} {{ scenic.city }}</span>
       </div>
       <div class="scenic-card-info">
-        <div class="scenic-card-price" v-if="scenic.price !== undefined">
-          <span>¥</span>{{ scenic.price }}
+        <div class="scenic-card-price" v-if="scenic.min_price || scenic.price">
+          <span>¥</span>{{ scenic.price || scenic.min_price || '免费' }}
         </div>
         <div class="scenic-card-type" v-if="scenic.type">{{ scenic.type }}</div>
       </div>

@@ -39,11 +39,16 @@ instance.interceptors.response.use(
     return response;
   },
   error => {
-    console.error('API请求错误:', {
+    // 记录详细的错误信息
+    const errorDetails = {
       url: error.config?.url,
+      method: error.config?.method,
       status: error.response?.status,
+      statusText: error.response?.statusText,
       data: error.response?.data
-    });
+    };
+    
+    console.error('API请求错误详情:', errorDetails);
     
     // 处理401未授权错误
     if (error.response && error.response.status === 401) {
@@ -51,6 +56,16 @@ instance.interceptors.response.use(
       const userStore = useUserStore();
       userStore.logout(); // 登出用户
       window.location.href = '/login'; // 重定向到登录页
+    }
+    
+    // 处理500内部服务器错误
+    if (error.response && error.response.status === 500) {
+      console.error('服务器内部错误，请检查后端日志');
+      
+      // 如果错误信息中包含HTML，可能是Django的错误页面
+      if (typeof error.response.data === 'string' && error.response.data.includes('<!DOCTYPE html>')) {
+        console.error('收到HTML错误页面，可能是Django的调试信息');
+      }
     }
     
     return Promise.reject(error);

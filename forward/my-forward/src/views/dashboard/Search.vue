@@ -40,9 +40,28 @@
                   clearable 
                   filterable
                   :disabled="!searchForm.province"
+                  @change="handleCityChange"
                 >
                   <el-option 
                     v-for="item in filteredCities" 
+                    :key="item" 
+                    :label="item" 
+                    :value="item" 
+                  />
+                </el-select>
+              </el-form-item>
+            </el-col>
+            <el-col :xs="24" :sm="12" :md="8" :lg="6">
+              <el-form-item label="区县">
+                <el-select 
+                  v-model="searchForm.district" 
+                  placeholder="选择区县" 
+                  clearable 
+                  filterable
+                  :disabled="!searchForm.province || !searchForm.city"
+                >
+                  <el-option 
+                    v-for="item in filteredDistricts" 
                     :key="item" 
                     :label="item" 
                     :value="item" 
@@ -57,6 +76,7 @@
                   placeholder="景区类型" 
                   clearable
                   filterable
+                  @change="handleTypeChange"
                 >
                   <el-option 
                     v-for="item in filterOptions.types" 
@@ -71,12 +91,13 @@
               <el-form-item label="级别">
                 <el-select 
                   v-model="searchForm.level" 
-                  placeholder="景区级别" 
+                  :placeholder="levelPlaceholder" 
                   clearable
                   filterable
+                  :disabled="!searchForm.type || isWaterScenic"
                 >
                   <el-option 
-                    v-for="item in filterOptions.levels" 
+                    v-for="item in availableLevels" 
                     :key="item" 
                     :label="item" 
                     :value="item" 
@@ -134,7 +155,7 @@
         
         <div v-else class="result-grid">
           <el-row :gutter="20">
-            <el-col :xs="24" :sm="12" :md="8" :lg="6" v-for="(item, index) in searchResult" :key="index">
+            <el-col :xs="24" :sm="12" :md="8" :lg="6" v-for="(item, index) in paginatedResults" :key="index">
               <scenic-card :scenic="item" />
             </el-col>
           </el-row>
@@ -156,12 +177,70 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, reactive, computed, onMounted } from 'vue'
+import { defineComponent, ref, reactive, computed, onMounted, watch } from 'vue'
 import CardContainer from '@/components/common/CardContainer.vue'
 import ScenicCard from '@/components/common/ScenicCard.vue'
 import { useScenicStore } from '@/stores/scenic'
 import { ElMessage } from 'element-plus'
+import typeAndLevelData from '@/assets/search/type_level_data.json'
+import locationData from '@/assets/search/location_data.json'
 import axios from 'axios'
+
+// 设置API基础URL
+const API_BASE_URL = 'http://localhost:8000/api'
+
+// API服务
+const apiService = {
+  // 获取景区搜索结果
+  searchScenic: async (keyword = '', params = {}) => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/scenic/search/`, {
+        params: {
+          keyword,
+          ...params
+        }
+      })
+      return response.data
+    } catch (error) {
+      console.error('获取景区数据失败:', error)
+      throw error
+    }
+  },
+  
+  // 获取筛选选项数据
+  getFilterOptions: async () => {
+    try {
+      // 这里优先使用本地JSON数据，若后端有专门的接口获取筛选选项，可以替换为API调用
+      return {
+        provinces: locationData.provinces,
+        cities: locationData.cities,
+        districts: locationData.districts,
+        types: typeAndLevelData.types,
+        typeLevels: typeAndLevelData.typeLevels
+      }
+    } catch (error) {
+      console.error('获取筛选选项失败:', error)
+      throw error
+    }
+  }
+}
+
+// 添加城市映射的类型声明
+type CitiesRecord = Record<string, string[]>
+
+// 添加TypeLevels类型定义
+interface TypeLevels {
+  [key: string]: string[];
+}
+
+// 筛选选项类型定义
+interface FilterOptions {
+  provinces: string[];
+  cities: Record<string, string[]>;
+  types: string[];
+  levels: string[];
+  districts: Record<string, string[]>;
+}
 
 export default defineComponent({
   name: 'Search',
@@ -177,38 +256,87 @@ export default defineComponent({
     const pageSize = ref(12)
     const sortType = ref('popularity')
     const searchResult = ref<any[]>([])
+    const hasInitialized = ref(false)
     
     // 筛选表单
     const searchForm = reactive({
       keyword: '',
       province: '',
       city: '',
+      district: '',
       type: '',
       level: '',
-      priceRange: [0, 500]
+      priceRange: [0, 500] as [number, number]
     })
-    
-    // 添加城市映射的类型声明
-    type CitiesRecord = Record<string, string[]>
     
     // 筛选选项
-    const filterOptions = reactive({
-      provinces: ['北京', '上海', '广东', '江苏', '浙江', '四川', '陕西', '云南', '湖北', '湖南'],
-      cities: {
-        '北京': ['北京'],
-        '上海': ['上海'],
-        '广东': ['广州', '深圳', '珠海', '佛山', '东莞'],
-        '江苏': ['南京', '苏州', '无锡', '常州', '扬州'],
-        '浙江': ['杭州', '宁波', '温州', '绍兴', '湖州'],
-        '四川': ['成都', '乐山', '峨眉山', '绵阳', '宜宾'],
-        '陕西': ['西安', '延安', '宝鸡', '汉中', '榆林'],
-        '云南': ['昆明', '大理', '丽江', '西双版纳', '香格里拉'],
-        '湖北': ['武汉', '宜昌', '襄阳', '荆州', '恩施'],
-        '湖南': ['长沙', '张家界', '岳阳', '常德', '湘西']
-      },
-      types: ['自然风景', '历史文化', '人文景观', '主题公园', '山岳景区', '水域风光', '古镇古村'],
-      levels: ['5A', '4A', '3A', '国家级博物馆', '国家级风景名胜区', '国家级地质公园', '世界文化遗产']
+    const filterOptions = reactive<FilterOptions>({
+      provinces: [],
+      cities: {},
+      types: [],
+      levels: [],
+      districts: {}
     })
+    
+    // 计算属性：判断是否为水利风景区类型
+    const isWaterScenic = computed(() => {
+      return searchForm.type === '水利风景区'
+    })
+    
+    // 级别选择框的占位文本
+    const levelPlaceholder = computed(() => {
+      return isWaterScenic.value ? '无级别选择' : '景区级别'
+    })
+    
+    // 根据当前选择的类型返回可用的级别
+    const availableLevels = computed(() => {
+      if (!searchForm.type || isWaterScenic.value) return []
+      
+      // 从typeLevels中获取当前类型的级别列表
+      return (typeAndLevelData.typeLevels as TypeLevels)[searchForm.type] || []
+    })
+    
+    // 使用本地JSON文件中的筛选选项
+    const fetchFilterOptions = async () => {
+      try {
+        // 获取筛选选项数据
+        const optionsData = await apiService.getFilterOptions()
+        
+        // 省份数据
+        if (optionsData.provinces) {
+          filterOptions.provinces = optionsData.provinces
+        }
+        
+        // 城市数据
+        if (optionsData.cities) {
+          filterOptions.cities = optionsData.cities
+        }
+        
+        // 区县数据
+        if (optionsData.districts) {
+          filterOptions.districts = optionsData.districts
+        }
+        
+        // 类型数据
+        if (optionsData.types) {
+          filterOptions.types = optionsData.types
+        }
+        
+        // 从typeLevels获取所有级别的展平数组（用于其他地方可能需要所有级别）
+        if (optionsData.typeLevels) {
+          const allLevels = new Set<string>()
+          Object.values(optionsData.typeLevels as TypeLevels).forEach(levels => {
+            levels.forEach(level => allLevels.add(level))
+          })
+          filterOptions.levels = Array.from(allLevels)
+        }
+        
+        console.log('获取到的筛选选项：', filterOptions)
+      } catch (error) {
+        console.error('获取筛选选项失败:', error)
+        ElMessage.error('获取筛选选项失败，请刷新页面重试')
+      }
+    }
     
     // 使用类型断言修复索引访问
     const filteredCities = computed(() => {
@@ -216,82 +344,217 @@ export default defineComponent({
       return (filterOptions.cities as CitiesRecord)[searchForm.province] || []
     })
     
-    // 搜索景区
-    const handleSearch = async () => {
-      if (!searchForm.keyword.trim() && !searchForm.province && !searchForm.city && !searchForm.type && !searchForm.level && !searchForm.priceRange[0] && !searchForm.priceRange[1]) {
-        return;
+    // 计算属性：根据选择的省份和城市筛选区县列表
+    const filteredDistricts = computed(() => {
+      if (!searchForm.province || !searchForm.city) return []
+      
+      const cityKey = `${searchForm.province}_${searchForm.city}`
+      return filterOptions.districts[cityKey] || []
+    })
+    
+    // 计算当前页面显示的数据
+    const paginatedResults = computed(() => {
+      // 如果后端已经实现了分页，直接返回整个结果集
+      if (searchResult.value.length <= pageSize.value) {
+        return searchResult.value
       }
       
-      loading.value = true;
+      // 否则在前端实现分页
+      const start = (currentPage.value - 1) * pageSize.value
+      const end = Math.min(start + pageSize.value, searchResult.value.length)
+      return searchResult.value.slice(start, end)
+    })
+    
+    // 恢复保存的搜索状态
+    const restoreSavedState = () => {
+      if (scenicStore.savedSearchState.hasSearched) {
+        // 恢复搜索表单
+        const savedForm = scenicStore.savedSearchState.searchForm
+        searchForm.keyword = savedForm.keyword
+        searchForm.province = savedForm.province
+        searchForm.city = savedForm.city
+        searchForm.district = savedForm.district || ''
+        searchForm.type = savedForm.type
+        searchForm.level = savedForm.level
+        searchForm.priceRange = [...savedForm.priceRange]
+        
+        // 恢复排序和分页
+        sortType.value = scenicStore.savedSearchState.sortType
+        currentPage.value = scenicStore.savedSearchState.currentPage
+        
+        console.log('已恢复搜索状态:', {
+          searchForm,
+          currentPage: currentPage.value,
+          sortType: sortType.value
+        })
+        
+        // 立即执行搜索
+        handleSearch()
+      }
+    }
+    
+    // 保存当前搜索状态
+    const saveCurrentState = () => {
+      scenicStore.saveSearchState(
+        { ...searchForm },
+        currentPage.value,
+        sortType.value
+      )
+    }
+    
+    // 使用后端API进行景区搜索
+    const handleSearch = async () => {
+      loading.value = true
       
       try {
-        // 构建筛选参数
+        // 构建API参数
         const params: any = {
-          keyword: searchForm.keyword.trim() || undefined,
           province: searchForm.province || undefined,
           city: searchForm.city || undefined,
+          district: searchForm.district || undefined,
           type: searchForm.type || undefined,
           level: searchForm.level || undefined,
-          priceRange: searchForm.priceRange.join(',') || undefined
-        };
+          priceRange: searchForm.priceRange.join(',') || undefined,
+          page: currentPage.value,
+          page_size: pageSize.value
+        }
         
-        const response = await axios.get('/api/scenic/search/', { params });
-        searchResult.value = response.data;
-        totalCount.value = response.data.length;
+        // 调用后端API
+        const data = await apiService.searchScenic(searchForm.keyword, params)
+        
+        // 处理响应数据
+        if (Array.isArray(data)) {
+          // 数组格式，直接使用
+          searchResult.value = data
+          totalCount.value = data.length
+        } else if (data.results && Array.isArray(data.results)) {
+          // 分页格式，包含results和total字段
+          searchResult.value = data.results
+          totalCount.value = data.total || data.results.length
+          
+          // 如果后端返回的页码不同，更新当前页码
+          if (data.page && data.page !== currentPage.value) {
+            currentPage.value = data.page
+          }
+        } else {
+          // 未知格式，尝试处理
+          console.warn('未识别的API响应格式:', data)
+          searchResult.value = data && typeof data === 'object' ? [data] : []
+          totalCount.value = searchResult.value.length
+        }
+        
+        // 根据排序类型排序
+        handleSort()
+        
+        // 保存当前搜索状态到store
+        saveCurrentState()
       } catch (error) {
-        console.error('搜索失败:', error);
-        ElMessage.error('搜索失败，请重试');
+        console.error('搜索失败:', error)
+        ElMessage.error('搜索失败，请重试')
+        searchResult.value = []
+        totalCount.value = 0
       } finally {
-        loading.value = false;
+        loading.value = false
       }
-    };
-    
-    // 获取筛选选项
-    const fetchFilterOptions = async () => {
-      try {
-        const response = await axios.get('/data/filter-options/');
-        // 更新filterOptions中的各项数据
-        filterOptions.provinces = response.data.provinces || [];
-        filterOptions.cities = response.data.cities || {};
-        filterOptions.types = response.data.types || [];
-        filterOptions.levels = response.data.levels || [];
-      } catch (error) {
-        console.error('获取筛选选项失败:', error);
-      }
-    };
+    }
     
     // 重置筛选条件
     const handleReset = () => {
       searchForm.keyword = ''
       searchForm.province = ''
       searchForm.city = ''
+      searchForm.district = ''
       searchForm.type = ''
       searchForm.level = ''
       searchForm.priceRange = [0, 500]
+      currentPage.value = 1
+      sortType.value = 'popularity'
+      
+      // 重置store中的保存状态
+      scenicStore.resetSearchState()
+      
       handleSearch()
     }
     
     // 处理排序变更
     const handleSort = () => {
       if (searchResult.value.length > 0) {
-        handleSearch()
+        // 只需要重新排序，不需要重新请求
+        const sortedResults = searchResult.value.slice()
+        sortedResults.sort((a: any, b: any) => {
+          // 其次按照选定的排序方式排序
+          if (sortType.value === 'price_asc') {
+            return (parseFloat(a.price) || 0) - (parseFloat(b.price) || 0)
+          } else if (sortType.value === 'price_desc') {
+            return (parseFloat(b.price) || 0) - (parseFloat(a.price) || 0)
+          } else if (sortType.value === 'rating') {
+            return (parseFloat(b.sentiment_score || b.rating) || 0) - 
+                   (parseFloat(a.sentiment_score || a.rating) || 0)
+          }
+          
+          // 默认按热度/人气排序
+          return (parseInt(b.comment_count || b.popularity) || 0) - 
+                 (parseInt(a.comment_count || a.popularity) || 0)
+        })
+        
+        searchResult.value = sortedResults
+        // 重置当前页码
+        currentPage.value = 1
+        
+        // 保存当前状态
+        saveCurrentState()
       }
     }
     
     // 处理分页变更
     const handlePageChange = (page: number) => {
       currentPage.value = page
+      // 请求新页的数据
       handleSearch()
+      // 保存当前状态 (已在handleSearch中进行)
     }
     
     // 处理省份变更
     const handleProvinceChange = () => {
       searchForm.city = ''
+      searchForm.district = ''
     }
     
+    // 处理城市变更
+    const handleCityChange = () => {
+      searchForm.district = ''
+    }
+    
+    // 处理类型变更
+    const handleTypeChange = () => {
+      // 当类型变化时，清空级别选择
+      searchForm.level = ''
+      
+      // 如果选择的是水利风景区，确保级别清空
+      if (searchForm.type === '水利风景区') {
+        searchForm.level = ''
+      }
+    }
+    
+    // 监听状态变化，避免路由导航后状态丢失
+    watch([searchForm, currentPage, sortType], () => {
+      if (hasInitialized.value) {
+        saveCurrentState()
+      }
+    }, { deep: true })
+    
     onMounted(() => {
-      fetchFilterOptions()
-      handleSearch()
+      fetchFilterOptions().then(() => {
+        // 检查是否有之前保存的状态需要恢复
+        if (scenicStore.savedSearchState.hasSearched) {
+          restoreSavedState()
+        } else {
+          // 否则执行初始搜索
+          handleSearch()
+        }
+        
+        hasInitialized.value = true
+      })
     })
     
     return {
@@ -299,16 +562,23 @@ export default defineComponent({
       searchForm,
       filterOptions,
       filteredCities,
+      filteredDistricts,
       searchResult,
+      paginatedResults,
       totalCount,
       currentPage,
       pageSize,
       sortType,
+      availableLevels,
       handleSearch,
       handleReset,
       handleSort,
       handlePageChange,
-      handleProvinceChange
+      handleProvinceChange,
+      handleCityChange,
+      handleTypeChange,
+      isWaterScenic,
+      levelPlaceholder
     }
   }
 })

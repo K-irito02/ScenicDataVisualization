@@ -316,21 +316,22 @@ class WordCloudView(views.APIView):
                 details=f'查看景区词云(ID: {scenic_id})'
             )
         
-        if not scenic.high_frequency_words:
-            return Response([])
-            
         word_freq = []
-        for word_item in scenic.high_frequency_words.split(','):
-            if ':' in word_item:
-                try:
-                    word, freq = word_item.split(':')
-                    word_freq.append({
-                        'name': word.strip(),
-                        'value': int(freq.strip())
-                    })
-                except (ValueError, TypeError):
-                    pass
         
+        # 只使用真实的高频词数据
+        if scenic.high_frequency_words:
+            for word_item in scenic.high_frequency_words.split(','):
+                if ':' in word_item:
+                    try:
+                        word, freq = word_item.split(':')
+                        word_freq.append({
+                            'name': word.strip(),
+                            'value': int(freq.strip())
+                        })
+                    except (ValueError, TypeError):
+                        pass
+        
+        # 不提供示例数据，当没有数据时返回空列表
         return Response(word_freq)
 
 class TransportationView(views.APIView):
@@ -370,9 +371,26 @@ class ScenicSearchView(views.APIView):
             keyword = request.query_params.get('keyword', '')
             province = request.query_params.get('province', '')
             city = request.query_params.get('city', '')
+            district = request.query_params.get('district', '')  # 添加区县参数
             scenic_type = request.query_params.get('type', '')
             level = request.query_params.get('level', '')
             price_range = request.query_params.get('priceRange', '0,500')
+            
+            # 获取分页参数
+            page = request.query_params.get('page', '1')
+            page_size = request.query_params.get('page_size', '12')
+            
+            try:
+                page = int(page)
+                page_size = int(page_size)
+                # 确保页码和页大小是合理的值
+                if page < 1:
+                    page = 1
+                if page_size < 1 or page_size > 100:
+                    page_size = 12
+            except (ValueError, TypeError):
+                page = 1
+                page_size = 12
             
             # 处理价格范围
             min_price = 0
@@ -400,6 +418,9 @@ class ScenicSearchView(views.APIView):
                 
             if city:
                 query &= Q(city=city)
+                
+            if district:  # 添加区县筛选条件
+                query &= Q(district=district)
                 
             if scenic_type:
                 query &= Q(scenic_type__icontains=scenic_type)
@@ -438,10 +459,11 @@ class ScenicSearchView(views.APIView):
                 try:
                     if request.user.is_authenticated:
                         search_details = f'搜索景区: {keyword}'
-                        if province or city or scenic_type or level:
+                        if province or city or district or scenic_type or level:  # 添加区县到记录
                             filters = []
                             if province: filters.append(f'省份={province}')
                             if city: filters.append(f'城市={city}')
+                            if district: filters.append(f'区县={district}')
                             if scenic_type: filters.append(f'类型={scenic_type}')
                             if level: filters.append(f'等级={level}')
                             search_details += f'(筛选: {", ".join(filters)})'
@@ -454,9 +476,26 @@ class ScenicSearchView(views.APIView):
                 except Exception as e:
                     print(f"记录用户操作失败: {e}")
                 
+                # 按景区属性排序：有景区属性的排在前面
+                filtered_results.sort(key=lambda x: 0 if x.scenic_type else 1)
+                
+                # 应用分页
+                total_results = len(filtered_results)
+                start_index = (page - 1) * page_size
+                end_index = min(start_index + page_size, total_results)
+                
+                # 获取当前页的结果
+                paginated_results = filtered_results[start_index:end_index]
+                
                 # 序列化返回结果
-                serializer = ScenicSearchSerializer(filtered_results, many=True)
-                return Response(serializer.data)
+                serializer = ScenicSearchSerializer(paginated_results, many=True)
+                return Response({
+                    'results': serializer.data,
+                    'total': total_results,
+                    'page': page,
+                    'page_size': page_size,
+                    'pages': (total_results + page_size - 1) // page_size  # 向上取整得到总页数
+                })
             except Exception as e:
                 print(f"查询或序列化数据时出错: {e}")
                 return Response({"error": "数据查询失败"}, status=500)
@@ -498,6 +537,30 @@ class FilterOptionsView(views.APIView):
                     cities_dict[province] = sorted(cities_dict[province])
             except Exception as e:
                 print(f"构建城市字典时出错: {e}")
+            
+            # 构建区县数据字典，格式：{'省份_城市': ['区县1', '区县2']}
+            districts_dict = {}
+            try:
+                province_city_district_data = ScenicData.objects.values('province', 'city', 'district').distinct()
+                for item in province_city_district_data:
+                    province = item.get('province')
+                    city = item.get('city')
+                    district = item.get('district')
+                    if not province or not city or not district:
+                        continue
+                    
+                    city_key = f"{province}_{city}"
+                    if city_key not in districts_dict:
+                        districts_dict[city_key] = []
+                    
+                    if district not in districts_dict[city_key]:
+                        districts_dict[city_key].append(district)
+                
+                # 确保每个城市的区县列表是已排序的
+                for city_key in districts_dict:
+                    districts_dict[city_key] = sorted(districts_dict[city_key])
+            except Exception as e:
+                print(f"构建区县字典时出错: {e}")
             
             # 分析scenic_type字段获取类型和等级
             types = set()
@@ -563,6 +626,7 @@ class FilterOptionsView(views.APIView):
             result = {
                 'provinces': sorted(list(provinces)) if provinces else [],
                 'cities': cities_dict or {},
+                'districts': districts_dict or {},  # 添加区县数据
                 'types': sorted(list(types)) if types else [],
                 'levels': sorted(list(levels)) if levels else [],
                 'priceRange': [min_price, max_price]
@@ -575,6 +639,7 @@ class FilterOptionsView(views.APIView):
             return Response({
                 'provinces': [],
                 'cities': {},
+                'districts': {},  # 增加空的区县对象
                 'types': [],
                 'levels': [],
                 'priceRange': [0, 500]
@@ -595,7 +660,7 @@ class ScenicDetailView(views.APIView):
                 UserActionRecord.objects.create(
                     user=request.user,
                     action_type='view_scenic_detail',
-                    content=f"查看景区详情: {scenic.name}"
+                    details=f"查看景区详情: {scenic.name}"
                 )
                 
             return Response(serializer.data)

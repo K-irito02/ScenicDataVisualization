@@ -66,6 +66,17 @@ interface TransportationFlow {
   value: number
 }
 
+// 定义搜索表单状态接口
+interface SearchFormState {
+  keyword: string
+  province: string
+  city: string
+  district: string
+  type: string
+  level: string
+  priceRange: [number, number]
+}
+
 export const useScenicStore = defineStore('scenic', {
   state: () => ({
     // 模块一：景区基础分布
@@ -115,10 +126,26 @@ export const useScenicStore = defineStore('scenic', {
     searchLoading: false,
     filterOptions: {
       provinces: [] as string[],
-      cities: [] as string[],
+      cities: {} as Record<string, string[]>,
       types: [] as string[],
       levels: [] as string[],
-      priceRange: [0, 1000]
+      priceRange: [0, 1000] as [number, number]
+    },
+    
+    // 保存的搜索状态
+    savedSearchState: {
+      searchForm: {
+        keyword: '',
+        province: '',
+        city: '',
+        district: '',
+        type: '',
+        level: '',
+        priceRange: [0, 500] as [number, number]
+      } as SearchFormState,
+      currentPage: 1,
+      sortType: 'popularity',
+      hasSearched: false
     },
     
     // 景区详情
@@ -126,6 +153,32 @@ export const useScenicStore = defineStore('scenic', {
   }),
   
   actions: {
+    // 保存搜索状态
+    saveSearchState(searchForm: SearchFormState, currentPage: number, sortType: string) {
+      this.savedSearchState.searchForm = { ...searchForm }
+      this.savedSearchState.currentPage = currentPage
+      this.savedSearchState.sortType = sortType
+      this.savedSearchState.hasSearched = true
+    },
+    
+    // 重置搜索状态
+    resetSearchState() {
+      this.savedSearchState = {
+        searchForm: {
+          keyword: '',
+          province: '',
+          city: '',
+          district: '',
+          type: '',
+          level: '',
+          priceRange: [0, 500]
+        },
+        currentPage: 1,
+        sortType: 'popularity',
+        hasSearched: false
+      }
+    },
+    
     // 获取省份景区分布数据
     async getProvinceData() {
       try {
@@ -257,9 +310,16 @@ export const useScenicStore = defineStore('scenic', {
     },
     
     // 获取景区详情
-    async getScenicDetail(scenicId: string) {
+    async getScenicDetail(scenicId: string | number) {
       try {
-        const response = await getScenicDetail(scenicId)
+        // 如果ID以'S'开头，去掉前缀只使用数字部分
+        let requestId = scenicId;
+        if (typeof scenicId === 'string' && scenicId.startsWith('S') && !isNaN(parseInt(scenicId.substring(1)))) {
+          requestId = scenicId.substring(1);
+          console.log('Store中调整请求ID:', requestId);
+        }
+        
+        const response = await getScenicDetail(requestId)
         this.scenicDetail = response.data
         return response.data
       } catch (error) {

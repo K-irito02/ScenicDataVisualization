@@ -40,12 +40,15 @@ class ScenicSearchSerializer(serializers.ModelSerializer):
     """景区搜索结果序列化器"""
     level = serializers.SerializerMethodField()
     type = serializers.SerializerMethodField()
+    price = serializers.SerializerMethodField()
+    image = serializers.SerializerMethodField()
+    scenic_type_original = serializers.CharField(source='scenic_type')
     
     class Meta:
         model = ScenicData
         fields = ('scenic_id', 'name', 'province', 'city', 'district', 'street',
-                 'image_url', 'description', 'min_price', 'level', 'type',
-                 'comment_count', 'sentiment_score')
+                 'image_url', 'description', 'min_price', 'level', 'type', 'price',
+                 'image', 'comment_count', 'sentiment_score', 'scenic_type_original')
     
     def get_level(self, obj):
         """获取景区等级"""
@@ -76,6 +79,29 @@ class ScenicSearchSerializer(serializers.ModelSerializer):
                     types.append(item.strip())
             return ', '.join(types) if types else '未分类'
         return '未分类'
+    
+    def get_price(self, obj):
+        """获取价格（数值类型，用于排序）"""
+        if obj.min_price:
+            try:
+                return float(obj.min_price)
+            except (ValueError, TypeError):
+                return 0
+        return 0
+    
+    def get_image(self, obj):
+        """获取图片URL"""
+        base_url = "https://example.com/images/"  # 替换为实际的图片基础URL
+        
+        if obj.image_url and obj.image_url.strip():
+            # 如果已有完整URL，直接返回
+            if obj.image_url.startswith(('http://', 'https://')):
+                return obj.image_url
+            # 否则拼接基础URL
+            return base_url + obj.image_url
+        
+        # 默认图片
+        return "/images/default-scenic.jpg"
 
 class ScenicDetailSerializer(serializers.ModelSerializer):
     """景区详情序列化器"""
@@ -83,6 +109,7 @@ class ScenicDetailSerializer(serializers.ModelSerializer):
     type = serializers.SerializerMethodField()
     trafficInfo = serializers.SerializerMethodField()
     comments = serializers.SerializerMethodField()
+    traffic_info = serializers.CharField(source='transportation')
     
     class Meta:
         model = ScenicData
@@ -99,46 +126,14 @@ class ScenicDetailSerializer(serializers.ModelSerializer):
         result = []
         try:
             # 使用transportation字段作为交通信息
-            if hasattr(obj, 'transportation') and obj.transportation:
-                # 使用transport_mode字段作为交通方式列表
-                modes = []
-                if hasattr(obj, 'transport_mode') and obj.transport_mode:
-                    modes = obj.transport_mode.split(',')
-                    
-                for mode in modes:
-                    if mode and mode.strip():
-                        result.append({
-                            'type': mode.strip(),
-                            'typeName': self._get_transport_type_name(mode.strip()),
-                            'description': obj.transportation
-                        })
+            if hasattr(obj, 'transportation') and obj.transportation:    
+                result.append({
+                    'description': obj.transportation
+                    })
         except Exception as e:
             print(f"获取交通信息时出错: {e}")
         return result
     
-    def _get_transport_type_name(self, type_code):
-        """获取交通类型的显示名称"""
-        transport_dict = {
-            '客车': '长途客车',
-            '公交': '公共汽车',
-            '火车': '铁路',
-            '包车': '包车服务',
-            '自驾': '自驾车',
-            '摆渡车': '景区摆渡',
-            '专车': '专车服务',
-            '步行': '步行',
-            '地铁': '地铁',
-            '飞机': '航空',
-            '观光车': '景区观光车',
-            '马': '骑马',
-            '动车': '高速动车',
-            '游艇': '游船/游艇',
-            '船': '轮渡/船',
-            '索道': '缆车/索道',
-            '高铁': '高速铁路',
-            '三轮车': '人力三轮'
-        }
-        return transport_dict.get(type_code, type_code)
     
     def get_comments(self, obj):
         """获取评论内容"""
