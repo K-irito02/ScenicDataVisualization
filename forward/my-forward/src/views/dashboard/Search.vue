@@ -151,6 +151,19 @@
         
         <div v-else-if="searchResult.length === 0" class="empty-result">
           <el-empty description="暂无符合条件的景区" />
+          <div class="empty-suggestions">
+            <p>您可以尝试：</p>
+            <ul>
+              <li>检查搜索关键字是否有误</li>
+              <li>放宽筛选条件（类型、级别、价格范围等）</li>
+              <li>选择不同的省份或城市</li>
+              <li v-if="searchForm.type && searchForm.level">取消"{{ searchForm.level }}"级别筛选</li>
+              <li v-if="searchForm.priceRange[0] > 0 || searchForm.priceRange[1] < 500">调整价格范围</li>
+            </ul>
+            <el-button type="primary" @click="handleReset" size="small" style="margin-top:10px">
+              重置所有筛选条件
+            </el-button>
+          </div>
         </div>
         
         <div v-else class="result-grid">
@@ -194,16 +207,36 @@ const apiService = {
   // 获取景区搜索结果
   searchScenic: async (keyword = '', params = {}) => {
     try {
+      console.log('请求URL:', `${API_BASE_URL}/scenic/search/`);
+      console.log('请求参数:', { keyword, ...params });
+      
+      // 添加超时和错误处理
       const response = await axios.get(`${API_BASE_URL}/scenic/search/`, {
         params: {
           keyword,
           ...params
-        }
+        },
+        timeout: 10000 // 10秒超时
       })
+      
+      console.log('API响应数据:', response.data);
       return response.data
-    } catch (error) {
-      console.error('获取景区数据失败:', error)
-      throw error
+    } catch (error: any) {
+      if (error.code === 'ECONNABORTED') {
+        console.error('请求超时:', error);
+        ElMessage.error('搜索请求超时，请检查后端服务是否正常运行');
+      } else if (error.response) {
+        console.error('服务器错误:', error.response.status, error.response.data);
+        ElMessage.error(`服务器错误: ${error.response.status}`);
+      } else if (error.request) {
+        console.error('无响应错误:', error.request);
+        ElMessage.error('无法连接到后端服务，请检查后端是否正在运行');
+      } else {
+        console.error('请求错误:', error.message);
+        ElMessage.error(`请求错误: ${error.message}`);
+      }
+      // 返回空数组，以便前端能够正常处理
+      return [];
     }
   },
   
@@ -292,8 +325,11 @@ export default defineComponent({
     const availableLevels = computed(() => {
       if (!searchForm.type || isWaterScenic.value) return []
       
+      // 处理"A级景区"类型，使其能够映射到原来的"景区"类型的级别
+      const typeKey = searchForm.type === 'A级景区' ? '景区' : searchForm.type;
+      
       // 从typeLevels中获取当前类型的级别列表
-      return (typeAndLevelData.typeLevels as TypeLevels)[searchForm.type] || []
+      return (typeAndLevelData.typeLevels as TypeLevels)[typeKey] || []
     })
     
     // 使用本地JSON文件中的筛选选项
@@ -317,15 +353,25 @@ export default defineComponent({
           filterOptions.districts = optionsData.districts
         }
         
-        // 类型数据
+        // 类型数据 - 将"景区"改为"A级景区"
         if (optionsData.types) {
-          filterOptions.types = optionsData.types
+          filterOptions.types = optionsData.types.map(type => 
+            type === '景区' ? 'A级景区' : type
+          )
         }
         
         // 从typeLevels获取所有级别的展平数组（用于其他地方可能需要所有级别）
         if (optionsData.typeLevels) {
           const allLevels = new Set<string>()
-          Object.values(optionsData.typeLevels as TypeLevels).forEach(levels => {
+          
+          // 将"景区"对应的级别映射到"A级景区"
+          const modifiedTypeLevels = { ...optionsData.typeLevels } as TypeLevels;
+          if (modifiedTypeLevels['景区']) {
+            modifiedTypeLevels['A级景区'] = modifiedTypeLevels['景区'];
+            delete modifiedTypeLevels['景区'];
+          }
+          
+          Object.values(modifiedTypeLevels).forEach(levels => {
             levels.forEach(level => allLevels.add(level))
           })
           filterOptions.levels = Array.from(allLevels)
@@ -354,15 +400,8 @@ export default defineComponent({
     
     // 计算当前页面显示的数据
     const paginatedResults = computed(() => {
-      // 如果后端已经实现了分页，直接返回整个结果集
-      if (searchResult.value.length <= pageSize.value) {
-        return searchResult.value
-      }
-      
-      // 否则在前端实现分页
-      const start = (currentPage.value - 1) * pageSize.value
-      const end = Math.min(start + pageSize.value, searchResult.value.length)
-      return searchResult.value.slice(start, end)
+      // 直接返回搜索结果，因为后端已经实现了分页
+      return searchResult.value;
     })
     
     // 恢复保存的搜索状态
@@ -412,29 +451,47 @@ export default defineComponent({
           province: searchForm.province || undefined,
           city: searchForm.city || undefined,
           district: searchForm.district || undefined,
-          type: searchForm.type || undefined,
+          type: searchForm.type === 'A级景区' ? '景区' : searchForm.type,
           level: searchForm.level || undefined,
           priceRange: searchForm.priceRange.join(',') || undefined,
           page: currentPage.value,
           page_size: pageSize.value
         }
         
+        // 特殊处理：对于A级景区类型，根据级别调整发送的参数
+        if (searchForm.type === 'A级景区') {
+          if (searchForm.level) {
+            // 如果选择了具体级别，如"5A景区"，直接发送完整级别名
+            params.level = searchForm.level;
+          }
+        }
+        
+        console.log('发送API请求参数:', params);
+        
         // 调用后端API
         const data = await apiService.searchScenic(searchForm.keyword, params)
+        
+        console.log('接收到的搜索结果:', data);
         
         // 处理响应数据
         if (Array.isArray(data)) {
           // 数组格式，直接使用
-          searchResult.value = data
-          totalCount.value = data.length
+          searchResult.value = data;
+          totalCount.value = data.length;
         } else if (data.results && Array.isArray(data.results)) {
           // 分页格式，包含results和total字段
-          searchResult.value = data.results
-          totalCount.value = data.total || data.results.length
+          searchResult.value = data.results;
+          // 使用后端返回的总数，而不是当前页结果的长度
+          totalCount.value = data.total || data.results.length;
           
-          // 如果后端返回的页码不同，更新当前页码
-          if (data.page && data.page !== currentPage.value) {
-            currentPage.value = data.page
+          // 如果后端返回了页码信息，更新对应的值
+          if (data.page) {
+            currentPage.value = data.page;
+          }
+          
+          // 更新页大小（如果有必要）
+          if (data.page_size && data.page_size !== pageSize.value) {
+            pageSize.value = data.page_size;
           }
         } else {
           // 未知格式，尝试处理
@@ -448,9 +505,16 @@ export default defineComponent({
         
         // 保存当前搜索状态到store
         saveCurrentState()
-      } catch (error) {
+      } catch (error: any) {
         console.error('搜索失败:', error)
-        ElMessage.error('搜索失败，请重试')
+        
+        // 增强错误处理
+        if (error.response && error.response.status === 500) {
+          ElMessage.error('后端服务器错误，请联系管理员检查服务器日志')
+        } else {
+          ElMessage.error('搜索失败，请重试')
+        }
+        
         searchResult.value = []
         totalCount.value = 0
       } finally {
@@ -533,6 +597,12 @@ export default defineComponent({
       // 如果选择的是水利风景区，确保级别清空
       if (searchForm.type === '水利风景区') {
         searchForm.level = ''
+      }
+      
+      // 如果类型从"A级景区"变为其他，或从其他变为"A级景区"，需要调整表单
+      if (searchForm.type === 'A级景区') {
+        // 可以在这里添加特定的处理逻辑
+        console.log('选择了A级景区类型')
       }
     }
     
@@ -635,5 +705,29 @@ export default defineComponent({
   margin-top: 30px;
   display: flex;
   justify-content: center;
+}
+
+.empty-suggestions {
+  margin-top: 20px;
+  padding: 20px;
+  background-color: #f0f0f0;
+  border-radius: 4px;
+}
+
+.empty-suggestions p {
+  margin-bottom: 10px;
+  font-size: 14px;
+  color: #606266;
+}
+
+.empty-suggestions ul {
+  margin-bottom: 10px;
+  padding-left: 20px;
+}
+
+.empty-suggestions li {
+  margin-bottom: 5px;
+  font-size: 14px;
+  color: #606266;
 }
 </style> 

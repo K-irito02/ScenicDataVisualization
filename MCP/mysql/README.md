@@ -1,67 +1,92 @@
-# MySQL MCP 客户端
+# MySQL数据库访问工具
 
-这是一个使用Smithery的MySQL MCP服务器连接到MySQL数据库的示例代码。
+这个工具可以访问本地MySQL数据库，包括`hierarchy_ticketanalysis`和`scenic_area`数据库。
+
+## 功能
+
+1. 查看数据库中的所有表
+2. 查看指定表的表结构
+3. 查看指定表中的数据（可以限制查询记录数量）
 
 ## 安装依赖
 
-首先，安装必要的包:
+### Node.js版本
+
+在使用前，请确保已安装Node.js，然后安装必要的依赖：
 
 ```bash
-pip install mcp smithery
+npm install mysql2
 ```
 
-## 配置MySQL连接
+### Python版本
 
-在使用这些脚本之前，您需要在Smithery平台上配置您的MySQL连接信息:
-
-1. 访问 [https://smithery.ai/server/mysql-mcp-server](https://smithery.ai/server/mysql-mcp-server)
-2. 登录您的Smithery账户
-3. 在配置页面输入以下信息:
-   - mysqlHost: 您的MySQL主机地址(通常是localhost或127.0.0.1)
-   - mysqlPort: MySQL端口(默认是3306)
-   - mysqlUser: 您的MySQL用户名
-   - mysqlPassword: 您的MySQL密码
-   - mysqlDatabase: 您要连接的数据库名称
-4. 点击"Save and Connect"保存配置
-
-## 脚本说明
-
-### scenic_area.py
-
-这个脚本展示了如何连接到scenic_area数据库并执行查询。它还包含了如何连接到hierarchy_ticketanalysis数据库的示例代码(需要先修改Smithery平台上的配置)。
-
-运行方法:
+在使用前，请确保已安装Python，然后安装必要的依赖：
 
 ```bash
-python scenic_area.py
+pip install pymysql tabulate
 ```
 
-### test_mcp_sql.py
+## 使用方法
 
-这是一个简单的测试脚本，用于执行基本的SQL查询(如SHOW DATABASES)并验证连接是否正常工作。
+### Node.js版本
 
-运行方法:
+#### 查看数据库中的所有表
 
 ```bash
-python test_mcp_sql.py
+node db_operations.js show-tables hierarchy_ticketanalysis
+# 或
+node db_operations.js show-tables scenic_area
 ```
 
-## 注意事项
+#### 查看指定表的结构
 
-1. 每次只能连接到一个数据库。如果需要切换数据库，需要在Smithery平台上修改配置。
-2. 确保您的MySQL服务器允许外部连接(如果需要从非本地环境访问)。
-3. 为了安全起见，建议为连接创建一个具有有限权限的专用数据库用户，而不是使用root用户。
-
-## 推荐使用方法
-
-### 在Cursor中直接使用MCP (推荐)
-
-Cursor已经内置了对Smithery MCP服务器的支持，这是最简单的使用方法:
-
-1. 确保已经在Smithery平台上配置了您的MySQL连接
-2. 在Cursor中，您可以直接使用`mcp__execute_sql`工具执行查询:
-
+```bash
+node db_operations.js describe-table hierarchy_ticketanalysis 表名
+# 或
+node db_operations.js describe-table scenic_area 表名
 ```
-<function_calls>
-<invoke name="mcp__execute_sql">
-<parameter name="query">SELECT * FROM your_table LIMIT 10;
+
+#### 查看表中的数据
+
+```bash
+# 默认显示10条记录
+node db_operations.js query-table hierarchy_ticketanalysis 表名
+# 或指定显示记录数量
+node db_operations.js query-table scenic_area 表名 20
+```
+
+### Python版本
+
+#### 查看数据库中的所有表
+
+```bash
+python db_operations.py show-tables hierarchy_ticketanalysis
+# 或
+python db_operations.py show-tables scenic_area
+```
+
+#### 查看指定表的结构
+
+```bash
+python db_operations.py describe-table hierarchy_ticketanalysis 表名
+# 或
+python db_operations.py describe-table scenic_area 表名
+```
+
+#### 查看表中的数据
+
+```bash
+# 默认显示10条记录
+python db_operations.py query-table hierarchy_ticketanalysis 表名
+# 或指定显示记录数量
+python db_operations.py query-table scenic_area 表名 20
+```
+
+## 配置文件
+
+连接信息存储在`HieTic_and_SceAr.json`文件中，包含两个数据库的连接信息：
+
+- hierarchy_ticketanalysis
+- scenic_area
+
+连接使用root用户，默认端口(3306)，密码已在配置文件中设置。 

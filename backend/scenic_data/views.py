@@ -423,10 +423,51 @@ class ScenicSearchView(views.APIView):
                 query &= Q(district=district)
                 
             if scenic_type:
-                query &= Q(scenic_type__icontains=scenic_type)
+                # 根据景区类型构建查询条件
+                if scenic_type == '景区':
+                    # 改进景区类型的查询方式，使用OR条件包含各种A级景区
+                    query &= (
+                        Q(scenic_type__icontains='5A景区') |
+                        Q(scenic_type__icontains='4A景区') |
+                        Q(scenic_type__icontains='3A景区') |
+                        Q(scenic_type__icontains='2A景区') |
+                        Q(scenic_type__icontains='1A景区') |
+                        Q(scenic_type__icontains='景区:省级') |
+                        # 包括仅有"景区"但不包含其他类型的情况
+                        (Q(scenic_type__icontains='景区') &
+                        ~Q(scenic_type__icontains='地质公园') &
+                        ~Q(scenic_type__icontains='湿地风景区') &
+                        ~Q(scenic_type__icontains='水利风景区') &
+                        ~Q(scenic_type__icontains='森林公园'))
+                    )
+                else:
+                    # 其他类型进行简单包含查询
+                    query &= Q(scenic_type__icontains=scenic_type)
                 
             if level:
-                query &= Q(scenic_type__icontains=level)
+                # 根据景区级别构建查询条件
+                if scenic_type and level:
+                    # 组合类型和级别筛选
+                    if scenic_type == '景区' and level == '省级':
+                        # 特殊处理A级景区的省级
+                        query &= Q(scenic_type__icontains='景区:省级')
+                    elif scenic_type == '景区':
+                        # A级景区的其他级别
+                        query &= Q(scenic_type__icontains=level)
+                    elif scenic_type == '水利风景区':
+                        # 特殊处理水利风景区的"是"/"否"级别
+                        if level == '是':
+                            query &= Q(scenic_type__icontains='水利风景区')
+                        elif level == '否':
+                            # 实际上是查找那些是水利风景区但未特别注明级别的
+                            query &= Q(scenic_type__icontains='水利风景区')
+                        # 注意：我们暂时保持水利风景区的查询行为一致
+                    else:
+                        # 其他类型的级别，使用"类型:级别"的格式查询
+                        query &= Q(scenic_type__icontains=f'{scenic_type}:{level}')
+                else:
+                    # 仅筛选级别
+                    query &= Q(scenic_type__icontains=f':{level}') | Q(scenic_type__icontains=level)
             
             # 执行查询
             try:

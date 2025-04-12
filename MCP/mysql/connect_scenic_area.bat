@@ -1,3 +1,0 @@
- @echo off
-echo 正在连接到 scenic_area 数据库...
-npx -y @smithery/cli@latest run mysql-mcp-server --client cursor --config {\"mysqlHost\":\"localhost\",\"mysqlPort\":3306,\"mysqlUser\":\"root\",\"mysqlPassword\":\"3143285505\",\"mysqlDatabase\":\"scenic_area\"}

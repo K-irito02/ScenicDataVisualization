@@ -4,68 +4,32 @@
       <el-col :span="24">
         <card-container title="交通方式分布">
           <template #actions>
-            <el-select v-model="selectedRegion" placeholder="选择地区" size="small" @change="handleRegionChange">
+            <el-select v-model="selectedProvince" placeholder="选择省份/地区" size="small" @change="handleProvinceChange" filterable>
               <el-option label="全国" value="all" />
-              <el-option v-for="region in regions" :key="region" :label="region" :value="region" />
+              <el-option v-for="province in provinceList" :key="province" :label="province" :value="province" />
             </el-select>
           </template>
           
-          <div class="chart-wrapper">
+          <div v-if="loading" class="loading-container">
+            <el-skeleton :rows="8" animated />
+          </div>
+          
+          <div v-else class="chart-wrapper">
             <base-chart 
               :options="sankeyOptions" 
-              height="500px"
+              height="900px"
             />
           </div>
           
           <div class="analysis-summary">
             <h4>交通分析结论</h4>
             <ul>
-              <li>全国范围内，自驾是前往景区的主要交通方式，占比约45%</li>
-              <li>高铁网络覆盖的东部地区，高铁出行比例明显高于西部地区</li>
-              <li>北京、上海、广州等一线城市的地铁直达景区比例较高</li>
+              <li>全国范围内，公交和地铁是前往城市景区的主要交通方式</li>
+              <li>步行在近郊景点也占有相当大的比例，表明很多景区都有便捷的步行路线</li>
+              <li>北京、上海、广州等一线城市的公共交通系统较为完善</li>
               <li>西部偏远景区主要依靠自驾和旅游大巴前往</li>
-              <li>沿海城市景区水路交通占比高于内陆景区</li>
+              <li>沿海城市景区有更多样化的交通选择</li>
             </ul>
-          </div>
-        </card-container>
-      </el-col>
-    </el-row>
-    
-    <el-row :gutter="20">
-      <el-col :span="24">
-        <card-container title="景区可达性评分">
-          <template #actions>
-            <el-radio-group v-model="transportType" size="small" @change="handleTransportTypeChange">
-              <el-radio-button label="all">全部</el-radio-button>
-              <el-radio-button label="car">自驾</el-radio-button>
-              <el-radio-button label="train">高铁/火车</el-radio-button>
-              <el-radio-button label="bus">公交/大巴</el-radio-button>
-              <el-radio-button label="subway">地铁</el-radio-button>
-            </el-radio-group>
-          </template>
-          
-          <div class="chart-wrapper">
-            <base-chart 
-              :options="mapOptions" 
-              height="450px"
-            />
-          </div>
-          
-          <div class="facility-summary">
-            <h4>交通设施分布</h4>
-            <el-row :gutter="20">
-              <el-col :xs="12" :sm="6" v-for="item in facilityStats" :key="item.type">
-                <div class="facility-card">
-                  <div class="facility-icon">
-                    <el-icon><component :is="item.icon"></component></el-icon>
-                  </div>
-                  <div class="facility-info">
-                    <div class="facility-name">{{ item.name }}</div>
-                    <div class="facility-count">{{ item.count }}</div>
-                  </div>
-                </div>
-              </el-col>
-            </el-row>
           </div>
         </card-container>
       </el-col>
@@ -75,19 +39,18 @@
 
 <script lang="ts">
 import { defineComponent, ref, onMounted, computed } from 'vue'
+import type { Ref } from 'vue'
 import CardContainer from '@/components/common/CardContainer.vue'
 import BaseChart from '@/components/charts/BaseChart.vue'
-import { useScenicStore } from '@/stores/scenic'
-import type { EChartsOption } from 'echarts'
-import { ElMessage } from 'element-plus'
-import { 
-  Location, 
-  Van, 
-  TrendCharts, 
-  OfficeBuilding, 
-  Clock 
-} from '@element-plus/icons-vue'
 import * as echarts from 'echarts'
+import type { 
+  EChartsOption, 
+  SankeySeriesOption
+} from 'echarts'
+import { ElMessage } from 'element-plus'
+import { Location, Van, TrendCharts } from '@element-plus/icons-vue'
+import { getTransportation } from '@/api/scenic'
+import { useScenicStore } from '@/stores/scenic'
 
 export default defineComponent({
   name: 'Transportation',
@@ -96,282 +59,340 @@ export default defineComponent({
     BaseChart,
     Location,
     Van,
-    TrendCharts,
-    OfficeBuilding,
-    Clock
+    TrendCharts
   },
   setup() {
     const scenicStore = useScenicStore()
-    const selectedRegion = ref('all')
-    const transportType = ref('all')
-    const regions = ref(['华北', '华东', '华南', '西南', '西北', '东北', '华中'])
+    const selectedProvince = ref('all')
+    const provinceList = ref<string[]>([])
+    const loading = ref(false) 
+    const apiData = ref<any[]>([]) 
+    const transportTypes = ref<string[]>([])
     
-    // 模拟桑基图数据
-    const sankeyData = ref({
-      nodes: [
-        { name: '北京' },
-        { name: '上海' },
-        { name: '广州' },
-        { name: '成都' },
-        { name: '西安' },
-        { name: '武汉' },
-        { name: '哈尔滨' },
-        { name: '自驾' },
-        { name: '高铁' },
-        { name: '地铁' },
-        { name: '公交/大巴' },
-        { name: '旅游专线' },
-        { name: '水路' },
-        { name: '飞机' }
-      ],
-      links: [
-        { source: '北京', target: '自驾', value: 3000 },
-        { source: '北京', target: '高铁', value: 2500 },
-        { source: '北京', target: '地铁', value: 3500 },
-        { source: '北京', target: '公交/大巴', value: 1500 },
-        { source: '北京', target: '旅游专线', value: 800 },
-        { source: '上海', target: '自驾', value: 2800 },
-        { source: '上海', target: '高铁', value: 3000 },
-        { source: '上海', target: '地铁', value: 4000 },
-        { source: '上海', target: '公交/大巴', value: 1200 },
-        { source: '上海', target: '水路', value: 1000 },
-        { source: '广州', target: '自驾', value: 2600 },
-        { source: '广州', target: '高铁', value: 2200 },
-        { source: '广州', target: '地铁', value: 2800 },
-        { source: '广州', target: '公交/大巴', value: 1100 },
-        { source: '广州', target: '水路', value: 800 },
-        { source: '成都', target: '自驾', value: 3200 },
-        { source: '成都', target: '高铁', value: 1800 },
-        { source: '成都', target: '公交/大巴', value: 1600 },
-        { source: '成都', target: '旅游专线', value: 1200 },
-        { source: '成都', target: '飞机', value: 1000 },
-        { source: '西安', target: '自驾', value: 2400 },
-        { source: '西安', target: '高铁', value: 2000 },
-        { source: '西安', target: '公交/大巴', value: 1400 },
-        { source: '西安', target: '旅游专线', value: 1000 },
-        { source: '武汉', target: '自驾', value: 2200 },
-        { source: '武汉', target: '高铁', value: 2500 },
-        { source: '武汉', target: '公交/大巴', value: 1300 },
-        { source: '武汉', target: '水路', value: 1200 },
-        { source: '哈尔滨', target: '自驾', value: 1800 },
-        { source: '哈尔滨', target: '高铁', value: 1600 },
-        { source: '哈尔滨', target: '公交/大巴', value: 1100 },
-        { source: '哈尔滨', target: '飞机', value: 900 }
-      ]
+    // 使用空初始值，将从API获取真实数据
+    const sankeyData = ref<{
+      nodes: Array<{ name: string, [key: string]: any }>,
+      links: Array<{ source: string, target: string, value: number, [key: string]: any }>
+    }>({
+      nodes: [],
+      links: []
     })
     
-    // 模拟交通设施统计
-    const facilityStats = ref([
-      { type: 'station', name: '火车站/高铁站', count: 264, icon: 'TrendCharts' },
-      { type: 'bus_stop', name: '公交站/大巴站', count: 1852, icon: 'Van' },
-      { type: 'subway', name: '地铁站', count: 138, icon: 'OfficeBuilding' },
-      { type: 'airport', name: '机场', count: 47, icon: 'Location' }
-    ])
-    
-    // 根据地区筛选桑基图数据
+    // 根据省份筛选桑基图数据
     const filterSankeyData = () => {
-      if (selectedRegion.value === 'all') {
+      if (selectedProvince.value === 'all') {
         return sankeyData.value
       }
       
-      // 这里应该根据选中的地区过滤数据
-      // 简化起见，这里只是模拟不同地区有不同数据
-      const regionNodesMap: Record<string, string[]> = {
-        '华北': ['北京', '自驾', '高铁', '地铁', '公交/大巴', '旅游专线'],
-        '华东': ['上海', '自驾', '高铁', '地铁', '公交/大巴', '水路'],
-        '华南': ['广州', '自驾', '高铁', '地铁', '公交/大巴', '水路'],
-        '西南': ['成都', '自驾', '高铁', '公交/大巴', '旅游专线', '飞机'],
-        '西北': ['西安', '自驾', '高铁', '公交/大巴', '旅游专线'],
-        '华中': ['武汉', '自驾', '高铁', '公交/大巴', '水路'],
-        '东北': ['哈尔滨', '自驾', '高铁', '公交/大巴', '飞机']
+      // 根据选中的省份过滤数据
+      const targetProvince = selectedProvince.value
+      
+      // 获取交通方式节点列表
+      const transportNodes = sankeyData.value.nodes.filter(node => {
+        // 判断是否为交通方式节点（排除省份节点）
+        return !provinceList.value.includes(node.name);
+      });
+      
+      // 获取选中的省份节点
+      const provinceNode = sankeyData.value.nodes.find(node => node.name === targetProvince);
+      
+      // 如果找不到省份节点，返回空数据
+      if (!provinceNode) {
+        return { nodes: [], links: [] };
       }
       
-      const targetNodes = regionNodesMap[selectedRegion.value] || []
+      // 过滤链接，只保留与选中省份相关的链接
+      const filteredLinks = sankeyData.value.links.filter(link => 
+        link.source === targetProvince || link.target === targetProvince
+      );
+      
+      // 获取相关节点的名称列表
+      const relatedNodeNames = new Set<string>();
+      relatedNodeNames.add(targetProvince);
+      
+      filteredLinks.forEach(link => {
+        relatedNodeNames.add(link.source as string);
+        relatedNodeNames.add(link.target as string);
+      });
+      
+      // 过滤节点，只保留相关节点
+      const filteredNodes = sankeyData.value.nodes.filter(node => 
+        relatedNodeNames.has(node.name)
+      );
       
       return {
-        nodes: sankeyData.value.nodes.filter(node => targetNodes.includes(node.name)),
-        links: sankeyData.value.links.filter(link => 
-          targetNodes.includes(link.source as string) && 
-          targetNodes.includes(link.target as string)
-        )
-      }
+        nodes: filteredNodes,
+        links: filteredLinks
+      };
     }
     
+    // 根据交通工具种类生成丰富的颜色系列
+    const generateTransportColors = (transportTypes: string[]) => {
+      // 预定义的鲜明颜色系列，确保每种交通工具有独特颜色
+      const colorPalette = [
+        '#FF3D00', '#D50000', '#C51162', '#AA00FF', '#6200EA',  
+        '#304FFE', '#2962FF', '#0091EA', '#00B8D4', '#00BFA5',
+        '#00C853', '#64DD17', '#AEEA00', '#FFD600', '#FFAB00',
+        '#FF6D00', '#8D6E63', '#546E7A', '#78909C', '#26A69A',
+        '#7CB342', '#FB8C00', '#F4511E', '#6D4C41', '#5D4037'
+      ];
+      
+      const transportColorMap: Record<string, string> = {};
+      
+      transportTypes.forEach((type, index) => {
+        transportColorMap[type] = colorPalette[index % colorPalette.length];
+      });
+      
+      return transportColorMap;
+    };
+    
+    // 为节点分配颜色
+    const getNodeColor = (name: string) => {
+      // 生成交通工具颜色映射
+      const transportColors = generateTransportColors(transportTypes.value);
+      
+      // 检查是否为交通方式
+      if (transportColors[name]) {
+        return transportColors[name];
+      }
+      
+      // 省份节点使用蓝色色系渐变
+      const provinceIndex = provinceList.value.indexOf(name);
+      if (provinceIndex >= 0) {
+        // 使用更丰富的颜色渐变
+        const colors = [
+          '#E3F2FD', '#BBDEFB', '#90CAF9', '#64B5F6', '#42A5F5', '#2196F3', 
+          '#1E88E5', '#1976D2', '#1565C0', '#0D47A1', '#82B1FF', '#448AFF'
+        ];
+        return colors[provinceIndex % colors.length];
+      }
+      
+      // 默认颜色
+      return '#CFD8DC';
+    };
+    
     // 桑基图配置
-    const sankeyOptions = computed<EChartsOption>(() => {
+    const sankeyOptions = computed(() => {
       const filteredData = filterSankeyData()
       
+      // 为节点添加颜色
+      const nodesWithColor = filteredData.nodes.map(node => ({
+        ...node,
+        itemStyle: {
+          color: getNodeColor(node.name)
+        }
+      }));
+      
+      // 链接的颜色基于源节点
+      const linksWithColor = filteredData.links.map(link => {
+        const sourceNode = nodesWithColor.find(node => node.name === link.source);
+        return {
+          ...link,
+          lineStyle: {
+            color: sourceNode?.itemStyle?.color || '#CFD8DC',
+            opacity: 0.7 // 增加不透明度使颜色更鲜明
+          }
+        };
+      });
+      
+      // 计算数据总量用于设置节点宽度 - 增加宽度
+      const totalValue = linksWithColor.reduce((sum, link) => sum + (link.value || 0), 0);
+      // 为圆形布局调整节点宽度
+      const nodeWidth = Math.max(15, Math.min(30, totalValue / 8000));
+      
+      // 创建图例数据，包含所有交通方式类型
+      const legendData = [...transportTypes.value, '省份/地区'];
+      
       return {
+        backgroundColor: '#FFFFFF', // 添加白色背景
         title: {
-          text: `${selectedRegion.value === 'all' ? '全国' : selectedRegion.value}景区交通方式分布`,
-          left: 'center'
+          text: `${selectedProvince.value === 'all' ? '全国' : selectedProvince.value}景区交通方式分布`,
+          left: 'center',
+          top: 20,
+          textStyle: {
+            fontSize: 20,
+            fontWeight: 'bold',
+            color: '#333333'
+          }
         },
         tooltip: {
           trigger: 'item',
-          triggerOn: 'mousemove'
+          triggerOn: 'mousemove',
+          backgroundColor: 'rgba(255, 255, 255, 0.9)',
+          borderColor: '#ccc',
+          borderWidth: 1,
+          textStyle: {
+            color: '#333',
+            fontSize: 14
+          },
+          formatter: function(params: any) {
+            if (params.dataType === 'node') {
+              return `<div style="font-weight:bold;">${params.name}</div>总连接量: ${params.value || 0}`;
+            } else if (params.data) {
+              const data = params.data as {
+                source: string;
+                target: string;
+                value: number;
+              };
+              return `<div style="font-weight:bold;">${data.source} → ${data.target}</div>数量: ${data.value}`;
+            }
+            return '';
+          }
+        },
+        legend: {
+          show: true,
+          type: 'scroll',
+          orient: 'horizontal',
+          bottom: 10,
+          padding: [15, 5, 5, 5],
+          itemGap: 15,
+          textStyle: {
+            fontSize: 14
+          },
+          data: legendData,
+          formatter: function(name: string) {
+            // 截断过长的名称
+            if (name.length > 15) {
+              return name.substr(0, 12) + '...';
+            }
+            return name;
+          }
         },
         series: [
           {
             type: 'sankey',
-            data: filteredData.nodes,
-            links: filteredData.links,
+            layout: 'circular', // 使用圆形布局
             emphasis: {
               focus: 'adjacency'
             },
-            levels: [
-              {
-                depth: 0,
-                itemStyle: {
-                  color: '#fbb4ae'
-                },
-                lineStyle: {
-                  color: 'source',
-                  opacity: 0.6
-                }
-              },
-              {
-                depth: 1,
-                itemStyle: {
-                  color: '#b3cde3'
-                },
-                lineStyle: {
-                  color: 'target',
-                  opacity: 0.6
-                }
-              }
-            ],
+            data: nodesWithColor,
+            links: linksWithColor,
+            nodeWidth: nodeWidth,
+            nodeGap: 8, // 为圆形布局调整节点间距
+            radius: ['20%', '70%'], // 设置圆形布局的内外半径
+            layoutIterations: 64, // 圆形布局迭代次数
+            draggable: false, // 禁止拖拽节点，避免布局混乱
+            label: {
+              formatter: '{b}', // 只显示节点名称
+              position: 'right',
+              fontSize: 12,
+              fontWeight: 'bold',
+              color: '#000',
+              distance: 5, // 标签与节点的距离
+              show: true
+            },
             lineStyle: {
+              color: 'source',
+              opacity: 0.6,
               curveness: 0.5
-            }
+            },
+            itemStyle: {
+              borderWidth: 1,
+              borderColor: 'rgba(255, 255, 255, 0.5)'
+            },
+            animation: true,
+            animationDuration: 1500, // 增加动画时间
+            animationEasing: 'cubicOut'
           }
         ]
-      }
+      } as EChartsOption
     })
     
-    // 获取中国地图数据
-    const getMapOption = () => ({
-      title: {
-        text: '景区可达性评分分布',
-        left: 'center'
-      },
-      tooltip: {
-        trigger: 'item' as const,
-        formatter: '{b}<br/>可达性评分: {c}'
-      },
-      visualMap: {
-        min: 0,
-        max: 100,
-        text: ['高', '低'],
-        realtime: false,
-        calculable: true,
-        inRange: {
-          color: ['#e0f3f8', '#abd9e9', '#74add1', '#4575b4', '#313695']
-        }
-      },
-      series: [
-        {
-          name: '可达性评分',
-          type: 'map',
-          map: 'china',
-          emphasis: {
-            label: {
-              show: true
-            }
-          },
-          data: generateProvinceScores()
-        }
-      ]
-    }) as EChartsOption
-    
-    // 生成省份得分数据
-    const generateProvinceScores = () => {
-      const provinces = [
-        '北京', '天津', '河北', '山西', '内蒙古', 
-        '辽宁', '吉林', '黑龙江', '上海', '江苏',
-        '浙江', '安徽', '福建', '江西', '山东',
-        '河南', '湖北', '湖南', '广东', '广西',
-        '海南', '重庆', '四川', '贵州', '云南',
-        '西藏', '陕西', '甘肃', '青海', '宁夏', '新疆'
-      ]
-      
-      // 根据交通类型调整得分
-      let scoreAdjustment = 0
-      if (transportType.value === 'car') {
-        scoreAdjustment = 10
-      } else if (transportType.value === 'train') {
-        scoreAdjustment = -5
-      } else if (transportType.value === 'subway') {
-        scoreAdjustment = -15
-      } else if (transportType.value === 'bus') {
-        scoreAdjustment = 5
-      }
-      
-      return provinces.map(province => {
-        // 简单模拟不同省份的基础得分
-        let baseScore
-        if (['北京', '上海', '江苏', '浙江', '广东'].includes(province)) {
-          baseScore = 85 // 东部发达省份
-        } else if (['西藏', '青海', '新疆', '甘肃', '内蒙古'].includes(province)) {
-          baseScore = 50 // 西部偏远省份
-        } else {
-          baseScore = 70 // 其他省份
-        }
-        
-        // 添加随机性和交通类型调整
-        const finalScore = Math.min(100, Math.max(0, baseScore + scoreAdjustment + Math.floor(Math.random() * 10 - 5)))
-        
-        return {
-          name: province,
-          value: finalScore
-        }
-      })
-    }
-    
-    // 地图配置
-    const mapOptions = computed<EChartsOption>(() => getMapOption())
-    
-    // 处理地区变更
-    const handleRegionChange = () => {
-      // 这里如果需要从API获取数据，可以添加相应逻辑
-    }
-    
-    // 处理交通类型变更
-    const handleTransportTypeChange = () => {
-      // 更新地图数据
+    // 处理省份变更
+    const handleProvinceChange = () => {
+      console.log('省份变更为:', selectedProvince.value);
     }
     
     // 获取交通数据
     const fetchTransportationData = async () => {
+      loading.value = true
       try {
-        // 实际项目中应该从API获取数据
-        // 这里使用的是预设的模拟数据
+        // 调用API获取交通方式数据
+        const response = await getTransportation()
+        console.log('交通数据API响应:', response)
+        
+        // 处理API响应，判断是否有data属性或者本身是数组
+        const responseData = response?.data || response
+        
+        if (responseData && Array.isArray(responseData)) {
+          apiData.value = responseData
+          
+          // 处理API返回的数据更新桑基图
+          if (responseData.length > 0) {
+            // 从API数据提取唯一的交通方式和目标省份
+            const transportSet = new Set<string>()
+            const provinceSet = new Set<string>()
+            
+            responseData.forEach((item: any) => {
+              if (item.source) transportSet.add(item.source)
+              if (item.target) provinceSet.add(item.target)
+            })
+            
+            // 从各种交通工具中提取交通工具类型
+            // 判断哪些是交通方式，哪些是省份
+            const transportList = Array.from(transportSet);
+            const provinceList = Array.from(provinceSet);
+            
+            // 我们假设交通方式的名称不会出现在省份列表中
+            const realTransportTypes = transportList.filter(t => !provinceList.includes(t));
+            transportTypes.value = realTransportTypes.sort();
+            
+            // 更新省份列表供筛选使用
+            provinceList.value = Array.from(provinceSet).sort()
+            
+            // 创建新的节点数组
+            const nodes = [
+              ...Array.from(transportSet).map(name => ({ name })),
+              ...Array.from(provinceSet).map(name => ({ name }))
+            ]
+            
+            // 创建新的链接数组
+            const links = responseData.map((item: any) => ({
+              source: item.source,
+              target: item.target,
+              value: item.value || 1
+            }))
+            
+            // 更新桑基图数据
+            sankeyData.value = {
+              nodes,
+              links
+            }
+            
+            console.log('已更新桑基图数据:', sankeyData.value)
+            console.log('交通工具类型:', transportTypes.value)
+          }
+        } else {
+          console.warn('API返回的交通数据格式不正确')
+          ElMessage.warning('无法获取交通数据，请稍后再试')
+        }
       } catch (error) {
         console.error('获取交通数据失败:', error)
-        ElMessage.error('获取交通数据失败')
+        ElMessage.error('获取交通数据失败，请检查网络连接')
+      } finally {
+        loading.value = false
       }
     }
     
     onMounted(async () => {
+      loading.value = true
       try {
-        // 注册中国地图
-        await echarts.registerMap('china', await fetch('/china.json').then(response => response.json()))
-        
-        fetchTransportationData()
+        // 获取交通数据
+        await fetchTransportationData()
       } catch (error) {
-        console.error('地图数据加载失败:', error)
-        ElMessage.error('地图数据加载失败')
+        console.error('初始化失败:', error)
+        ElMessage.error('页面初始化失败')
+      } finally {
+        loading.value = false
       }
     })
     
     return {
-      selectedRegion,
-      transportType,
-      regions,
-      facilityStats,
+      selectedProvince,
+      provinceList,
       sankeyOptions,
-      mapOptions,
-      handleRegionChange,
-      handleTransportTypeChange
+      handleProvinceChange,
+      loading
     }
   }
 })
@@ -384,17 +405,22 @@ export default defineComponent({
 
 .chart-wrapper {
   width: 100%;
+  height: 100%;
   margin-bottom: 20px;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.05);
+  border-radius: 4px;
+  padding: 10px;
 }
 
-.analysis-summary, .facility-summary {
+.analysis-summary {
   background-color: #f8f9fa;
   padding: 15px;
   border-radius: 4px;
   margin-top: 10px;
+  box-shadow: 0 2px 8px 0 rgba(0, 0, 0, 0.05);
 }
 
-.analysis-summary h4, .facility-summary h4 {
+.analysis-summary h4 {
   margin-top: 0;
   margin-bottom: 10px;
   color: #303133;
@@ -409,45 +435,12 @@ export default defineComponent({
   margin-bottom: 8px;
 }
 
-.facility-card {
+.loading-container {
+  min-height: 900px;
   display: flex;
-  align-items: center;
-  background-color: white;
-  border-radius: 4px;
-  padding: 15px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-  margin-bottom: 15px;
-}
-
-.facility-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background-color: #ecf5ff;
-  display: flex;
-  align-items: center;
+  flex-direction: column;
   justify-content: center;
-  margin-right: 12px;
-}
-
-.facility-icon .el-icon {
-  font-size: 20px;
-  color: #409eff;
-}
-
-.facility-info {
-  flex: 1;
-}
-
-.facility-name {
-  font-size: 14px;
-  color: #606266;
-  margin-bottom: 5px;
-}
-
-.facility-count {
-  font-size: 18px;
-  font-weight: 600;
-  color: #303133;
+  align-items: center;
+  width: 100%;
 }
 </style> 

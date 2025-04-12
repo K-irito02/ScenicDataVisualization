@@ -1,7 +1,15 @@
 <template>
   <div class="scenic-card" @click="navigateToDetail">
     <div class="scenic-card-image">
-      <img :src="scenic.image || defaultImage" :alt="scenic.name" />
+      <img 
+        v-if="!imageError" 
+        :src="scenic.image || defaultImage" 
+        :alt="scenic.name" 
+        @error="handleImageError" 
+      />
+      <div v-else class="image-placeholder">
+        <el-icon><Picture /></el-icon>
+      </div>
       <div class="scenic-card-level" v-if="scenic.level">{{ scenic.level }}</div>
     </div>
     <div class="scenic-card-content">
@@ -31,9 +39,9 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, computed } from 'vue'
+import { defineComponent, computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { Location, Star, StarFilled } from '@element-plus/icons-vue'
+import { Location, Star, StarFilled, Picture } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import { ElMessage } from 'element-plus'
 
@@ -42,7 +50,8 @@ export default defineComponent({
   components: {
     Location,
     Star,
-    StarFilled
+    StarFilled,
+    Picture
   },
   props: {
     scenic: {
@@ -54,6 +63,7 @@ export default defineComponent({
     const router = useRouter()
     const userStore = useUserStore()
     const defaultImage = '/images/default-scenic.jpg'
+    const imageError = ref(false)
     
     // 检查用户是否已登录
     const isLoggedIn = computed(() => !!userStore.token)
@@ -95,8 +105,16 @@ export default defineComponent({
       }
     }
     
+    // 处理图片加载错误
+    const handleImageError = () => {
+      console.log('图片加载失败，显示占位符')
+      imageError.value = true
+    }
+    
     return {
       defaultImage,
+      imageError,
+      handleImageError,
       isFavorite,
       navigateToDetail,
       toggleFavorite
@@ -214,5 +232,16 @@ export default defineComponent({
 
 .is-favorite {
   color: #ff9900;
+}
+
+.image-placeholder {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  background-color: #f5f7fa;
+  color: #909399;
+  font-size: 36px;
 }
 </style> 

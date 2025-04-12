@@ -69,14 +69,36 @@ class ScenicSearchSerializer(serializers.ModelSerializer):
         if obj.scenic_type:
             # 从类型字段中提取类型信息
             types = []
+            
+            # 检查是否包含A级景区标识
+            is_a_level_scenic = any(item for item in obj.scenic_type.split(',') 
+                                 if '景区' in item and ('A景区' in item or '5A' in item or '4A' in item or '3A' in item or '2A' in item or '1A' in item))
+            
+            # 如果是A级景区，先添加"景区"类型
+            if is_a_level_scenic:
+                types.append('景区')
+                
+            # 处理其他类型
             for item in obj.scenic_type.split(','):
+                item = item.strip()
+                # 跳过A级景区标记，已在上面处理
+                if 'A景区' in item or '5A' in item or '4A' in item or '3A' in item or '2A' in item or '1A' in item:
+                    continue
+                    
                 if ':' in item:
                     type_name, _ = item.split(':')
-                    types.append(type_name.strip())
-                elif 'A景区' in item:
-                    continue
+                    type_name = type_name.strip()
+                    if type_name and type_name not in types:
+                        types.append(type_name)
                 else:
-                    types.append(item.strip())
+                    # 处理没有冒号的类型，但跳过单独的"景区"（因为A级景区已经处理）
+                    if item and item != '景区' and item not in types:
+                        types.append(item)
+            
+            # 如果没有找到任何类型，但原始字符串中包含"景区"，添加"景区"类型
+            if not types and '景区' in obj.scenic_type:
+                types.append('景区')
+                
             return ', '.join(types) if types else '未分类'
         return '未分类'
     

@@ -1,0 +1,20 @@
+{
+  "connections": [
+    {
+      "name": "hierarchy_ticketanalysis",
+      "host": "localhost",
+      "port": 3306,
+      "user": "root",
+      "password": "3143285505",
+      "database": "hierarchy_ticketanalysis"
+    },
+    {
+      "name": "scenic_area",
+      "host": "localhost",
+      "port": 3306,
+      "user": "root",
+      "password": "3143285505",
+      "database": "scenic_area"
+    }
+  ]
+}
