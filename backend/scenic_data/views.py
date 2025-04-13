@@ -344,9 +344,7 @@ class TransportationView(views.APIView):
         
         result = []
         for item in province_traffic:
-            if not item.transport_frequency:
-                continue
-                
+            
             for transport_item in item.transport_frequency.split(','):
                 if ':' in transport_item:
                     try:
@@ -371,10 +369,14 @@ class ScenicSearchView(views.APIView):
             keyword = request.query_params.get('keyword', '')
             province = request.query_params.get('province', '')
             city = request.query_params.get('city', '')
-            district = request.query_params.get('district', '')  # 添加区县参数
+            district = request.query_params.get('district', '')
             scenic_type = request.query_params.get('type', '')
             level = request.query_params.get('level', '')
             price_range = request.query_params.get('priceRange', '0,500')
+            
+            # 详细记录请求参数
+            print(f"[搜索请求] 关键词: '{keyword}', 省份: '{province}', 城市: '{city}', 区县: '{district}'")
+            print(f"[搜索请求] 类型: '{scenic_type}', 级别: '{level}', 价格范围: '{price_range}'")
             
             # 获取分页参数
             page = request.query_params.get('page', '1')
@@ -391,6 +393,7 @@ class ScenicSearchView(views.APIView):
             except (ValueError, TypeError):
                 page = 1
                 page_size = 12
+                print(f"[警告] 页码或页大小参数无效，使用默认值: page={page}, page_size={page_size}")
             
             # 处理价格范围
             min_price = 0
@@ -401,8 +404,9 @@ class ScenicSearchView(views.APIView):
                     if len(parts) == 2:
                         min_price = float(parts[0])
                         max_price = float(parts[1])
+                        print(f"[价格范围] 解析成功: {min_price}-{max_price}")
                 except (ValueError, TypeError, IndexError) as e:
-                    print(f"价格范围解析错误: {e}")
+                    print(f"[错误] 价格范围解析错误: {e}, 使用默认值: 0-500")
             
             # 构建查询条件
             query = Q()
@@ -412,95 +416,141 @@ class ScenicSearchView(views.APIView):
                     Q(name__icontains=keyword) | 
                     Q(description__icontains=keyword)
                 )
+                print(f"[查询条件] 添加关键词筛选: '{keyword}'")
             
             if province:
                 query &= Q(province=province)
+                print(f"[查询条件] 添加省份筛选: '{province}'")
                 
             if city:
                 query &= Q(city=city)
+                print(f"[查询条件] 添加城市筛选: '{city}'")
                 
-            if district:  # 添加区县筛选条件
+            if district:
                 query &= Q(district=district)
+                print(f"[查询条件] 添加区县筛选: '{district}'")
+            
+            # 改进类型和级别的查询方式，对应数据库中实际的数据格式
+            if scenic_type or level:
+                # 打印调试信息
+                print(f"[查询条件] 类型筛选: '{scenic_type}', 级别筛选: '{level}'")
                 
-            if scenic_type:
-                # 根据景区类型构建查询条件
-                if scenic_type == '景区':
-                    # 改进景区类型的查询方式，使用OR条件包含各种A级景区
-                    query &= (
-                        Q(scenic_type__icontains='5A景区') |
-                        Q(scenic_type__icontains='4A景区') |
-                        Q(scenic_type__icontains='3A景区') |
-                        Q(scenic_type__icontains='2A景区') |
-                        Q(scenic_type__icontains='1A景区') |
-                        Q(scenic_type__icontains='景区:省级') |
-                        # 包括仅有"景区"但不包含其他类型的情况
-                        (Q(scenic_type__icontains='景区') &
-                        ~Q(scenic_type__icontains='地质公园') &
-                        ~Q(scenic_type__icontains='湿地风景区') &
-                        ~Q(scenic_type__icontains='水利风景区') &
-                        ~Q(scenic_type__icontains='森林公园'))
-                    )
-                else:
-                    # 其他类型进行简单包含查询
-                    query &= Q(scenic_type__icontains=scenic_type)
-                
-            if level:
-                # 根据景区级别构建查询条件
+                # 处理类型和级别组合
                 if scenic_type and level:
-                    # 组合类型和级别筛选
-                    if scenic_type == '景区' and level == '省级':
-                        # 特殊处理A级景区的省级
-                        query &= Q(scenic_type__icontains='景区:省级')
-                    elif scenic_type == '景区':
-                        # A级景区的其他级别
+                    # 特殊处理A级景区
+                    if scenic_type == '景区':
+                        print(f"[类型+级别] 特殊处理景区类型: 查询包含'{level}'的景区")
                         query &= Q(scenic_type__icontains=level)
-                    elif scenic_type == '水利风景区':
-                        # 特殊处理水利风景区的"是"/"否"级别
-                        if level == '是':
-                            query &= Q(scenic_type__icontains='水利风景区')
-                        elif level == '否':
-                            # 实际上是查找那些是水利风景区但未特别注明级别的
-                            query &= Q(scenic_type__icontains='水利风景区')
-                        # 注意：我们暂时保持水利风景区的查询行为一致
                     else:
-                        # 其他类型的级别，使用"类型:级别"的格式查询
-                        query &= Q(scenic_type__icontains=f'{scenic_type}:{level}')
-                else:
-                    # 仅筛选级别
-                    query &= Q(scenic_type__icontains=f':{level}') | Q(scenic_type__icontains=level)
+                        # 对于其他类型：构建"类型:级别"格式进行精确匹配
+                        type_level_pattern = f"{scenic_type}:{level}"
+                        print(f"[类型+级别] 执行类型:级别组合搜索: '{type_level_pattern}'")
+                        # 尝试两种模式匹配，增加匹配成功率
+                        type_query = (
+                            Q(scenic_type__icontains=type_level_pattern) |
+                            Q(scenic_type__regex=f"{scenic_type}[^:]*:{level}")
+                        )
+                        query &= type_query
+                
+                # 仅类型
+                elif scenic_type:
+                    if scenic_type == '景区':
+                        # 景区类型特殊处理：包含所有A级景区
+                        print(f"[类型筛选] 执行景区类型搜索: 包含所有A级和省级景区")
+                        type_query = (
+                            Q(scenic_type__icontains='5A景区') |
+                            Q(scenic_type__icontains='4A景区') |
+                            Q(scenic_type__icontains='3A景区') |
+                            Q(scenic_type__icontains='2A景区') |
+                            Q(scenic_type__icontains='1A景区') |
+                            Q(scenic_type__icontains='省级景区')
+                        )
+                        query &= type_query
+                    else:
+                        # 其他类型：直接匹配类型名称
+                        print(f"执行单一类型搜索: {scenic_type}")
+                        query &= Q(scenic_type__icontains=scenic_type)
             
             # 执行查询
             try:
+                print("[查询执行] 开始执行数据库查询...")
                 results = ScenicData.objects.filter(query).order_by('name')
+                print(f"[查询结果] 初始查询返回 {results.count()} 条结果")
                 
                 # 在Python中处理价格过滤
                 filtered_results = []
+                price_filter_count = 0  # 记录因价格过滤掉的数量
+                
                 for scenic in results:
                     try:
                         price_str = scenic.min_price
                         price = 0
+                        
+                        # 增强价格处理逻辑
                         if price_str and price_str.strip():
-                            try:
-                                price = float(price_str)
-                            except (ValueError, TypeError):
-                                continue
+                            # 处理特殊价格值
+                            price_text = price_str.strip().lower()
+                            if price_text in ['免费', '0', '0元', '0.0', '0.00', 'free', '无需门票']:
+                                price = 0
+                                print(f"[价格处理] 景区价格为'{price_text}'，设置为0元: ID={scenic.scenic_id}, 名称={scenic.name}")
+                            else:
+                                # 尝试提取数字部分
+                                import re
+                                # 尝试匹配价格中的数字部分
+                                number_match = re.search(r'(\d+(\.\d+)?)', price_text)
+                                if number_match:
+                                    try:
+                                        price = float(number_match.group(1))
+                                        print(f"[价格处理] 从'{price_text}'提取到价格: {price}元")
+                                    except (ValueError, TypeError) as e:
+                                        print(f"[警告] 价格数字部分无法转换: '{number_match.group(1)}', 错误: {e}")
+                                        price = 0
+                                        print(f"[价格处理] 设置默认价格为0元: ID={scenic.scenic_id}")
+                                else:
+                                    try:
+                                        price = float(price_text)
+                                    except (ValueError, TypeError) as e:
+                                        print(f"[警告] 景区价格无法解析: ID={scenic.scenic_id}, price={price_str}, 错误: {e}")
+                                        # 无法解析的价格视为0元
+                                        price = 0
+                                        print(f"[价格处理] 无法解析的价格，设置为0元: ID={scenic.scenic_id}")
+                        else:
+                            print(f"[价格处理] 景区价格为空，设置为0元: ID={scenic.scenic_id}")
                             
+                        # 检查价格是否在范围内
                         if price < min_price or price > max_price:
+                            print(f"[价格过滤] 景区价格 {price}元 不在范围 {min_price}-{max_price}元 内: ID={scenic.scenic_id}")
+                            price_filter_count += 1
                             continue
+                            
+                        # 价格在范围内，保留此结果
+                        print(f"[价格匹配] 景区价格 {price}元 在范围 {min_price}-{max_price}元 内: ID={scenic.scenic_id}, 名称={scenic.name}")
                         filtered_results.append(scenic)
                     except Exception as e:
-                        print(f"处理景区价格时出错: {e}")
+                        print(f"[错误] 处理景区价格时出错: {e}, ID={scenic.scenic_id}")
+                        # 发生异常时，默认保留结果而不是跳过
+                        print(f"[价格处理] 异常处理：保留景区 ID={scenic.scenic_id}, 名称={scenic.name}")
+                        filtered_results.append(scenic)
                         continue
                 
+                print(f"[价格过滤] 过滤掉 {price_filter_count} 条结果，剩余 {len(filtered_results)} 条结果")
+                
                 # 如果过滤后没有结果，则返回空列表
-                if not filtered_results and min_price > 0:
-                    filtered_results = []
+                if not filtered_results:
+                    print("[查询结果] 最终过滤后没有匹配的景区")
+                    return Response({
+                        'results': [],
+                        'total': 0,
+                        'page': page,
+                        'page_size': page_size,
+                        'pages': 0
+                    })
                 
                 # 记录搜索操作(如果用户已登录)
                 try:
                     if request.user.is_authenticated:
                         search_details = f'搜索景区: {keyword}'
-                        if province or city or district or scenic_type or level:  # 添加区县到记录
+                        if province or city or district or scenic_type or level:
                             filters = []
                             if province: filters.append(f'省份={province}')
                             if city: filters.append(f'城市={city}')
@@ -515,7 +565,7 @@ class ScenicSearchView(views.APIView):
                             details=search_details
                         )
                 except Exception as e:
-                    print(f"记录用户操作失败: {e}")
+                    print(f"[警告] 记录用户操作失败: {e}")
                 
                 # 按景区属性排序：有景区属性的排在前面
                 filtered_results.sort(key=lambda x: 0 if x.scenic_type else 1)
@@ -528,22 +578,43 @@ class ScenicSearchView(views.APIView):
                 # 获取当前页的结果
                 paginated_results = filtered_results[start_index:end_index]
                 
+                # 处理单一结果的情况，确保序列化器正常工作
+                if len(paginated_results) == 1:
+                    print(f"[单一结果] 查询仅返回1个结果: {paginated_results[0].name}")
+                
                 # 序列化返回结果
                 serializer = ScenicSearchSerializer(paginated_results, many=True)
-                return Response({
-                    'results': serializer.data,
+                serialized_data = serializer.data
+                
+                # 记录结果数
+                print(f"[搜索结果] 总数={total_results}, 当前页={len(paginated_results)}, 页码={page}/{(total_results + page_size - 1) // page_size}")
+                
+                # 检查序列化后的数据
+                if len(serialized_data) != len(paginated_results):
+                    print(f"[警告] 序列化数据数量({len(serialized_data)})与结果数量({len(paginated_results)})不一致")
+                
+                # 确保始终返回统一的数据结构
+                # 即使只有一个结果，也使用带有results字段的分页结构
+                response_data = {
+                    'results': serialized_data,
                     'total': total_results,
                     'page': page,
                     'page_size': page_size,
                     'pages': (total_results + page_size - 1) // page_size  # 向上取整得到总页数
-                })
+                }
+                
+                return Response(response_data)
             except Exception as e:
-                print(f"查询或序列化数据时出错: {e}")
-                return Response({"error": "数据查询失败"}, status=500)
+                print(f"[严重错误] 查询或序列化数据时出错: {e}")
+                import traceback
+                traceback.print_exc()
+                return Response({"error": "数据查询失败", "detail": str(e)}, status=500)
                 
         except Exception as e:
-            print(f"搜索视图处理请求时出错: {e}")
-            return Response({"error": "服务器内部错误"}, status=500)
+            print(f"[严重错误] 搜索视图处理请求时出错: {e}")
+            import traceback
+            traceback.print_exc()
+            return Response({"error": "服务器内部错误", "detail": str(e)}, status=500)
 
 class FilterOptionsView(views.APIView):
     """筛选选项数据视图"""

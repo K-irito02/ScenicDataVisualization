@@ -130,7 +130,7 @@
       <card-container>
         <template #actions>
           <div class="result-actions">
-            <span class="result-count">找到 {{ totalCount }} 个结果</span>
+            <span class="result-count">找到 {{ pageConfig.totalCount }} 个结果</span>
             <div class="sort-options">
               <span>排序：</span>
               <el-radio-group v-model="sortType" size="small" @change="handleSort">
@@ -175,11 +175,13 @@
           
           <div class="pagination-container">
             <el-pagination
+              v-if="pageConfig.totalCount > 0"
+              :key="rerenderPagination"
               background
-              layout="prev, pager, next"
-              :total="totalCount"
-              :page-size="pageSize"
-              :current-page="currentPage"
+              layout="prev, pager, next, jumper"
+              :total="pageConfig.totalCount"
+              :page-size="pageConfig.pageSize"
+              :current-page="pageConfig.currentPage"
               @current-change="handlePageChange"
             />
           </div>
@@ -190,7 +192,7 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, reactive, computed, onMounted, watch } from 'vue'
+import { defineComponent, ref, reactive, computed, onMounted, watch, nextTick } from 'vue'
 import CardContainer from '@/components/common/CardContainer.vue'
 import ScenicCard from '@/components/common/ScenicCard.vue'
 import { useScenicStore } from '@/stores/scenic'
@@ -205,7 +207,7 @@ const API_BASE_URL = 'http://localhost:8000/api'
 // API服务
 const apiService = {
   // 获取景区搜索结果
-  searchScenic: async (keyword = '', params = {}) => {
+  searchScenic: async (keyword = '', params = {}, timeout = 10000) => {
     try {
       console.log('请求URL:', `${API_BASE_URL}/scenic/search/`);
       console.log('请求参数:', { keyword, ...params });
@@ -216,11 +218,73 @@ const apiService = {
           keyword,
           ...params
         },
-        timeout: 10000 // 10秒超时
+        timeout: timeout // 可配置超时
       })
       
-      console.log('API响应数据:', response.data);
-      return response.data
+      console.log('API响应状态码:', response.status);
+      
+      // 增强的数据结构验证和日志
+      if (!response.data) {
+        console.error('API响应为空或无效');
+        return { results: [], total: 0, page: 1, page_size: 10, pages: 0 };
+      }
+      
+      // 全面检查响应数据结构
+      console.log('API响应数据类型:', typeof response.data);
+      console.log('是否为数组:', Array.isArray(response.data));
+      
+      // 规范化响应数据结构
+      let normalizedData;
+      
+      if (Array.isArray(response.data)) {
+        // 数组情况 - 包装为标准分页格式
+        console.log('处理API返回的数组数据，长度:', response.data.length);
+        normalizedData = {
+          results: response.data,
+          total: response.data.length,
+          page: 1,
+          page_size: response.data.length,
+          pages: 1
+        };
+      } else if (typeof response.data === 'object') {
+        // 非null对象情况
+        console.log('对象键:', Object.keys(response.data));
+        
+        if (response.data.results && Array.isArray(response.data.results)) {
+          // 标准分页格式
+          console.log('标准分页响应，结果数量:', response.data.results.length);
+          normalizedData = response.data;
+        } else if (!response.data.results) {
+          // 单一对象，可能是单个景区结果
+          console.log('单一对象响应，无results字段，可能是单个景区');
+          // 确认是否有典型的景区对象字段
+          if (response.data.name || response.data.scenic_id) {
+            console.log('识别为单个景区对象，包装为标准格式');
+            normalizedData = {
+              results: [response.data],
+              total: 1,
+              page: 1,
+              page_size: 1,
+              pages: 1
+            };
+          } else {
+            // 可能是其他格式的对象
+            console.warn('无法识别的对象结构，尝试保持原样');
+            normalizedData = response.data;
+          }
+        } else {
+          // 其他情况，保持原样
+          console.warn('未识别的对象结构，保持原样');
+          normalizedData = response.data;
+        }
+      } else {
+        // 其他情况：字符串、数字等，返回空结果
+        console.error('API返回了无效数据类型:', response.data);
+        normalizedData = { results: [], total: 0, page: 1, page_size: 10, pages: 0 };
+      }
+      
+      console.log('规范化后的响应数据:', normalizedData);
+      return normalizedData;
     } catch (error: any) {
       if (error.code === 'ECONNABORTED') {
         console.error('请求超时:', error);
@@ -235,8 +299,8 @@ const apiService = {
         console.error('请求错误:', error.message);
         ElMessage.error(`请求错误: ${error.message}`);
       }
-      // 返回空数组，以便前端能够正常处理
-      return [];
+      // 返回标准化的空结果对象，而不是空数组
+      return { results: [], total: 0, page: 1, page_size: 10, pages: 0 };
     }
   },
   
@@ -257,6 +321,21 @@ const apiService = {
     }
   }
 }
+
+// 解决分页组件高亮问题：强制Element UI重新渲染
+const forceRerender = (component: any) => {
+  if (!component) return;
+  
+  // 移除并重新添加DOM元素
+  const parent = component.$el.parentNode;
+  if (parent) {
+    const next = component.$el.nextSibling;
+    parent.removeChild(component.$el);
+    setTimeout(() => {
+      parent.insertBefore(component.$el, next);
+    }, 0);
+  }
+};
 
 // 添加城市映射的类型声明
 type CitiesRecord = Record<string, string[]>
@@ -290,6 +369,14 @@ export default defineComponent({
     const sortType = ref('popularity')
     const searchResult = ref<any[]>([])
     const hasInitialized = ref(false)
+    const rerenderPagination = ref(0) // 用于强制重新渲染分页组件
+    
+    // 分页直接使用对象，避免响应式问题
+    const pageConfig = reactive({
+      currentPage: 1,
+      totalCount: 0,
+      pageSize: 12
+    })
     
     // 筛选表单
     const searchForm = reactive({
@@ -311,6 +398,9 @@ export default defineComponent({
       districts: {}
     })
     
+    // 在setup内部定义defaultPriceRange
+    const defaultPriceRange = ref([0, 1000]);
+    
     // 计算属性：判断是否为水利风景区类型
     const isWaterScenic = computed(() => {
       return searchForm.type === '水利风景区'
@@ -328,8 +418,13 @@ export default defineComponent({
       // 处理"A级景区"类型，使其能够映射到原来的"景区"类型的级别
       const typeKey = searchForm.type === 'A级景区' ? '景区' : searchForm.type;
       
+      // 调试可用级别
+      console.log('获取可用级别 - 类型:', typeKey);
+      
       // 从typeLevels中获取当前类型的级别列表
-      return (typeAndLevelData.typeLevels as TypeLevels)[typeKey] || []
+      const levels = (typeAndLevelData.typeLevels as TypeLevels)[typeKey] || [];
+      console.log('级别列表:', levels);
+      return levels;
     })
     
     // 使用本地JSON文件中的筛选选项
@@ -398,9 +493,15 @@ export default defineComponent({
       return filterOptions.districts[cityKey] || []
     })
     
+    // 计算总页数
+    const totalPages = computed(() => {
+      return Math.ceil(pageConfig.totalCount / pageConfig.pageSize) || 1;
+    })
+    
     // 计算当前页面显示的数据
     const paginatedResults = computed(() => {
       // 直接返回搜索结果，因为后端已经实现了分页
+      console.log(`[分页计算] 返回搜索结果, 长度: ${searchResult.value.length}, 当前页: ${pageConfig.currentPage}`);
       return searchResult.value;
     })
     
@@ -409,21 +510,32 @@ export default defineComponent({
       if (scenicStore.savedSearchState.hasSearched) {
         // 恢复搜索表单
         const savedForm = scenicStore.savedSearchState.searchForm
-        searchForm.keyword = savedForm.keyword
-        searchForm.province = savedForm.province
-        searchForm.city = savedForm.city
+        searchForm.keyword = savedForm.keyword || ''
+        searchForm.province = savedForm.province || ''
+        searchForm.city = savedForm.city || ''
         searchForm.district = savedForm.district || ''
-        searchForm.type = savedForm.type
-        searchForm.level = savedForm.level
-        searchForm.priceRange = [...savedForm.priceRange]
+        searchForm.type = savedForm.type || ''
+        searchForm.level = savedForm.level || ''
+        
+        // 安全处理priceRange，确保它是数组
+        if (Array.isArray(savedForm.priceRange) && savedForm.priceRange.length >= 2) {
+          searchForm.priceRange = [...savedForm.priceRange]
+        } else {
+          // 提供默认值
+          searchForm.priceRange = [0, 500]
+          console.warn('[恢复状态] priceRange格式不正确，使用默认值')
+        }
         
         // 恢复排序和分页
-        sortType.value = scenicStore.savedSearchState.sortType
-        currentPage.value = scenicStore.savedSearchState.currentPage
+        sortType.value = scenicStore.savedSearchState.sortType || 'popularity'
+        
+        // 设置当前页码，确保使用pageConfig
+        pageConfig.currentPage = scenicStore.savedSearchState.currentPage || 1
+        console.log(`[恢复状态] 已恢复页码: ${pageConfig.currentPage}`);
         
         console.log('已恢复搜索状态:', {
           searchForm,
-          currentPage: currentPage.value,
+          currentPage: pageConfig.currentPage,
           sortType: sortType.value
         })
         
@@ -436,89 +548,129 @@ export default defineComponent({
     const saveCurrentState = () => {
       scenicStore.saveSearchState(
         { ...searchForm },
-        currentPage.value,
+        pageConfig.currentPage,
         sortType.value
       )
     }
     
-    // 使用后端API进行景区搜索
-    const handleSearch = async () => {
-      loading.value = true
+    // 处理搜索
+    const handleSearch = async (resetPage = false) => {
+      console.log('[搜索] 开始搜索，重置页码?', resetPage);
+      
+      if (resetPage) {
+        console.log(`[分页] 重置页码: 从 ${pageConfig.currentPage} 到 1`);
+        pageConfig.currentPage = 1;
+      }
+      
+      console.log('[搜索] 当前搜索条件:', {
+        关键词: searchForm.keyword,
+        省份: searchForm.province,
+        城市: searchForm.city,
+        区县: searchForm.district,
+        类型: searchForm.type,
+        等级: searchForm.level,
+        价格范围: searchForm.priceRange.join('-'),
+        排序方式: sortType.value,
+        页码: pageConfig.currentPage,
+        每页数量: pageConfig.pageSize
+      });
+
+      // 清空搜索结果防止闪烁
+      searchResult.value = [];
+      loading.value = true;
       
       try {
-        // 构建API参数
-        const params: any = {
-          province: searchForm.province || undefined,
-          city: searchForm.city || undefined,
-          district: searchForm.district || undefined,
-          type: searchForm.type === 'A级景区' ? '景区' : searchForm.type,
-          level: searchForm.level || undefined,
-          priceRange: searchForm.priceRange.join(',') || undefined,
-          page: currentPage.value,
-          page_size: pageSize.value
+        // 构建API请求参数
+        const params: Record<string, any> = {
+          keyword: searchForm.keyword?.trim() || '',
+          page: pageConfig.currentPage,
+          page_size: pageConfig.pageSize,
+          sort_by: sortType.value
         }
         
-        // 特殊处理：对于A级景区类型，根据级别调整发送的参数
-        if (searchForm.type === 'A级景区') {
-          if (searchForm.level) {
-            // 如果选择了具体级别，如"5A景区"，直接发送完整级别名
-            params.level = searchForm.level;
-          }
+        // 添加可选参数
+        if (searchForm.province) params.province = searchForm.province;
+        if (searchForm.city) params.city = searchForm.city;
+        if (searchForm.district) params.district = searchForm.district;
+        if (searchForm.type) params.type = searchForm.type;
+        if (searchForm.level) params.level = searchForm.level;
+        if (searchForm.priceRange[0] != (defaultPriceRange?.value?.[0] ?? 0) || 
+            searchForm.priceRange[1] != (defaultPriceRange?.value?.[1] ?? 500)) {
+          params.min_price = searchForm.priceRange[0];
+          params.max_price = searchForm.priceRange[1];
         }
         
-        console.log('发送API请求参数:', params);
+        console.log('[搜索] 发送API请求:', params);
         
-        // 调用后端API
-        const data = await apiService.searchScenic(searchForm.keyword, params)
+        const response = await apiService.searchScenic(searchForm.keyword, params, 20000)
+        const data = response;
+        console.log('[搜索] 搜索结果:', data);
         
-        console.log('接收到的搜索结果:', data);
+        // 标记已经初始化过搜索
+        hasInitialized.value = true;
         
-        // 处理响应数据
-        if (Array.isArray(data)) {
-          // 数组格式，直接使用
-          searchResult.value = data;
-          totalCount.value = data.length;
-        } else if (data.results && Array.isArray(data.results)) {
-          // 分页格式，包含results和total字段
+        // 保存搜索状态
+        console.log('[搜索] 保存搜索状态:', {
+          searchForm,
+          currentPage: pageConfig.currentPage,
+          sortType: sortType.value
+        });
+        
+        // 修复：确保使用正确的三个参数
+        scenicStore.saveSearchState(
+          { ...searchForm },
+          pageConfig.currentPage,
+          sortType.value
+        );
+        
+        // 处理搜索结果 - 使用新的规范化响应格式
+        if (data && data.results) {
+          console.log(`[搜索] 获取到${data.results.length}个结果，总共${data.total || data.results.length}个`);
           searchResult.value = data.results;
-          // 使用后端返回的总数，而不是当前页结果的长度
-          totalCount.value = data.total || data.results.length;
+          pageConfig.totalCount = data.total || data.results.length;
           
-          // 如果后端返回了页码信息，更新对应的值
+          // 更新分页信息
           if (data.page) {
-            currentPage.value = data.page;
+            // 转换为数字
+            const pageNum = Number(data.page);
+            if (!isNaN(pageNum)) {
+              pageConfig.currentPage = pageNum;
+            }
           }
           
-          // 更新页大小（如果有必要）
-          if (data.page_size && data.page_size !== pageSize.value) {
-            pageSize.value = data.page_size;
+          if (data.page_size) {
+            // 转换为数字
+            const pageSizeNum = Number(data.page_size);
+            if (!isNaN(pageSizeNum)) {
+              pageConfig.pageSize = pageSizeNum;
+            }
           }
         } else {
-          // 未知格式，尝试处理
-          console.warn('未识别的API响应格式:', data)
-          searchResult.value = data && typeof data === 'object' ? [data] : []
-          totalCount.value = searchResult.value.length
+          console.error('[搜索] 未识别的结果格式或结果为空:', data);
+          searchResult.value = [];
+          pageConfig.totalCount = 0;
         }
         
-        // 根据排序类型排序
-        handleSort()
+        console.log(`[分页] 更新分页数据: 总数=${pageConfig.totalCount}, 每页=${pageConfig.pageSize}, 总页数=${Math.ceil(pageConfig.totalCount / pageConfig.pageSize)}`);
         
-        // 保存当前搜索状态到store
-        saveCurrentState()
+        // 如果搜索结果为空，显示提示
+        if (searchResult.value.length === 0) {
+          ElMessage.info('没有找到符合条件的景区');
+        }
+        
+        // 搜索完成后强制刷新分页组件以确保高亮正确
+        nextTick(() => {
+          refreshPaginationComponent();
+          console.log('[分页] 搜索完成后刷新分页组件，当前页码:', pageConfig.currentPage);
+        });
+        
       } catch (error: any) {
-        console.error('搜索失败:', error)
-        
-        // 增强错误处理
-        if (error.response && error.response.status === 500) {
-          ElMessage.error('后端服务器错误，请联系管理员检查服务器日志')
-        } else {
-          ElMessage.error('搜索失败，请重试')
-        }
-        
-        searchResult.value = []
-        totalCount.value = 0
+        console.error('[搜索] 搜索失败:', error);
+        ElMessage.error(`搜索失败: ${error.message || '未知错误'}`);
+        searchResult.value = [];
+        pageConfig.totalCount = 0;
       } finally {
-        loading.value = false
+        loading.value = false;
       }
     }
     
@@ -531,8 +683,14 @@ export default defineComponent({
       searchForm.type = ''
       searchForm.level = ''
       searchForm.priceRange = [0, 500]
-      currentPage.value = 1
+      
+      // 重置页码
+      console.log('[分页] 重置条件，页码重置为1');
+      pageConfig.currentPage = 1
       sortType.value = 'popularity'
+      
+      // 强制重新创建分页组件
+      refreshPaginationComponent();
       
       // 重置store中的保存状态
       scenicStore.resetSearchState()
@@ -563,19 +721,56 @@ export default defineComponent({
         
         searchResult.value = sortedResults
         // 重置当前页码
-        currentPage.value = 1
+        console.log('[分页] 排序变更，页码重置为1');
+        pageConfig.currentPage = 1
+        
+        // 强制重新创建分页组件
+        refreshPaginationComponent();
         
         // 保存当前状态
         saveCurrentState()
       }
     }
     
+    // 强制重新创建分页组件
+    const refreshPaginationComponent = () => {
+      console.log(`[分页] 强制重新创建分页组件，当前key=${rerenderPagination.value}, 当前页=${pageConfig.currentPage}`);
+      
+      // 增加key以强制重新渲染
+      rerenderPagination.value += 1;
+      
+      // 使用nextTick确保DOM更新后再执行
+      nextTick(() => {
+        console.log(`[分页] 组件应该已重新创建，key=${rerenderPagination.value}, 页码=${pageConfig.currentPage}`);
+        
+        // 确保数据刷新正确
+        if (pageConfig.currentPage > Math.ceil(pageConfig.totalCount / pageConfig.pageSize)) {
+          console.warn(`[分页] 页码超出范围，重置为1, 当前页=${pageConfig.currentPage}, 总页数=${Math.ceil(pageConfig.totalCount / pageConfig.pageSize)}`);
+          pageConfig.currentPage = 1;
+        }
+      });
+    };
+
     // 处理分页变更
     const handlePageChange = (page: number) => {
-      currentPage.value = page
+      console.log(`[分页] 页码变更事件: 从 ${pageConfig.currentPage} 到 ${page}`);
+      
+      // 如果点击的是当前页，不需要处理
+      if (page === pageConfig.currentPage) {
+        console.log('[分页] 点击了当前页，不需要处理');
+        return;
+      }
+      
+      // 更新页码
+      pageConfig.currentPage = page;
+      
+      // 强制重新创建分页组件，确保高亮正确
+      refreshPaginationComponent();
+      
+      console.log(`[分页] 更新后的当前页码: ${pageConfig.currentPage}, 准备发送搜索请求...`);
+      
       // 请求新页的数据
-      handleSearch()
-      // 保存当前状态 (已在handleSearch中进行)
+      handleSearch();
     }
     
     // 处理省份变更
@@ -599,15 +794,16 @@ export default defineComponent({
         searchForm.level = ''
       }
       
-      // 如果类型从"A级景区"变为其他，或从其他变为"A级景区"，需要调整表单
-      if (searchForm.type === 'A级景区') {
-        // 可以在这里添加特定的处理逻辑
-        console.log('选择了A级景区类型')
-      }
+      console.log('类型已更改为:', searchForm.type)
+      console.log('可用级别选项:', availableLevels.value)
     }
     
     // 监听状态变化，避免路由导航后状态丢失
-    watch([searchForm, currentPage, sortType], () => {
+    watch([
+      () => ({ ...searchForm }), 
+      () => pageConfig.currentPage, 
+      () => sortType.value
+    ], () => {
       if (hasInitialized.value) {
         saveCurrentState()
       }
@@ -619,6 +815,9 @@ export default defineComponent({
         if (scenicStore.savedSearchState.hasSearched) {
           restoreSavedState()
         } else {
+          // 确保页码为1
+          pageConfig.currentPage = 1;
+          console.log('[分页] 初始化页码为1');
           // 否则执行初始搜索
           handleSearch()
         }
@@ -635,9 +834,7 @@ export default defineComponent({
       filteredDistricts,
       searchResult,
       paginatedResults,
-      totalCount,
-      currentPage,
-      pageSize,
+      pageConfig,
       sortType,
       availableLevels,
       handleSearch,
@@ -648,7 +845,9 @@ export default defineComponent({
       handleCityChange,
       handleTypeChange,
       isWaterScenic,
-      levelPlaceholder
+      levelPlaceholder,
+      totalPages,
+      rerenderPagination
     }
   }
 })
@@ -704,7 +903,14 @@ export default defineComponent({
 .pagination-container {
   margin-top: 30px;
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
+}
+
+.page-info {
+  margin-top: 10px;
+  font-size: 14px;
+  color: #606266;
 }
 
 .empty-suggestions {

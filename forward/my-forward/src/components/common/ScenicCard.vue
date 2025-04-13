@@ -2,9 +2,9 @@
   <div class="scenic-card" @click="navigateToDetail">
     <div class="scenic-card-image">
       <img 
-        v-if="!imageError" 
+        v-if="!imageError && (scenic.image || defaultImage)" 
         :src="scenic.image || defaultImage" 
-        :alt="scenic.name" 
+        :alt="scenic.name || '景区'" 
         @error="handleImageError" 
       />
       <div v-else class="image-placeholder">
@@ -13,21 +13,22 @@
       <div class="scenic-card-level" v-if="scenic.level">{{ scenic.level }}</div>
     </div>
     <div class="scenic-card-content">
-      <h3 class="scenic-card-title">{{ scenic.name }}</h3>
+      <h3 class="scenic-card-title">{{ scenic.name || '未命名景区' }}</h3>
       <div class="scenic-card-location">
         <el-icon><Location /></el-icon>
-        <span>{{ scenic.province }} {{ scenic.city }}</span>
+        <span>{{ (scenic.province || '') + ' ' + (scenic.city || '') }}</span>
       </div>
       <div class="scenic-card-info">
-        <div class="scenic-card-price" v-if="scenic.min_price || scenic.price">
-          <span>¥</span>{{ scenic.price || scenic.min_price || '免费' }}
+        <div class="scenic-card-price" v-if="scenic.min_price || scenic.price !== undefined">
+          <span>¥</span>{{ displayPrice }}
         </div>
-        <div class="scenic-card-type" v-if="scenic.type">{{ scenic.type }}</div>
+        <div class="scenic-card-type" v-if="getDisplayType">{{ getDisplayType }}</div>
       </div>
     </div>
     <div class="scenic-card-actions">
       <el-button 
-        type="text" 
+        type="primary"
+        link
         :icon="isFavorite ? 'StarFilled' : 'Star'" 
         @click.stop="toggleFavorite"
         :class="{ 'is-favorite': isFavorite }"
@@ -65,42 +66,93 @@ export default defineComponent({
     const defaultImage = '/images/default-scenic.jpg'
     const imageError = ref(false)
     
+    // 计算属性：获取适合显示的价格
+    const displayPrice = computed(() => {
+      // 尝试获取价格值
+      const priceValue = props.scenic.price !== undefined ? props.scenic.price : 
+                          props.scenic.min_price !== undefined ? props.scenic.min_price : null;
+      
+      // 如果价格为空、0或undefined，显示免费
+      if (priceValue === null || priceValue === undefined || 
+          priceValue === 0 || priceValue === '0' || 
+          priceValue === '' || priceValue === 'free' || 
+          priceValue === '免费') {
+        return '免费';
+      }
+      
+      return priceValue;
+    });
+    
+    // 计算属性：获取适合显示的类型
+    const getDisplayType = computed(() => {
+      try {
+        // 优先使用frontend_type
+        if (props.scenic.frontend_type) {
+          console.log(`[ScenicCard] 使用frontend_type: ${props.scenic.frontend_type}`);
+          return props.scenic.frontend_type;
+        }
+        
+        // 备选使用type
+        if (props.scenic.type) {
+          console.log(`[ScenicCard] 使用type: ${props.scenic.type}`);
+          return props.scenic.type;
+        }
+        
+        // 都没有时显示未分类
+        return '未分类';
+      } catch (error) {
+        console.error('[ScenicCard] 获取景区类型出错:', error);
+        return '未分类';
+      }
+    });
+    
     // 检查用户是否已登录
     const isLoggedIn = computed(() => !!userStore.token)
     
     // 检查是否已收藏
     const isFavorite = computed(() => {
-      const scenicId = props.scenic.scenic_id || props.scenic.id
-      return userStore.favorites.some((id: string) => id === scenicId)
+      try {
+        const scenicId = props.scenic.scenic_id || props.scenic.id
+        return scenicId && userStore.favorites.some((id: string) => id === scenicId)
+      } catch (error) {
+        console.error('[ScenicCard] 检查收藏状态出错:', error);
+        return false;
+      }
     })
     
     // 跳转到景区详情页
     const navigateToDetail = () => {
-      const scenicId = props.scenic.scenic_id || props.scenic.id
-      if (!scenicId) {
-        ElMessage.warning('景区ID不存在')
-        return
+      try {
+        const scenicId = props.scenic.scenic_id || props.scenic.id
+        if (!scenicId) {
+          ElMessage.warning('景区ID不存在')
+          return
+        }
+        router.push(`/dashboard/scenic/${scenicId}`)
+      } catch (error) {
+        console.error('[ScenicCard] 导航到详情页出错:', error);
+        ElMessage.error('导航到详情页失败');
       }
-      router.push(`/dashboard/scenic/${scenicId}`)
     }
     
     // 切换收藏状态
     const toggleFavorite = async () => {
-      if (!isLoggedIn.value) {
-        ElMessage.warning('请先登录')
-        return
-      }
-      
-      const scenicId = props.scenic.scenic_id || props.scenic.id
-      if (!scenicId) {
-        ElMessage.warning('景区ID不存在')
-        return
-      }
-      
       try {
+        if (!isLoggedIn.value) {
+          ElMessage.warning('请先登录')
+          return
+        }
+        
+        const scenicId = props.scenic.scenic_id || props.scenic.id
+        if (!scenicId) {
+          ElMessage.warning('景区ID不存在')
+          return
+        }
+        
         await userStore.toggleFavorite(scenicId)
         ElMessage.success(isFavorite.value ? '已取消收藏' : '收藏成功')
       } catch (error) {
+        console.error('[ScenicCard] 切换收藏状态出错:', error);
         ElMessage.error('操作失败，请重试')
       }
     }
@@ -117,7 +169,9 @@ export default defineComponent({
       handleImageError,
       isFavorite,
       navigateToDetail,
-      toggleFavorite
+      toggleFavorite,
+      getDisplayType,
+      displayPrice
     }
   }
 })

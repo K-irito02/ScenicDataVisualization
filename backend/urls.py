@@ -16,10 +16,17 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from scenic_data.models import ScenicData
+from django.db.models import Q
 
 urlpatterns = [
+    # 管理界面
     path('admin/', admin.site.urls),
-    path('api/', include('user_management.urls')),
+    
+    # API接口
     path('api/', include('scenic_data.urls')),
-    path('api/', include('admin_management.urls')),
+    path('api/users/', include('users.urls')),
+    path('api/admin/', include('admin_management.urls')), 
 ]

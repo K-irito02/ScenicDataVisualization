@@ -5,8 +5,8 @@
         <card-container title="交通方式分布">
           <template #actions>
             <el-select v-model="selectedProvince" placeholder="选择省份/地区" size="small" @change="handleProvinceChange" filterable>
-              <el-option label="全国" value="all" />
-              <el-option v-for="province in provinceList" :key="province" :label="province" :value="province" />
+              <el-option label="全国" value="全国" />
+              <el-option v-for="province in availableProvinces" :key="province" :label="province" :value="province" />
             </el-select>
           </template>
           
@@ -14,10 +14,19 @@
             <el-skeleton :rows="8" animated />
           </div>
           
+          <div v-else-if="noDataError" class="no-data-container">
+            <el-empty description="暂无该省份的交通数据" :image-size="200">
+              <template #description>
+                <p>{{ noDataError }}</p>
+              </template>
+              <el-button type="primary" @click="selectedProvince = '全国'">返回全国视图</el-button>
+            </el-empty>
+          </div>
+          
           <div v-else class="chart-wrapper">
             <base-chart 
-              :options="sankeyOptions" 
-              height="900px"
+              :options="circularChartOptions" 
+              height="700px"
             />
           </div>
           
@@ -38,19 +47,45 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, onMounted, computed } from 'vue'
-import type { Ref } from 'vue'
+import { defineComponent, ref, onMounted, computed, watch } from 'vue'
 import CardContainer from '@/components/common/CardContainer.vue'
 import BaseChart from '@/components/charts/BaseChart.vue'
 import * as echarts from 'echarts'
 import type { 
   EChartsOption, 
-  SankeySeriesOption
 } from 'echarts'
+// 删除不存在的库导入
 import { ElMessage } from 'element-plus'
 import { Location, Van, TrendCharts } from '@element-plus/icons-vue'
 import { getTransportation } from '@/api/scenic'
 import { useScenicStore } from '@/stores/scenic'
+
+// 链接和节点的接口定义
+interface SankeyNode {
+  name: string;
+  itemStyle?: { color?: string };
+  value?: number;
+}
+
+interface SankeyLink {
+  source: string | SankeyNode | number;
+  target: string | SankeyNode | number;
+  value: number;
+  lineStyle?: any;
+}
+
+interface SankeyData {
+  nodes: SankeyNode[];
+  links: SankeyLink[];
+}
+
+// 环形图数据项接口定义
+interface PieData {
+  name: string;
+  value: number;
+  itemStyle?: { color?: string };
+  children?: PieData[];
+}
 
 export default defineComponent({
   name: 'Transportation',
@@ -63,66 +98,190 @@ export default defineComponent({
   },
   setup() {
     const scenicStore = useScenicStore()
-    const selectedProvince = ref('all')
+    const selectedProvince = ref('全国')
     const provinceList = ref<string[]>([])
     const loading = ref(false) 
     const apiData = ref<any[]>([]) 
     const transportTypes = ref<string[]>([])
+    const noDataError = ref('')
+    const provincesWithData = ref<Set<string>>(new Set())
+    
+    // 定义所有省级行政区
+    const allProvinces = [
+      '北京', '天津', '河北', '山西', '内蒙古', '辽宁', '吉林', '黑龙江',
+      '上海', '江苏', '浙江', '安徽', '福建', '江西', '山东', '河南', '湖北',
+      '湖南', '广东', '广西', '海南', '重庆', '四川', '贵州', '云南', '西藏',
+      '陕西', '甘肃', '青海', '宁夏', '新疆', '香港', '澳门', '台湾',
+      '东北', '西北' // 添加东北和西北作为省级行政区
+    ]
+    
+    // 计算属性：只返回有数据的省份
+    const availableProvinces = computed(() => {
+      return Array.from(provincesWithData.value).sort();
+    });
     
     // 使用空初始值，将从API获取真实数据
-    const sankeyData = ref<{
-      nodes: Array<{ name: string, [key: string]: any }>,
-      links: Array<{ source: string, target: string, value: number, [key: string]: any }>
-    }>({
-      nodes: [],
-      links: []
-    })
+    const sankeyData = ref<SankeyData>({ nodes: [], links: [] });
+    
+    // 监听省份变化，检查是否有数据
+    watch(selectedProvince, (newValue) => {
+      if (newValue !== '全国') {
+        checkProvinceData(newValue);
+      } else {
+        noDataError.value = '';
+      }
+    });
+    
+    // 检查省份是否有数据
+    const checkProvinceData = (province: string) => {
+      // 重置错误信息
+      noDataError.value = '';
+      
+      // 检查省份节点是否存在
+      const provinceNode = sankeyData.value.nodes.find(node => node.name === province);
+      if (!provinceNode) {
+        noDataError.value = `未找到${province}省份节点数据`;
+        return false;
+      }
+      
+      // 检查是否存在与该省份相关的链接
+      const relatedLinks = sankeyData.value.links.filter(link => {
+        const source = typeof link.source === 'string' 
+          ? link.source 
+          : typeof link.source === 'object' && link.source !== null 
+            ? (link.source as SankeyNode).name 
+            : '';
+        const target = typeof link.target === 'string' 
+          ? link.target 
+          : typeof link.target === 'object' && link.target !== null 
+            ? (link.target as SankeyNode).name 
+            : '';
+        return source === province || target === province;
+      });
+      
+      if (relatedLinks.length === 0) {
+        noDataError.value = `${province}没有相关的交通数据`;
+        return false;
+      }
+      
+      return true;
+    };
     
     // 根据省份筛选桑基图数据
     const filterSankeyData = () => {
-      if (selectedProvince.value === 'all') {
-        return sankeyData.value
+      console.log(`筛选桑基图数据，选中省份: ${selectedProvince.value}`);
+      
+      if (selectedProvince.value === '全国') {
+        console.log('显示全国数据');
+        return sankeyData.value;
       }
       
       // 根据选中的省份过滤数据
-      const targetProvince = selectedProvince.value
+      const targetProvince = selectedProvince.value;
+      console.log(`目标省份: ${targetProvince}`);
+      
+      // 如果没有数据，返回空数据结构
+      if (noDataError.value) {
+        return { nodes: [], links: [] };
+      }
       
       // 获取交通方式节点列表
       const transportNodes = sankeyData.value.nodes.filter(node => {
         // 判断是否为交通方式节点（排除省份节点）
-        return !provinceList.value.includes(node.name);
+        return !allProvinces.includes(node.name);
       });
+      console.log(`交通方式节点数量: ${transportNodes.length}`);
       
       // 获取选中的省份节点
       const provinceNode = sankeyData.value.nodes.find(node => node.name === targetProvince);
       
       // 如果找不到省份节点，返回空数据
       if (!provinceNode) {
+        console.warn(`未找到省份节点: ${targetProvince}`);
         return { nodes: [], links: [] };
       }
       
       // 过滤链接，只保留与选中省份相关的链接
-      const filteredLinks = sankeyData.value.links.filter(link => 
-        link.source === targetProvince || link.target === targetProvince
-      );
+      const filteredLinks = sankeyData.value.links.filter(link => {
+        const source = typeof link.source === 'string' 
+          ? link.source 
+          : typeof link.source === 'object' && link.source !== null 
+            ? (link.source as SankeyNode).name 
+            : '';
+        const target = typeof link.target === 'string' 
+          ? link.target 
+          : typeof link.target === 'object' && link.target !== null 
+            ? (link.target as SankeyNode).name 
+            : '';
+        return source === targetProvince || target === targetProvince;
+      });
+      console.log(`筛选后的链接数量: ${filteredLinks.length}`);
+      
+      // 链接数量为0，说明没有与该省份相关的数据
+      if (filteredLinks.length === 0) {
+        console.warn(`${targetProvince}没有相关链接数据`);
+        return { nodes: [], links: [] };
+      }
       
       // 获取相关节点的名称列表
       const relatedNodeNames = new Set<string>();
-      relatedNodeNames.add(targetProvince);
       
+      // 收集与省份相关的所有交通方式节点
       filteredLinks.forEach(link => {
-        relatedNodeNames.add(link.source as string);
-        relatedNodeNames.add(link.target as string);
+        const sourceName = typeof link.source === 'string' 
+          ? link.source 
+          : typeof link.source === 'object' && link.source !== null 
+            ? (link.source as SankeyNode).name 
+            : '';
+        const targetName = typeof link.target === 'string' 
+          ? link.target 
+          : typeof link.target === 'object' && link.target !== null 
+            ? (link.target as SankeyNode).name 
+            : '';
+        
+        if (sourceName !== targetProvince) relatedNodeNames.add(sourceName);
+        if (targetName !== targetProvince) relatedNodeNames.add(targetName);
       });
+      console.log(`相关节点数量: ${relatedNodeNames.size}`);
       
-      // 过滤节点，只保留相关节点
-      const filteredNodes = sankeyData.value.nodes.filter(node => 
-        relatedNodeNames.has(node.name)
-      );
+      // 过滤节点，只保留相关节点和选中的省份节点
+      const filteredNodes = [
+        ...sankeyData.value.nodes.filter(node => 
+          relatedNodeNames.has(node.name)
+        ),
+        provinceNode // 确保包含省份节点
+      ];
+      console.log(`筛选后的节点数量: ${filteredNodes.length}`);
+      
+      // 确保链接中的省份节点始终在左侧（作为source）
+      const reorientedLinks = filteredLinks.map(link => {
+        const newLink = { ...link };
+        const sourceName = typeof newLink.source === 'string' 
+          ? newLink.source 
+          : typeof newLink.source === 'object' && newLink.source !== null 
+            ? (newLink.source as SankeyNode).name 
+            : '';
+        const targetName = typeof newLink.target === 'string' 
+          ? newLink.target 
+          : typeof newLink.target === 'object' && newLink.target !== null 
+            ? (newLink.target as SankeyNode).name 
+            : '';
+        
+        // 如果省份不是source，就交换source和target
+        if (sourceName !== targetProvince && targetName === targetProvince) {
+          return {
+            ...newLink,
+            source: newLink.target,
+            target: newLink.source
+          };
+        }
+        
+        return newLink;
+      });
       
       return {
         nodes: filteredNodes,
-        links: filteredLinks
+        links: reorientedLinks
       };
     }
     
@@ -156,13 +315,14 @@ export default defineComponent({
         return transportColors[name];
       }
       
-      // 省份节点使用蓝色色系渐变
-      const provinceIndex = provinceList.value.indexOf(name);
+      // 省份节点使用梯度蓝色系
+      const provinceIndex = allProvinces.indexOf(name);
       if (provinceIndex >= 0) {
         // 使用更丰富的颜色渐变
         const colors = [
-          '#E3F2FD', '#BBDEFB', '#90CAF9', '#64B5F6', '#42A5F5', '#2196F3', 
-          '#1E88E5', '#1976D2', '#1565C0', '#0D47A1', '#82B1FF', '#448AFF'
+          '#1A237E', '#283593', '#303F9F', '#3949AB', '#3F51B5', 
+          '#5C6BC0', '#7986CB', '#9FA8DA', '#C5CAE9', '#E8EAF6', 
+          '#8C9EFF', '#536DFE', '#3D5AFE', '#304FFE', '#1976D2'
         ];
         return colors[provinceIndex % colors.length];
       }
@@ -171,141 +331,403 @@ export default defineComponent({
       return '#CFD8DC';
     };
     
-    // 桑基图配置
-    const sankeyOptions = computed(() => {
-      const filteredData = filterSankeyData()
-      
-      // 为节点添加颜色
-      const nodesWithColor = filteredData.nodes.map(node => ({
-        ...node,
-        itemStyle: {
-          color: getNodeColor(node.name)
-        }
-      }));
-      
-      // 链接的颜色基于源节点
-      const linksWithColor = filteredData.links.map(link => {
-        const sourceNode = nodesWithColor.find(node => node.name === link.source);
-        return {
-          ...link,
-          lineStyle: {
-            color: sourceNode?.itemStyle?.color || '#CFD8DC',
-            opacity: 0.7 // 增加不透明度使颜色更鲜明
+    // 将桑基图数据转换为环形图数据
+    const convertToCircularData = (filteredData: SankeyData): PieData[] => {
+      // 如果是全国数据，按省份分组显示交通方式
+      if (selectedProvince.value === '全国') {
+        // 获取所有省份节点
+        const provinceNodes = filteredData.nodes.filter(node => 
+          allProvinces.includes(node.name)
+        );
+        
+        // 对每个省份，收集相关的交通方式数据
+        return provinceNodes.map(province => {
+          // 查找与该省份相关的链接
+          const provinceLinks = filteredData.links.filter(link => {
+            const source = typeof link.source === 'string' 
+              ? link.source 
+              : typeof link.source === 'object' && link.source !== null 
+                ? (link.source as SankeyNode).name 
+                : '';
+            
+            return source === province.name;
+          });
+          
+          // 如果没有链接，返回空数据
+          if (provinceLinks.length === 0) {
+            return {
+              name: province.name,
+              value: 0,
+              itemStyle: {
+                color: getNodeColor(province.name)
+              },
+              children: []
+            };
           }
-        };
-      });
-      
-      // 计算数据总量用于设置节点宽度 - 增加宽度
-      const totalValue = linksWithColor.reduce((sum, link) => sum + (link.value || 0), 0);
-      // 为圆形布局调整节点宽度
-      const nodeWidth = Math.max(15, Math.min(30, totalValue / 8000));
-      
-      // 创建图例数据，包含所有交通方式类型
-      const legendData = [...transportTypes.value, '省份/地区'];
-      
-      return {
-        backgroundColor: '#FFFFFF', // 添加白色背景
-        title: {
-          text: `${selectedProvince.value === 'all' ? '全国' : selectedProvince.value}景区交通方式分布`,
-          left: 'center',
-          top: 20,
-          textStyle: {
-            fontSize: 20,
-            fontWeight: 'bold',
-            color: '#333333'
-          }
-        },
-        tooltip: {
-          trigger: 'item',
-          triggerOn: 'mousemove',
-          backgroundColor: 'rgba(255, 255, 255, 0.9)',
-          borderColor: '#ccc',
-          borderWidth: 1,
-          textStyle: {
-            color: '#333',
-            fontSize: 14
-          },
-          formatter: function(params: any) {
-            if (params.dataType === 'node') {
-              return `<div style="font-weight:bold;">${params.name}</div>总连接量: ${params.value || 0}`;
-            } else if (params.data) {
-              const data = params.data as {
-                source: string;
-                target: string;
-                value: number;
-              };
-              return `<div style="font-weight:bold;">${data.source} → ${data.target}</div>数量: ${data.value}`;
-            }
-            return '';
-          }
-        },
-        legend: {
-          show: true,
-          type: 'scroll',
-          orient: 'horizontal',
-          bottom: 10,
-          padding: [15, 5, 5, 5],
-          itemGap: 15,
-          textStyle: {
-            fontSize: 14
-          },
-          data: legendData,
-          formatter: function(name: string) {
-            // 截断过长的名称
-            if (name.length > 15) {
-              return name.substr(0, 12) + '...';
-            }
-            return name;
-          }
-        },
-        series: [
-          {
-            type: 'sankey',
-            layout: 'circular', // 使用圆形布局
-            emphasis: {
-              focus: 'adjacency'
-            },
-            data: nodesWithColor,
-            links: linksWithColor,
-            nodeWidth: nodeWidth,
-            nodeGap: 8, // 为圆形布局调整节点间距
-            radius: ['20%', '70%'], // 设置圆形布局的内外半径
-            layoutIterations: 64, // 圆形布局迭代次数
-            draggable: false, // 禁止拖拽节点，避免布局混乱
-            label: {
-              formatter: '{b}', // 只显示节点名称
-              position: 'right',
-              fontSize: 12,
-              fontWeight: 'bold',
-              color: '#000',
-              distance: 5, // 标签与节点的距离
-              show: true
-            },
-            lineStyle: {
-              color: 'source',
-              opacity: 0.6,
-              curveness: 0.5
-            },
+          
+          // 计算省份总值
+          const provinceTotal = provinceLinks.reduce((sum, link) => {
+            return sum + (typeof link.value === 'number' ? link.value : 0);
+          }, 0);
+          
+          // 为每个省份创建子项（各种交通方式）
+          const transportChildren = provinceLinks.map(link => {
+            const targetName = typeof link.target === 'string' 
+              ? link.target 
+              : typeof link.target === 'object' && link.target !== null 
+                ? (link.target as SankeyNode).name 
+                : '';
+            
+            return {
+              name: targetName,
+              value: typeof link.value === 'number' ? link.value : 0,
+              itemStyle: {
+                color: getNodeColor(targetName)
+              }
+            };
+          });
+          
+          return {
+            name: province.name,
+            value: provinceTotal,
             itemStyle: {
-              borderWidth: 1,
-              borderColor: 'rgba(255, 255, 255, 0.5)'
+              color: getNodeColor(province.name)
             },
-            animation: true,
-            animationDuration: 1500, // 增加动画时间
-            animationEasing: 'cubicOut'
+            children: transportChildren
+          };
+        }).filter(item => item.children && item.children.length > 0);
+      } else {
+        // 单个省份视图：直接显示交通方式
+        const province = selectedProvince.value;
+        const provinceLinks = filteredData.links.filter(link => {
+          const source = typeof link.source === 'string' 
+            ? link.source 
+            : typeof link.source === 'object' && link.source !== null 
+              ? (link.source as SankeyNode).name 
+              : '';
+          
+          return source === province;
+        });
+        
+        if (provinceLinks.length === 0) {
+          return [];
+        }
+        
+        // 直接返回交通方式数据
+        return provinceLinks.map(link => {
+          const targetName = typeof link.target === 'string' 
+            ? link.target 
+            : typeof link.target === 'object' && link.target !== null 
+              ? (link.target as SankeyNode).name 
+              : '';
+          
+          return {
+            name: targetName,
+            value: typeof link.value === 'number' ? link.value : 0,
+            itemStyle: {
+              color: getNodeColor(targetName)
+            }
+          };
+        });
+      }
+    };
+    
+    // 环形图配置
+    const circularChartOptions = computed(() => {
+      const filteredData = filterSankeyData();
+      console.log('过滤后的数据:', filteredData);
+      
+      // 如果没有数据，返回空配置
+      if (filteredData.nodes.length === 0 || filteredData.links.length === 0) {
+        return {
+          title: {
+            text: '暂无数据',
+            left: 'center',
+            top: 'center',
+            textStyle: {
+              fontSize: 24,
+              fontWeight: 'bold',
+              color: '#909399'
+            }
           }
-        ]
-      } as EChartsOption
+        } as EChartsOption;
+      }
+      
+      // 使用chord图(和弦图)替代环形桑基图
+      if (selectedProvince.value === '全国') {
+        // 为全国视图使用和弦图(chord)
+        // 为节点添加颜色
+        const nodesWithColor = filteredData.nodes.filter(node => 
+          allProvinces.includes(node.name)
+        ).map(node => ({
+          name: node.name,
+          itemStyle: {
+            color: getNodeColor(node.name)
+          }
+        }));
+        
+        // 准备和弦图数据矩阵
+        const nodeNames = nodesWithColor.map(node => node.name);
+        const nodeMap = new Map(nodeNames.map((name, index) => [name, index]));
+        
+        // 创建一个零填充的矩阵
+        const matrix: number[][] = Array(nodeNames.length).fill(0).map(() => Array(nodeNames.length).fill(0));
+        
+        // 填充矩阵数据
+        filteredData.links.forEach(link => {
+          const source = typeof link.source === 'string' 
+            ? link.source 
+            : typeof link.source === 'object' && link.source !== null 
+              ? (link.source as SankeyNode).name 
+              : '';
+          
+          const target = typeof link.target === 'string' 
+            ? link.target 
+            : typeof link.target === 'object' && link.target !== null 
+              ? (link.target as SankeyNode).name 
+              : '';
+          
+          const value = typeof link.value === 'number' ? link.value : 0;
+          
+          // 如果source和target都在节点列表中
+          if (nodeMap.has(source) && nodeMap.has(target)) {
+            const sourceIndex = nodeMap.get(source)!;
+            const targetIndex = nodeMap.get(target)!;
+            matrix[sourceIndex][targetIndex] = value;
+          }
+        });
+        
+        return {
+          backgroundColor: '#FFFFFF',
+          title: {
+            text: '全国交通方式分布图',
+            left: 'center',
+            top: 10,
+            textStyle: {
+              fontSize: 18,
+              fontWeight: 'bold'
+            },
+            subtext: '环形展示省份间交通方式关系',
+            subtextStyle: {
+              fontSize: 12,
+              color: '#666'
+            }
+          },
+          tooltip: {
+            trigger: 'item',
+            triggerOn: 'mousemove',
+            formatter: function(params: any) {
+              if (params.dataType === 'chord') {
+                return `${params.name} → ${params.data.target}: ${params.data.value}`;
+              } else {
+                return `${params.name}`;
+              }
+            }
+          },
+          legend: {
+            show: true,
+            type: 'scroll',
+            orient: 'horizontal',
+            bottom: 10,
+            data: nodeNames,
+            formatter: function(name: string) {
+              // 截断过长的名称
+              if (name.length > 10) {
+                return name.substr(0, 8) + '...';
+              }
+              return name;
+            }
+          },
+          series: [
+            {
+              name: '交通方式分布',
+              type: 'chord',
+              data: nodesWithColor,
+              matrix: matrix,
+              ribbonType: true,
+              radius: '70%',
+              center: ['50%', '50%'],
+              padding: 10,
+              sort: 'ascending',
+              sortSub: 'descending',
+              startAngle: 90,
+              clockwise: true,
+              itemStyle: {
+                borderWidth: 1,
+                borderColor: '#fff'
+              },
+              label: {
+                show: true,
+                position: 'outside',
+                fontSize: 12,
+                fontWeight: 'bold',
+                color: '#000',
+                formatter: '{b}'
+              },
+              emphasis: {
+                scale: true,
+                focus: 'adjacency',
+                itemStyle: {
+                  shadowBlur: 10,
+                  shadowColor: 'rgba(0, 0, 0, 0.3)'
+                }
+              },
+              tooltip: {
+                formatter: '{b}: {c}'
+              }
+            }
+          ]
+        } as EChartsOption;
+      } else {
+        // 单个省份视图使用力导向图形式的桑基图
+        // 为节点添加颜色
+        const nodesWithColor = filteredData.nodes.map(node => ({
+          name: node.name,
+          itemStyle: {
+            color: getNodeColor(node.name)
+          },
+          value: node.value,
+          // 控制节点固定位置
+          fixed: node.name === selectedProvince.value ? true : false,
+          x: node.name === selectedProvince.value ? 300 : undefined,
+          y: node.name === selectedProvince.value ? 300 : undefined
+        }));
+        
+        // 为链接添加样式
+        const linksWithColor = filteredData.links.map(link => {
+          const source = typeof link.source === 'string' 
+            ? link.source 
+            : typeof link.source === 'object' && link.source !== null 
+              ? (link.source as SankeyNode).name 
+              : '';
+          
+          const target = typeof link.target === 'string' 
+            ? link.target 
+            : typeof link.target === 'object' && link.target !== null 
+              ? (link.target as SankeyNode).name 
+              : '';
+          
+          const sourceColor = getNodeColor(source);
+          
+          return {
+            source: source,
+            target: target,
+            value: typeof link.value === 'number' ? link.value : 0,
+            lineStyle: {
+              color: sourceColor,
+              opacity: 0.7,
+              width: Math.max(1, (typeof link.value === 'number' ? link.value : 0) / 5000)
+            }
+          };
+        });
+        
+        return {
+          backgroundColor: '#FFFFFF',
+          title: {
+            text: `${selectedProvince.value}交通方式分布图`,
+            left: 'center',
+            top: 10,
+            textStyle: {
+              fontSize: 18,
+              fontWeight: 'bold'
+            },
+            subtext: '显示省份相关交通方式',
+            subtextStyle: {
+              fontSize: 12,
+              color: '#666'
+            }
+          },
+          tooltip: {
+            trigger: 'item',
+            triggerOn: 'mousemove',
+            formatter: function(params: any) {
+              if (params.dataType === 'edge') {
+                return `${params.data.source} → ${params.data.target}: ${params.data.value}`;
+              } else {
+                return `${params.name}`;
+              }
+            }
+          },
+          legend: {
+            show: true,
+            type: 'scroll',
+            orient: 'horizontal',
+            bottom: 10,
+            data: transportTypes.value,
+            formatter: function(name: string) {
+              // 截断过长的名称
+              if (name.length > 15) {
+                return name.substr(0, 12) + '...';
+              }
+              return name;
+            }
+          },
+          series: [
+            {
+              type: 'graph',
+              name: '交通方式分布',
+              layout: 'circular',
+              circular: {
+                rotateLabel: true
+              },
+              data: nodesWithColor,
+              links: linksWithColor,
+              roam: true,
+              focusNodeAdjacency: true,
+              edgeSymbol: ['none', 'arrow'],
+              edgeSymbolSize: [0, 10],
+              symbolSize: 40,
+              label: {
+                show: true,
+                position: 'right',
+                formatter: '{b}'
+              },
+              lineStyle: {
+                curveness: 0.3
+              },
+              emphasis: {
+                lineStyle: {
+                  width: 5
+                },
+                focus: 'adjacency'
+              },
+              categories: transportTypes.value.map(type => ({
+                name: type
+              })),
+              force: {
+                edgeLength: 120,
+                repulsion: 800,
+                gravity: 0.2
+              },
+              edgeLabel: {
+                show: true,
+                formatter: '{c}',
+                fontSize: 12
+              },
+              animationDuration: 1500,
+              animationEasingUpdate: 'quinticInOut'
+            }
+          ]
+        } as EChartsOption;
+      }
     })
     
     // 处理省份变更
     const handleProvinceChange = () => {
       console.log('省份变更为:', selectedProvince.value);
+      // 当省份变更时，检查是否有相关数据
+      if (selectedProvince.value !== '全国') {
+        checkProvinceData(selectedProvince.value);
+      } else {
+        noDataError.value = '';
+      }
     }
     
     // 获取交通数据
     const fetchTransportationData = async () => {
       loading.value = true
+      noDataError.value = '';
+      
       try {
         // 调用API获取交通方式数据
         const response = await getTransportation()
@@ -328,30 +750,60 @@ export default defineComponent({
               if (item.target) provinceSet.add(item.target)
             })
             
+            // 不再过滤东北和西北
+            console.log('API返回的所有节点:', [...transportSet, ...provinceSet]);
+            
             // 从各种交通工具中提取交通工具类型
             // 判断哪些是交通方式，哪些是省份
             const transportList = Array.from(transportSet);
-            const provinceList = Array.from(provinceSet);
+            const provinceListFromAPI = Array.from(provinceSet);
             
+            // 修复：确保provinceList是Ref对象
             // 我们假设交通方式的名称不会出现在省份列表中
-            const realTransportTypes = transportList.filter(t => !provinceList.includes(t));
+            const realTransportTypes = transportList.filter(t => !allProvinces.includes(t));
             transportTypes.value = realTransportTypes.sort();
             
             // 更新省份列表供筛选使用
-            provinceList.value = Array.from(provinceSet).sort()
+            provinceList.value = provinceListFromAPI.sort();
+            console.log('API返回的省份列表:', provinceList.value);
             
-            // 创建新的节点数组
+            // 创建新的节点数组 - 不再过滤东北和西北
             const nodes = [
               ...Array.from(transportSet).map(name => ({ name })),
               ...Array.from(provinceSet).map(name => ({ name }))
             ]
             
-            // 创建新的链接数组
-            const links = responseData.map((item: any) => ({
-              source: item.source,
-              target: item.target,
-              value: item.value || 1
-            }))
+            // 创建新的链接数组 - 不再过滤东北和西北相关的链接
+            const links = responseData
+              .map((item: any) => {
+                const isProvinceSource = allProvinces.includes(item.source);
+                const isProvinceTarget = allProvinces.includes(item.target);
+                
+                // 如果source是省份且target不是省份，保持原样
+                if (isProvinceSource && !isProvinceTarget) {
+                  return {
+                    source: item.source,
+                    target: item.target,
+                    value: item.value || 1
+                  };
+                }
+                
+                // 如果source不是省份但target是省份，交换位置
+                if (!isProvinceSource && isProvinceTarget) {
+                  return {
+                    source: item.target,  // 省份作为source
+                    target: item.source,  // 交通方式作为target
+                    value: item.value || 1
+                  };
+                }
+                
+                // 其他情况保持原样
+                return {
+                  source: item.source,
+                  target: item.target,
+                  value: item.value || 1
+                };
+              });
             
             // 更新桑基图数据
             sankeyData.value = {
@@ -361,6 +813,9 @@ export default defineComponent({
             
             console.log('已更新桑基图数据:', sankeyData.value)
             console.log('交通工具类型:', transportTypes.value)
+            
+            // 识别哪些省份有数据
+            identifyProvincesWithData();
           }
         } else {
           console.warn('API返回的交通数据格式不正确')
@@ -372,6 +827,40 @@ export default defineComponent({
       } finally {
         loading.value = false
       }
+    }
+    
+    // 识别哪些省份有相关数据
+    const identifyProvincesWithData = () => {
+      const provincesWithLinks = new Set<string>();
+      
+      // 将"全国"添加到集合中
+      provincesWithLinks.add('全国');
+      
+      // 遍历所有链接，收集有相关链接的省份
+      sankeyData.value.links.forEach(link => {
+        const source = typeof link.source === 'string' 
+          ? link.source 
+          : typeof link.source === 'object' && link.source !== null 
+            ? (link.source as SankeyNode).name 
+            : '';
+        const target = typeof link.target === 'string' 
+          ? link.target 
+          : typeof link.target === 'object' && link.target !== null 
+            ? (link.target as SankeyNode).name 
+            : '';
+        
+        // 检查是否为省份
+        if (allProvinces.includes(source)) {
+          provincesWithLinks.add(source);
+        }
+        if (allProvinces.includes(target)) {
+          provincesWithLinks.add(target);
+        }
+      });
+      
+      // 更新有数据的省份集合
+      provincesWithData.value = provincesWithLinks;
+      console.log('有交通数据的省份:', Array.from(provincesWithLinks));
     }
     
     onMounted(async () => {
@@ -390,9 +879,11 @@ export default defineComponent({
     return {
       selectedProvince,
       provinceList,
-      sankeyOptions,
+      availableProvinces, // 使用可用省份替代所有省份
+      circularChartOptions,
       handleProvinceChange,
-      loading
+      loading,
+      noDataError
     }
   }
 })
@@ -409,7 +900,18 @@ export default defineComponent({
   margin-bottom: 20px;
   box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.05);
   border-radius: 4px;
-  padding: 10px;
+  padding: 0;
+}
+
+.no-data-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 500px;
+  width: 100%;
+  background-color: #f9f9f9;
+  border-radius: 4px;
+  margin-bottom: 20px;
 }
 
 .analysis-summary {
@@ -436,7 +938,7 @@ export default defineComponent({
 }
 
 .loading-container {
-  min-height: 900px;
+  min-height: 700px;
   display: flex;
   flex-direction: column;
   justify-content: center;
