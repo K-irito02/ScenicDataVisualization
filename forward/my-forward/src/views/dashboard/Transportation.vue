@@ -6,7 +6,7 @@
           <template #actions>
             <el-select v-model="selectedProvince" placeholder="选择省份/地区" size="small" @change="handleProvinceChange" filterable>
               <el-option label="全国" value="全国" />
-              <el-option v-for="province in availableProvinces" :key="province" :label="province" :value="province" />
+              <el-option v-for="province in availableProvinces.filter(p => p !== '全国')" :key="province" :label="province" :value="province" />
             </el-select>
           </template>
           
@@ -23,22 +23,18 @@
             </el-empty>
           </div>
           
-          <div v-else class="chart-wrapper">
-            <base-chart 
-              :options="circularChartOptions" 
-              height="700px"
-            />
-          </div>
-          
-          <div class="analysis-summary">
-            <h4>交通分析结论</h4>
-            <ul>
-              <li>全国范围内，公交和地铁是前往城市景区的主要交通方式</li>
-              <li>步行在近郊景点也占有相当大的比例，表明很多景区都有便捷的步行路线</li>
-              <li>北京、上海、广州等一线城市的公共交通系统较为完善</li>
-              <li>西部偏远景区主要依靠自驾和旅游大巴前往</li>
-              <li>沿海城市景区有更多样化的交通选择</li>
-            </ul>
+          <div v-else>
+            <!-- 对全国视图使用Highcharts依赖轮图 -->
+            <div v-if="selectedProvince === '全国'" class="chart-wrapper">
+              <div id="highcharts-container" style="width:100%; height:800px;"></div>
+            </div>
+            <!-- 对省级视图使用ECharts图表 -->
+            <div v-else class="chart-wrapper">
+              <base-chart 
+                :options="circularChartOptions" 
+                height="700px"
+              />
+            </div>
           </div>
         </card-container>
       </el-col>
@@ -54,6 +50,12 @@ import * as echarts from 'echarts'
 import type { 
   EChartsOption, 
 } from 'echarts'
+// 引入Highcharts及其依赖轮模块
+import Highcharts from 'highcharts'
+import 'highcharts/modules/sankey'
+import 'highcharts/modules/dependency-wheel'
+// 添加Highcharts导出模块
+import 'highcharts/modules/exporting'
 // 删除不存在的库导入
 import { ElMessage } from 'element-plus'
 import { Location, Van, TrendCharts } from '@element-plus/icons-vue'
@@ -453,130 +455,12 @@ export default defineComponent({
         } as EChartsOption;
       }
       
-      // 使用chord图(和弦图)替代环形桑基图
+      // 只为省份视图提供ECharts配置，全国视图由Highcharts处理
       if (selectedProvince.value === '全国') {
-        // 为全国视图使用和弦图(chord)
-        // 为节点添加颜色
-        const nodesWithColor = filteredData.nodes.filter(node => 
-          allProvinces.includes(node.name)
-        ).map(node => ({
-          name: node.name,
-          itemStyle: {
-            color: getNodeColor(node.name)
-          }
-        }));
-        
-        // 准备和弦图数据矩阵
-        const nodeNames = nodesWithColor.map(node => node.name);
-        const nodeMap = new Map(nodeNames.map((name, index) => [name, index]));
-        
-        // 创建一个零填充的矩阵
-        const matrix: number[][] = Array(nodeNames.length).fill(0).map(() => Array(nodeNames.length).fill(0));
-        
-        // 填充矩阵数据
-        filteredData.links.forEach(link => {
-          const source = typeof link.source === 'string' 
-            ? link.source 
-            : typeof link.source === 'object' && link.source !== null 
-              ? (link.source as SankeyNode).name 
-              : '';
-          
-          const target = typeof link.target === 'string' 
-            ? link.target 
-            : typeof link.target === 'object' && link.target !== null 
-              ? (link.target as SankeyNode).name 
-              : '';
-          
-          const value = typeof link.value === 'number' ? link.value : 0;
-          
-          // 如果source和target都在节点列表中
-          if (nodeMap.has(source) && nodeMap.has(target)) {
-            const sourceIndex = nodeMap.get(source)!;
-            const targetIndex = nodeMap.get(target)!;
-            matrix[sourceIndex][targetIndex] = value;
-          }
-        });
-        
         return {
-          backgroundColor: '#FFFFFF',
           title: {
-            text: '全国交通方式分布图',
-            left: 'center',
-            top: 10,
-            textStyle: {
-              fontSize: 18,
-              fontWeight: 'bold'
-            },
-            subtext: '环形展示省份间交通方式关系',
-            subtextStyle: {
-              fontSize: 12,
-              color: '#666'
-            }
-          },
-          tooltip: {
-            trigger: 'item',
-            triggerOn: 'mousemove',
-            formatter: function(params: any) {
-              if (params.dataType === 'chord') {
-                return `${params.name} → ${params.data.target}: ${params.data.value}`;
-              } else {
-                return `${params.name}`;
-              }
-            }
-          },
-          legend: {
-            show: true,
-            type: 'scroll',
-            orient: 'horizontal',
-            bottom: 10,
-            data: nodeNames,
-            formatter: function(name: string) {
-              // 截断过长的名称
-              if (name.length > 10) {
-                return name.substr(0, 8) + '...';
-              }
-              return name;
-            }
-          },
-          series: [
-            {
-              name: '交通方式分布',
-              type: 'chord',
-              data: nodesWithColor,
-              matrix: matrix,
-              ribbonType: true,
-              radius: '70%',
-              center: ['50%', '50%'],
-              padding: 10,
-              sort: 'ascending',
-              sortSub: 'descending',
-              startAngle: 90,
-              clockwise: true,
-              itemStyle: {
-                borderWidth: 1,
-                borderColor: '#fff'
-              },
-              label: {
-                show: true,
-                position: 'outside',
-                fontSize: 12,
-                fontWeight: 'bold',
-                color: '#000',
-                formatter: '{b}'
-              },
-              emphasis: {
-                scale: true,
-                focus: 'adjacency',
-                itemStyle: {
-                  shadowBlur: 10,
-                  shadowColor: 'rgba(0, 0, 0, 0.3)'
-                }
-              },
-              tooltip: {
-                formatter: '{b}: {c}'
-              }
-            }
-          ]
+            text: ' ', // 空标题，由Highcharts处理
+          }
         } as EChartsOption;
       } else {
         // 单个省份视图使用力导向图形式的桑基图
@@ -626,7 +510,7 @@ export default defineComponent({
           title: {
             text: `${selectedProvince.value}交通方式分布图`,
             left: 'center',
-            top: 10,
+            top: 40,  // 标题距离顶部距离
             textStyle: {
               fontSize: 18,
               fontWeight: 'bold'
@@ -648,12 +532,22 @@ export default defineComponent({
               }
             }
           },
+          grid: {
+            top: 80, 
+            containLabel: true
+          },
           legend: {
             show: true,
             type: 'scroll',
-            orient: 'horizontal',
-            bottom: 10,
+            orient: 'vertical',  // 垂直方向排列
+            left: '25%',         // 距离左侧25%位置
+            top: 'middle',      // 垂直居中
+            itemGap: 10,         // 图例项之间的间距
+            pageButtonPosition: 'end', // 分页按钮位置
             data: transportTypes.value,
+            textStyle: {
+              fontSize: 12
+            },
             formatter: function(name: string) {
               // 截断过长的名称
               if (name.length > 15) {
@@ -680,7 +574,8 @@ export default defineComponent({
               label: {
                 show: true,
                 position: 'right',
-                formatter: '{b}'
+                formatter: '{b}',
+                distance: 15  // 增加标签距离，避免文字与节点重叠
               },
               lineStyle: {
                 curveness: 0.3
@@ -695,15 +590,19 @@ export default defineComponent({
                 name: type
               })),
               force: {
-                edgeLength: 120,
-                repulsion: 800,
-                gravity: 0.2
+                edgeLength: 150,  // 增加边的长度
+                repulsion: 1000,  // 增加斥力
+                gravity: 0.1      // 减小引力
               },
               edgeLabel: {
                 show: true,
                 formatter: '{c}',
-                fontSize: 12
+                fontSize: 12,
+                distance: 10
               },
+              // 调整图表位置
+              center: ['25%', '50%'],  // 将图表中心点向右移动到25%位置
+              radius: '60%',           // 适当调整图表半径
               animationDuration: 1500,
               animationEasingUpdate: 'quinticInOut'
             }
@@ -720,6 +619,265 @@ export default defineComponent({
         checkProvinceData(selectedProvince.value);
       } else {
         noDataError.value = '';
+        // 当切换到全国视图时，在下一个tick渲染Highcharts
+        setTimeout(() => {
+          renderDependencyWheel();
+        }, 0);
+      }
+    }
+    
+    // 渲染Highcharts依赖轮图
+    const renderDependencyWheel = () => {
+      const filteredData = filterSankeyData();
+      if (filteredData.nodes.length === 0 || filteredData.links.length === 0) {
+        return;
+      }
+      
+      // 定义统计数据的接口
+      interface NodeStat {
+        totalOutgoing: number;
+        outgoingLinks: Array<{ target: string; value: number }>;
+        uniqueTargets: Set<string>;
+        totalIncoming: number;
+        incomingLinks: Array<{ source: string; value: number }>;
+        uniqueSources: Set<string>;
+        isProvince: boolean;
+      }
+      
+      const nodeStats: Record<string, NodeStat> = {};
+      
+      // 遍历所有链接，收集各节点的统计信息
+      filteredData.links.forEach(link => {
+        const source = typeof link.source === 'string' 
+          ? link.source 
+          : typeof link.source === 'object' && link.source !== null 
+            ? (link.source as SankeyNode).name 
+            : '';
+        const target = typeof link.target === 'string' 
+          ? link.target 
+          : typeof link.target === 'object' && link.target !== null 
+            ? (link.target as SankeyNode).name 
+            : '';
+        const value = typeof link.value === 'number' ? link.value : 0;
+        
+        // 初始化省份节点统计数据结构
+        if (!nodeStats[source]) {
+          nodeStats[source] = {
+            totalOutgoing: 0,
+            outgoingLinks: [],
+            uniqueTargets: new Set<string>(),
+            totalIncoming: 0,
+            incomingLinks: [],
+            uniqueSources: new Set<string>(),
+            isProvince: allProvinces.includes(source)
+          };
+        }
+        
+        // 初始化交通方式节点统计数据结构
+        if (!nodeStats[target]) {
+          nodeStats[target] = {
+            totalOutgoing: 0,
+            outgoingLinks: [],
+            uniqueTargets: new Set<string>(),
+            totalIncoming: 0,
+            incomingLinks: [],
+            uniqueSources: new Set<string>(),
+            isProvince: allProvinces.includes(target)
+          };
+        }
+        
+        // 累加数据
+        nodeStats[source].totalOutgoing += value;
+        nodeStats[source].outgoingLinks.push({ target, value });
+        nodeStats[source].uniqueTargets.add(target);
+        
+        nodeStats[target].totalIncoming += value;
+        nodeStats[target].incomingLinks.push({ source, value });
+        nodeStats[target].uniqueSources.add(source);
+      });
+      
+      // 准备Highcharts依赖轮格式的数据
+      const dependencyWheelData = filteredData.links.map(link => {
+        const source = typeof link.source === 'string' 
+          ? link.source 
+          : typeof link.source === 'object' && link.source !== null 
+            ? (link.source as SankeyNode).name 
+            : '';
+        
+        const target = typeof link.target === 'string' 
+          ? link.target 
+          : typeof link.target === 'object' && link.target !== null 
+            ? (link.target as SankeyNode).name 
+            : '';
+        
+        const value = typeof link.value === 'number' ? link.value : 0;
+        
+        return {
+          from: source,
+          to: target,
+          weight: value,
+          // 为节点设置颜色
+          color: getNodeColor(source),
+          // 设置环形桑基图的透明度
+          opacity: 0.7
+        };
+      });
+      
+      // 使用正确的Highcharts API调用
+      const container = document.getElementById('highcharts-container');
+      if (container) {
+        Highcharts.chart(container, {
+          chart: {
+            height: 800,  // 增加图表高度
+            backgroundColor: '#FFFFFF'
+          },
+          title: {
+            text: '全国交通方式分布图',
+            style: {
+              fontSize: '20px',  // 增大标题字体
+              fontWeight: 'bold'
+            }
+          },
+          subtitle: {
+            text: '环形桑葚图展示省份与交通方式关系',
+            style: {
+              fontSize: '14px',  // 增大副标题字体
+              color: '#666'
+            }
+          },
+          tooltip: {
+            useHTML: true,
+            formatter: function() {
+              // @ts-ignore
+              const point = this.point;
+              
+              // 如果是链接（两点之间的连线）
+              if (point.from && point.to) {
+                return `<b>${point.from} → ${point.to}</b><br/>数量: <b>${point.weight}</b>`;
+              }
+              
+              // 如果是节点
+              const nodeName = point.name || point.id;
+              if (nodeName && nodeStats[nodeName]) {
+                const stats = nodeStats[nodeName];
+                
+                // 省份节点显示
+                if (stats.isProvince) {
+                  const transportTypesCount = stats.uniqueTargets.size;
+                  const totalTransport = stats.totalOutgoing;
+                  
+                  let html = `<div style="min-width: 150px;">`;
+                  html += `<div style="font-weight: bold; font-size: 14px; margin-bottom: 5px;">${nodeName}</div>`;
+                  html += `<div>交通方式种类: <b>${transportTypesCount}</b> 种</div>`;
+                  html += `<div>交通总数量: <b>${totalTransport}</b></div>`;
+                  
+                  // 添加交通方式详情（最多显示前5种）
+                  if (stats.outgoingLinks && stats.outgoingLinks.length > 0) {
+                    html += `<div style="margin-top: 8px; border-top: 1px solid #ddd; padding-top: 5px;">`;
+                    html += `<div style="font-weight: bold; margin-bottom: 3px;">主要交通方式:</div>`;
+                    
+                    // 按数量排序并取前5个
+                    const sortedLinks = [...stats.outgoingLinks].sort((a, b) => b.value - a.value).slice(0, 5);
+                    sortedLinks.forEach(link => {
+                      html += `<div>${link.target}: <b>${link.value}</b></div>`;
+                    });
+                    
+                    if (stats.outgoingLinks.length > 5) {
+                      html += `<div>... 等${stats.outgoingLinks.length - 5}种</div>`;
+                    }
+                    
+                    html += `</div>`;
+                  }
+                  
+                  html += `</div>`;
+                  return html;
+                } 
+                // 交通工具节点显示
+                else {
+                  const provincesCount = stats.uniqueSources.size;
+                  const totalUsage = stats.totalIncoming;
+                  
+                  let html = `<div style="min-width: 150px;">`;
+                  html += `<div style="font-weight: bold; font-size: 14px; margin-bottom: 5px;">${nodeName}</div>`;
+                  html += `<div>使用省份数: <b>${provincesCount}</b> 个</div>`;
+                  html += `<div>总使用量: <b>${totalUsage}</b></div>`;
+                  
+                  // 添加省份使用详情（最多显示前5个）
+                  if (stats.incomingLinks && stats.incomingLinks.length > 0) {
+                    html += `<div style="margin-top: 8px; border-top: 1px solid #ddd; padding-top: 5px;">`;
+                    html += `<div style="font-weight: bold; margin-bottom: 3px;">主要使用省份:</div>`;
+                    
+                    // 按数量排序并取前5个
+                    const sortedLinks = [...stats.incomingLinks].sort((a, b) => b.value - a.value).slice(0, 5);
+                    sortedLinks.forEach(link => {
+                      html += `<div>${link.source}: <b>${link.value}</b></div>`;
+                    });
+                    
+                    if (stats.incomingLinks.length > 5) {
+                      html += `<div>... 等${stats.incomingLinks.length - 5}个省份</div>`;
+                    }
+                    
+                    html += `</div>`;
+                  }
+                  
+                  html += `</div>`;
+                  return html;
+                }
+              }
+              
+              // 默认显示
+              return `<b>${nodeName || 'Unknown'}</b>`;
+            },
+            backgroundColor: 'rgba(255, 255, 255, 0.95)',
+            borderColor: '#ccc',
+            borderWidth: 1,
+            borderRadius: 8,
+            shadow: true,
+            padding: 10,
+            style: {
+              fontSize: '12px',
+              fontFamily: 'Arial, sans-serif'
+            }
+          },
+          series: [{
+            type: 'dependencywheel',
+            name: '交通方式分布',
+            data: dependencyWheelData,
+            size: '98%',  // 增大环形图尺寸
+            // 数据标签设置
+            dataLabels: {
+              color: '#333',
+              // 文本路径设置
+              textPath: {
+                enabled: true,
+                attributes: {
+                  dy: 5
+                }
+              },
+              distance: 15,  // 增加标签距离
+              // 标签格式化
+              formatter: function() {
+                // @ts-ignore
+                return this.point.name;
+              }
+            },
+            // 节点宽度
+            nodeWidth: 25  // 增加节点宽度
+          }],
+          // 信用标签
+          credits: {
+            enabled: false
+          },
+          // 导出按钮
+          exporting: {
+            enabled: true,
+            buttons: {
+              contextButton: {
+                menuItems: ['downloadPNG', 'downloadJPEG', 'downloadPDF', 'downloadSVG']
+              }
+            }
+          }
+        });
       }
     }
     
@@ -868,6 +1026,12 @@ export default defineComponent({
       try {
         // 获取交通数据
         await fetchTransportationData()
+        // 如果初始视图是全国，渲染依赖轮图
+        if (selectedProvince.value === '全国') {
+          setTimeout(() => {
+            renderDependencyWheel();
+          }, 100);
+        }
       } catch (error) {
         console.error('初始化失败:', error)
         ElMessage.error('页面初始化失败')
@@ -903,6 +1067,28 @@ export default defineComponent({
   padding: 0;
 }
 
+/* Highcharts容器样式 */
+#highcharts-container {
+  width: 100%;
+  height: 800px;  /* 调整全国图表高度 */
+  margin: 0 auto;
+}
+
+/* 移动设备适配 */
+@media screen and (max-width: 768px) {
+  .transportation-container {
+    padding: 10px;
+  }
+  
+  #highcharts-container {
+    height: 600px;  /* 调整移动设备上的高度 */
+  }
+  
+  .chart-wrapper {
+    box-shadow: none;
+  }
+}
+
 .no-data-container {
   display: flex;
   justify-content: center;
@@ -914,29 +1100,6 @@ export default defineComponent({
   margin-bottom: 20px;
 }
 
-.analysis-summary {
-  background-color: #f8f9fa;
-  padding: 15px;
-  border-radius: 4px;
-  margin-top: 10px;
-  box-shadow: 0 2px 8px 0 rgba(0, 0, 0, 0.05);
-}
-
-.analysis-summary h4 {
-  margin-top: 0;
-  margin-bottom: 10px;
-  color: #303133;
-}
-
-.analysis-summary ul {
-  padding-left: 20px;
-  margin: 0;
-}
-
-.analysis-summary li {
-  margin-bottom: 8px;
-}
-
 .loading-container {
   min-height: 700px;
   display: flex;
@@ -944,5 +1107,12 @@ export default defineComponent({
   justify-content: center;
   align-items: center;
   width: 100%;
+}
+
+/* 移动设备适配加载容器 */
+@media screen and (max-width: 768px) {
+  .loading-container {
+    min-height: 500px;
+  }
 }
 </style> 
