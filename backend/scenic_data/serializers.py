@@ -296,7 +296,11 @@ class HierarchyLevelPriceSerializer(serializers.ModelSerializer):
 
 class TimeRangeSerializer(serializers.Serializer):
     """开放时间段序列化器"""
+    id = serializers.CharField(required=False)
+    name = serializers.CharField(required=False)
+    type = serializers.CharField(required=False)
     timeRange = serializers.CharField()
+    weekdays = serializers.CharField(required=False)
     count = serializers.IntegerField()
 
 class WordCloudItemSerializer(serializers.Serializer):

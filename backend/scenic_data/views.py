@@ -258,30 +258,98 @@ class OpenTimesView(views.APIView):
         # 获取开放时间数据
         time_data = TimeData.objects.all()
         
-        # 统计时间段分布
-        time_counts = defaultdict(int)
-        scenic_map = defaultdict(list)
+        # 创建用于存储处理后的数据
+        processed_data = []
         
+        # 使用字典记录每个景区的ID或名称，避免重复
+        scenic_ids = {}
+        
+        # 第一步：收集所有景区的基本信息
         for item in time_data:
+            scenic_id = item.scenic_id or f"scenic_{item.id}"
+            if scenic_id not in scenic_ids:
+                scenic_ids[scenic_id] = {
+                    'id': scenic_id,
+                    'name': item.scenic_name,
+                    'city': item.city_name,
+                    'type': item.type or '其他',  # 默认类型为'其他'
+                    'time_ranges': [],
+                    'weekdays': item.weekdays or '周一-周日',  # 默认为全周
+                }
+            
+            # 添加时间范围
             if item.time_range:
                 time_ranges = item.time_range.split(',')
                 for time_range in time_ranges:
                     time_range = time_range.strip()
-                    if time_range:
-                        time_counts[time_range] += 1
-                        scenic_map[time_range].append(item.scenic_name)
+                    if time_range and time_range not in scenic_ids[scenic_id]['time_ranges']:
+                        scenic_ids[scenic_id]['time_ranges'].append(time_range)
         
-        time_ranges = [
-            {'timeRange': time_range, 'count': count}
-            for time_range, count in sorted(time_counts.items(), key=lambda x: x[1], reverse=True)
-        ]
+        # 第二步：整理每个景区的开放时间数据，处理重叠时间段
+        for scenic_id, info in scenic_ids.items():
+            # 解析并合并时间段
+            time_points = set()  # 用集合存储所有小时点，自动去重
+            
+            for time_range in info['time_ranges']:
+                try:
+                    # 解析时间范围，例如"08:00-17:30"
+                    start_time, end_time = time_range.split('-')
+                    
+                    # 将时间转换为小时数（简化为整数小时）
+                    start_hour = int(start_time.split(':')[0])
+                    end_hour = int(end_time.split(':')[0])
+                    
+                    # 确保结束时间不小于开始时间
+                    if end_hour < start_hour:
+                        end_hour += 24  # 处理跨天的情况
+                    
+                    # 添加该时间范围内的所有小时点
+                    for hour in range(start_hour, end_hour + 1):
+                        hour = hour % 24  # 确保小时在0-23范围内
+                        time_points.add(hour)
+                        
+                except Exception as e:
+                    # 如果解析失败，继续处理下一个时间段
+                    print(f"解析时间范围失败: {time_range}, 错误: {e}")
+                    continue
+            
+            # 将所有工作日解析为标准格式
+            weekdays = self._parse_weekdays(info['weekdays'])
+            
+            # 将处理后的数据添加到结果列表
+            processed_data.append({
+                'id': info['id'],
+                'name': info['name'],
+                'type': info['type'],
+                'timeRange': ','.join(info['time_ranges']),
+                'weekdays': weekdays,
+                'count': 1  # 每个景区只计数一次
+            })
         
+        # 返回处理后的数据
         result = {
-            'time_ranges': time_ranges,
-            'scenic_map': scenic_map
+            'time_ranges': processed_data,
+            'total_count': len(processed_data)
         }
         
         return Response(result)
+    
+    def _parse_weekdays(self, weekdays_str):
+        """解析工作日字符串为标准格式"""
+        if not weekdays_str:
+            return '周一-周日'  # 默认返回全周
+        
+        # 如果已经包含了全周相关关键词，直接返回标准格式
+        if '全周' in weekdays_str or '每天' in weekdays_str or '周一-周日' in weekdays_str:
+            return '周一-周日'
+        
+        # 将可能的分隔符标准化
+        standardized = weekdays_str.replace('，', ',').replace('、', ',').replace(';', ',').replace('；', ',')
+        
+        # 处理"周一至周五"这样的格式
+        standardized = standardized.replace('至', '-').replace('到', '-')
+        
+        return standardized
 
 class CommentAnalysisView(views.APIView):
     """评论情感分析数据视图"""
@@ -963,3 +1031,602 @@ class DistrictDistributionView(views.APIView):
             print(traceback.format_exc())
             return Response({'detail': f'获取数据失败: {str(e)}'}, 
                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class SentimentDistributionView(views.APIView):
+    """情感倾向分布数据视图"""
+    permission_classes = [permissions.AllowAny]
+    
+    def get(self, request):
+        # 获取情感倾向（良、中、优）的分布数据
+        result = {}
+        
+        # 统计情感倾向的数量
+        sentiment_counts = ScenicData.objects.exclude(
+            sentiment__isnull=True
+        ).values('sentiment').annotate(
+            count=Count('sentiment')
+        ).order_by('sentiment')
+        
+        # 转换为前端所需的格式
+        sentiment_data = []
+        for item in sentiment_counts:
+            if item['sentiment'] and item['sentiment'].strip():
+                sentiment_data.append({
+                    'name': item['sentiment'],
+                    'value': item['count']
+                })
+        
+        return Response(sentiment_data)
+
+class SentimentTypeView(views.APIView):
+    """情感得分与景区类型等级关系数据视图"""
+    permission_classes = [permissions.AllowAny]
+    
+    def get(self, request):
+        # 获取请求参数
+        scenic_type = request.query_params.get('type', '')
+        level = request.query_params.get('level', '')
+        
+        print(f"[情感分析] 接收到请求参数: 类型={scenic_type}, 级别={level}")
+        
+        if not scenic_type:
+            return Response({"detail": "必须提供景区类型参数"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # 初始化查询条件
+        query_filter = Q()
+        
+        # 处理不同景区类型的特殊情况
+        if scenic_type == '景区':
+            # 景区类型直接按5A、4A等级别查询
+            if level:
+                # 如果有指定级别，查询该级别的景区
+                print(f"[情感分析] 查询指定级别景区: {level}")
+                query_filter &= Q(scenic_type__contains=level)
+            else:
+                # 否则查询所有景区（5A、4A、3A、2A、省级景区）
+                print("[情感分析] 查询所有景区等级")
+                query_filter &= (
+                    Q(scenic_type__contains='5A') | 
+                    Q(scenic_type__contains='4A') | 
+                    Q(scenic_type__contains='3A') | 
+                    Q(scenic_type__contains='2A') | 
+                    Q(scenic_type__contains='省级景区')
+                )
+        elif scenic_type == '水利风景区':
+            # 水利风景区查询"是"
+            print("[情感分析] 查询水利风景区")
+            query_filter &= Q(scenic_type__contains='水利风景区')
+            if level == '是':
+                # 如果指定为"是"，则查询
+                print("[情感分析] 水利风景区级别为'是'")
+                pass  # 已经在上面查询了水利风景区，无需额外过滤
+        else:
+            # 其他类型使用组合查询（例如"森林公园:国家级"）
+            print(f"[情感分析] 查询景区类型: {scenic_type}")
+            query_filter &= Q(scenic_type__contains=scenic_type)
+            if level:
+                # 组合查询，找到特定类型特定级别的景区
+                print(f"[情感分析] 组合查询: {scenic_type}:{level}")
+                query_filter &= Q(scenic_type__contains=f"{scenic_type}:{level}")
+        
+        try:
+            # 执行查询，获取符合条件的景区
+            scenic_data = ScenicData.objects.filter(
+                query_filter
+            ).exclude(
+                sentiment_score__isnull=True
+            ).exclude(
+                sentiment_magnitude__isnull=True
+            )
+            
+            print(f"[情感分析] 查询到景区数量: {scenic_data.count()}")
+            
+            # 对于景区类型，我们需要提取等级并分组
+            result_data = {}
+            
+            for scenic in scenic_data:
+                # 提取景区等级
+                level_extracted = self.extract_level(scenic.scenic_type, scenic_type)
+                
+                if level_extracted:
+                    print(f"[情感分析] 景区 '{scenic.name}' 提取到级别: {level_extracted}")
+                    print(f"  - 情感得分: {scenic.sentiment_score} (类型: {type(scenic.sentiment_score).__name__})")
+                    print(f"  - 情感强度: {scenic.sentiment_magnitude} (类型: {type(scenic.sentiment_magnitude).__name__})")
+                    
+                    if level_extracted not in result_data:
+                        result_data[level_extracted] = {
+                            'level': level_extracted,
+                            'total_score': float(scenic.sentiment_score or 0),
+                            'total_magnitude': float(scenic.sentiment_magnitude or 0),
+                            'count': 1
+                        }
+                    else:
+                        result_data[level_extracted]['total_score'] += float(scenic.sentiment_score or 0)
+                        result_data[level_extracted]['total_magnitude'] += float(scenic.sentiment_magnitude or 0)
+                        result_data[level_extracted]['count'] += 1
+            
+            # 计算平均值
+            response_data = []
+            for level_key, data in result_data.items():
+                avg_score = data['total_score'] / data['count'] if data['count'] > 0 else 0
+                avg_magnitude = data['total_magnitude'] / data['count'] if data['count'] > 0 else 0
+                
+                print(f"[情感分析] 级别 '{level_key}' 汇总:")
+                print(f"  - 总得分: {data['total_score']}")
+                print(f"  - 景区数量: {data['count']}")
+                print(f"  - 平均得分: {avg_score}")
+                print(f"  - 平均强度: {avg_magnitude}")
+                
+                response_data.append({
+                    'level': level_key,
+                    'avg_sentiment_score': float(avg_score),
+                    'avg_sentiment_magnitude': float(avg_magnitude),
+                    'count': int(data['count'])
+                })
+            
+            # 按级别排序（5A > 4A > 3A > 2A > 省级 > 国家级 > 省级 > 市级）
+            def level_sort_key(item):
+                level = item['level']
+                if '5A' in level:
+                    return 0
+                elif '4A' in level:
+                    return 1
+                elif '3A' in level:
+                    return 2
+                elif '2A' in level:
+                    return 3
+                elif '国家级' in level:
+                    return 4
+                elif '省级' in level:
+                    return 5
+                elif '市级' in level:
+                    return 6
+                else:
+                    return 7
+            
+            response_data.sort(key=level_sort_key)
+            
+            print(f"[情感分析] 最终返回数据数量: {len(response_data)}")
+            for idx, item in enumerate(response_data):
+                print(f"  数据项 {idx+1}: 级别={item['level']}, 得分={item['avg_sentiment_score']}, 强度={item['avg_sentiment_magnitude']}, 数量={item['count']}")
+            
+            return Response(response_data)
+            
+        except Exception as e:
+            print(f"获取景区类型情感数据失败: {e}")
+            import traceback
+            print(traceback.format_exc())
+            return Response({'detail': f'获取数据失败: {str(e)}'}, 
+                           status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def extract_level(self, scenic_type_str, scenic_type):
+        """从景区类型及级别字符串中提取等级"""
+        if not scenic_type_str:
+            return None
+            
+        if scenic_type == '景区':
+            # 对于景区，查找5A、4A、3A、2A、省级
+            if '5A' in scenic_type_str:
+                return '5A景区'
+            elif '4A' in scenic_type_str:
+                return '4A景区'
+            elif '3A' in scenic_type_str:
+                return '3A景区'
+            elif '2A' in scenic_type_str:
+                return '2A景区'
+            elif '省级景区' in scenic_type_str:
+                return '省级景区'
+        elif scenic_type == '水利风景区':
+            # 水利风景区只有"是"这一个级别
+            if '水利风景区' in scenic_type_str:
+                return '是'
+        else:
+            # 其他类型使用冒号分割，例如"森林公园:国家级"
+            parts = scenic_type_str.split(',')
+            for part in parts:
+                part = part.strip()
+                if scenic_type in part and ':' in part:
+                    type_level = part.split(':')
+                    if len(type_level) == 2 and type_level[0].strip() == scenic_type:
+                        return type_level[1].strip()
+                elif scenic_type in part and part == scenic_type:
+                    # 对于没有指定级别的，记为"无级别"
+                    return "无级别"
+                    
+        return None
+
+# 票价分析相关视图
+class TicketAvgPriceView(views.APIView):
+    """景区类型平均门票价格"""
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        try:
+            # 获取请求参数
+            scenic_type = request.GET.get('type', '景区')
+            
+            # 根据景区类型构建查询条件
+            query_filter = {}
+            
+            # 处理特殊情况：景区类型和水利风景区
+            if scenic_type == '景区':
+                # 对于景区类型，查询以5A景区、4A景区等开头的景区
+                query = Q(scenic_type__contains='5A景区') | Q(scenic_type__contains='4A景区') | \
+                        Q(scenic_type__contains='3A景区') | Q(scenic_type__contains='2A景区') | \
+                        Q(scenic_type__contains='省级景区')
+            elif scenic_type == '水利风景区':
+                # 对于水利风景区，查询包含"水利风景区"的记录
+                query = Q(scenic_type__contains='水利风景区')
+            else:
+                # 对于其他类型，查询包含"类型:等级"的记录
+                query = Q(scenic_type__contains=scenic_type)
+            
+            # 执行查询，获取符合条件的景区数据
+            scenic_data = ScenicData.objects.filter(query)
+            
+            # 按类型和等级分组统计
+            result = []
+            
+            if scenic_type == '景区':
+                # 对于景区类型，按5A、4A等级分组
+                level_patterns = ['5A景区', '4A景区', '3A景区', '2A景区', '省级景区']
+                for level in level_patterns:
+                    level_data = []
+                    for scenic in scenic_data:
+                        if level in scenic.scenic_type:
+                            # 处理价格
+                            price_str = scenic.min_price
+                            if price_str and price_str not in ['请咨询景区', '免费']:
+                                try:
+                                    price = float(price_str)
+                                    level_data.append(price)
+                                except (ValueError, TypeError):
+                                    pass  # 忽略无法转换为数字的价格
+                    
+                    if level_data:
+                        avg_price = sum(level_data) / len(level_data)
+                        result.append({
+                            'level': level,
+                            'avg_price': round(avg_price, 2),
+                            'count': len(level_data)
+                        })
+            elif scenic_type == '水利风景区':
+                # 对于水利风景区，只统计"是"
+                level_data = []
+                for scenic in scenic_data:
+                    # 处理价格
+                    price_str = scenic.min_price
+                    if price_str and price_str not in ['请咨询景区', '免费']:
+                        try:
+                            price = float(price_str)
+                            level_data.append(price)
+                        except (ValueError, TypeError):
+                            pass  # 忽略无法转换为数字的价格
+                
+                if level_data:
+                    avg_price = sum(level_data) / len(level_data)
+                    result.append({
+                        'level': '水利风景区',
+                        'avg_price': round(avg_price, 2),
+                        'count': len(level_data)
+                    })
+            else:
+                # 对于其他类型，提取"类型:等级"格式的信息
+                level_price_map = {}
+                for scenic in scenic_data:
+                    # 从scenic_type字段中提取类型和等级
+                    types_and_levels = scenic.scenic_type.split(',')
+                    for item in types_and_levels:
+                        item = item.strip()
+                        if scenic_type in item:
+                            # 提取等级
+                            if ':' in item:
+                                level = item.split(':')[1].strip()
+                            else:
+                                level = '未分级'
+                            
+                            # 处理价格
+                            price_str = scenic.min_price
+                            if price_str and price_str not in ['请咨询景区', '免费']:
+                                try:
+                                    price = float(price_str)
+                                    if level not in level_price_map:
+                                        level_price_map[level] = []
+                                    
+                                    level_price_map[level].append(price)
+                                except (ValueError, TypeError):
+                                    pass  # 忽略无法转换为数字的价格
+                
+                # 计算各等级的平均价格
+                for level, price_data in level_price_map.items():
+                    if price_data:
+                        avg_price = sum(price_data) / len(price_data)
+                        result.append({
+                            'level': level,
+                            'avg_price': round(avg_price, 2),
+                            'count': len(price_data)
+                        })
+            
+            # 按平均价格降序排序
+            result = sorted(result, key=lambda x: x['avg_price'], reverse=True)
+            
+            return Response(result)
+        except Exception as e:
+            logger.error(f"获取景区平均门票价格数据失败: {str(e)}")
+            return Response({"error": "获取数据失败"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class TicketBoxplotByTypeView(views.APIView):
+    """各景区类型门票价格箱线图数据"""
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        try:
+            # 获取所有景区数据
+            all_scenic_data = ScenicData.objects.all()
+            
+            # 定义要分析的景区类型
+            scenic_types = ['景区', '博物馆', '地质公园', '森林公园', '水利风景区', '湿地风景区', '文物保护单位', '自然保护区']
+            
+            result = []
+            
+            for scenic_type in scenic_types:
+                # 收集该类型的所有价格数据
+                price_data = []
+                
+                # 构建查询条件
+                if scenic_type == '景区':
+                    # 对于景区类型，查询以5A景区、4A景区等开头的景区
+                    query = Q(scenic_type__contains='5A景区') | Q(scenic_type__contains='4A景区') | \
+                            Q(scenic_type__contains='3A景区') | Q(scenic_type__contains='2A景区') | \
+                            Q(scenic_type__contains='省级景区')
+                elif scenic_type == '水利风景区':
+                    # 对于水利风景区，查询包含"水利风景区"的记录
+                    query = Q(scenic_type__contains='水利风景区')
+                else:
+                    # 对于其他类型，查询包含该类型的记录
+                    query = Q(scenic_type__contains=scenic_type)
+                
+                # 执行查询，获取符合条件的景区数据
+                type_scenic_data = all_scenic_data.filter(query)
+                
+                # 收集价格数据
+                for scenic in type_scenic_data:
+                    price_str = scenic.min_price
+                    if price_str and price_str not in ['请咨询景区', '免费']:
+                        try:
+                            price = float(price_str)
+                            price_data.append(price)
+                        except (ValueError, TypeError):
+                            pass  # 忽略无法转换为数字的价格
+                
+                # 计算箱线图数据
+                if price_data:
+                    # 排序价格数据
+                    price_data.sort()
+                    
+                    # 计算最小值、最大值、中位数和四分位数
+                    min_price = min(price_data)
+                    max_price = max(price_data)
+                    
+                    # 计算中位数和四分位数
+                    n = len(price_data)
+                    median_idx = n // 2
+                    median_price = price_data[median_idx] if n % 2 == 1 else (price_data[median_idx-1] + price_data[median_idx]) / 2
+                    
+                    q1_idx = n // 4
+                    q1_price = price_data[q1_idx] if n % 4 != 0 else (price_data[q1_idx-1] + price_data[q1_idx]) / 2
+                    
+                    q3_idx = 3 * n // 4
+                    q3_price = price_data[q3_idx] if 3 * n % 4 != 0 else (price_data[q3_idx-1] + price_data[q3_idx]) / 2
+                    
+                    result.append({
+                        'type': scenic_type,
+                        'min_price': round(min_price, 2),
+                        'q1_price': round(q1_price, 2),
+                        'median_price': round(median_price, 2),
+                        'q3_price': round(q3_price, 2),
+                        'max_price': round(max_price, 2),
+                        'count': len(price_data)
+                    })
+            
+            return Response(result)
+        except Exception as e:
+            logger.error(f"获取景区类型箱线图数据失败: {str(e)}")
+            return Response({"error": "获取数据失败"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class TicketBoxplotByLevelView(views.APIView):
+    """指定景区类型各等级门票价格箱线图数据"""
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        try:
+            # 获取请求参数
+            scenic_type = request.GET.get('type', '景区')
+            
+            # 获取所有景区数据
+            all_scenic_data = ScenicData.objects.all()
+            
+            # 构建查询条件
+            if scenic_type == '景区':
+                # 对于景区类型，查询以5A景区、4A景区等开头的景区
+                query = Q(scenic_type__contains='5A景区') | Q(scenic_type__contains='4A景区') | \
+                        Q(scenic_type__contains='3A景区') | Q(scenic_type__contains='2A景区') | \
+                        Q(scenic_type__contains='省级景区')
+                
+                # 定义要分析的景区等级
+                scenic_levels = ['5A景区', '4A景区', '3A景区', '2A景区', '省级景区']
+            elif scenic_type == '水利风景区':
+                # 对于水利风景区，查询包含"水利风景区"的记录
+                query = Q(scenic_type__contains='水利风景区')
+                
+                # 水利风景区只有"是"一个等级
+                scenic_levels = ['水利风景区']
+            else:
+                # 对于其他类型，查询包含该类型的记录
+                query = Q(scenic_type__contains=scenic_type)
+                
+                # 从type_level_data.json文件中获取该类型的等级列表
+                import json
+                try:
+                    with open('forward/my-forward/src/assets/search/type_level_data.json', 'r', encoding='utf-8') as f:
+                        type_level_data = json.load(f)
+                        scenic_levels = type_level_data.get('typeLevels', {}).get(scenic_type, [])
+                except (FileNotFoundError, json.JSONDecodeError):
+                    # 如果文件不存在或解析失败，使用默认等级
+                    scenic_levels = ['国家级', '省级', '市级', '县级']
+            
+            # 执行查询，获取符合条件的景区数据
+            type_scenic_data = all_scenic_data.filter(query)
+            
+            result = []
+            
+            if scenic_type == '景区':
+                # 对于景区类型，按5A、4A等级分组
+                for level in scenic_levels:
+                    # 收集该等级的所有价格数据
+                    price_data = []
+                    
+                    for scenic in type_scenic_data:
+                        if level in scenic.scenic_type:
+                            price_str = scenic.min_price
+                            if price_str and price_str not in ['请咨询景区', '免费']:
+                                try:
+                                    price = float(price_str)
+                                    price_data.append(price)
+                                except (ValueError, TypeError):
+                                    pass  # 忽略无法转换为数字的价格
+                    
+                    # 计算箱线图数据
+                    if price_data:
+                        # 排序价格数据
+                        price_data.sort()
+                        
+                        # 计算最小值、最大值、中位数和四分位数
+                        min_price = min(price_data)
+                        max_price = max(price_data)
+                        
+                        # 计算中位数和四分位数
+                        n = len(price_data)
+                        median_idx = n // 2
+                        median_price = price_data[median_idx] if n % 2 == 1 else (price_data[median_idx-1] + price_data[median_idx]) / 2
+                        
+                        q1_idx = n // 4
+                        q1_price = price_data[q1_idx] if n % 4 != 0 else (price_data[q1_idx-1] + price_data[q1_idx]) / 2
+                        
+                        q3_idx = 3 * n // 4
+                        q3_price = price_data[q3_idx] if 3 * n % 4 != 0 else (price_data[q3_idx-1] + price_data[q3_idx]) / 2
+                        
+                        result.append({
+                            'level': level,
+                            'min_price': round(min_price, 2),
+                            'q1_price': round(q1_price, 2),
+                            'median_price': round(median_price, 2),
+                            'q3_price': round(q3_price, 2),
+                            'max_price': round(max_price, 2),
+                            'count': len(price_data)
+                        })
+            elif scenic_type == '水利风景区':
+                # 对于水利风景区，只统计一个等级
+                price_data = []
+                
+                for scenic in type_scenic_data:
+                    price_str = scenic.min_price
+                    if price_str and price_str not in ['请咨询景区', '免费']:
+                        try:
+                            price = float(price_str)
+                            price_data.append(price)
+                        except (ValueError, TypeError):
+                            pass  # 忽略无法转换为数字的价格
+                
+                # 计算箱线图数据
+                if price_data:
+                    # 排序价格数据
+                    price_data.sort()
+                    
+                    # 计算最小值、最大值、中位数和四分位数
+                    min_price = min(price_data)
+                    max_price = max(price_data)
+                    
+                    # 计算中位数和四分位数
+                    n = len(price_data)
+                    median_idx = n // 2
+                    median_price = price_data[median_idx] if n % 2 == 1 else (price_data[median_idx-1] + price_data[median_idx]) / 2
+                    
+                    q1_idx = n // 4
+                    q1_price = price_data[q1_idx] if n % 4 != 0 else (price_data[q1_idx-1] + price_data[q1_idx]) / 2
+                    
+                    q3_idx = 3 * n // 4
+                    q3_price = price_data[q3_idx] if 3 * n % 4 != 0 else (price_data[q3_idx-1] + price_data[q3_idx]) / 2
+                    
+                    result.append({
+                        'level': '水利风景区',
+                        'min_price': round(min_price, 2),
+                        'q1_price': round(q1_price, 2),
+                        'median_price': round(median_price, 2),
+                        'q3_price': round(q3_price, 2),
+                        'max_price': round(max_price, 2),
+                        'count': len(price_data)
+                    })
+            else:
+                # 对于其他类型，提取"类型:等级"格式的信息
+                level_price_map = {}
+                
+                for scenic in type_scenic_data:
+                    # 从scenic_type字段中提取类型和等级
+                    types_and_levels = scenic.scenic_type.split(',')
+                    for item in types_and_levels:
+                        item = item.strip()
+                        if scenic_type in item:
+                            # 提取等级
+                            if ':' in item:
+                                level = item.split(':')[1].strip()
+                                
+                                # 处理价格
+                                price_str = scenic.min_price
+                                if price_str and price_str not in ['请咨询景区', '免费']:
+                                    try:
+                                        price = float(price_str)
+                                        if level not in level_price_map:
+                                            level_price_map[level] = []
+                                        
+                                        level_price_map[level].append(price)
+                                    except (ValueError, TypeError):
+                                        pass  # 忽略无法转换为数字的价格
+                
+                # 计算各等级的箱线图数据
+                for level, price_data in level_price_map.items():
+                    if price_data:
+                        # 排序价格数据
+                        price_data.sort()
+                        
+                        # 计算最小值、最大值、中位数和四分位数
+                        min_price = min(price_data)
+                        max_price = max(price_data)
+                        
+                        # 计算中位数和四分位数
+                        n = len(price_data)
+                        median_idx = n // 2
+                        median_price = price_data[median_idx] if n % 2 == 1 else (price_data[median_idx-1] + price_data[median_idx]) / 2
+                        
+                        q1_idx = n // 4
+                        q1_price = price_data[q1_idx] if n % 4 != 0 else (price_data[q1_idx-1] + price_data[q1_idx]) / 2
+                        
+                        q3_idx = 3 * n // 4
+                        q3_price = price_data[q3_idx] if 3 * n % 4 != 0 else (price_data[q3_idx-1] + price_data[q3_idx]) / 2
+                        
+                        result.append({
+                            'level': level,
+                            'min_price': round(min_price, 2),
+                            'q1_price': round(q1_price, 2),
+                            'median_price': round(median_price, 2),
+                            'q3_price': round(q3_price, 2),
+                            'max_price': round(max_price, 2),
+                            'count': len(price_data)
+                        })
+            
+            return Response(result)
+        except Exception as e:
+            logger.error(f"获取景区类型各等级箱线图数据失败: {str(e)}")
+            return Response({"error": "获取数据失败"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

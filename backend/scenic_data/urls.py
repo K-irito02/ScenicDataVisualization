@@ -37,4 +37,19 @@ urlpatterns = [
     
     # 区县景区分布数据
     path('data/district-distribution/<str:province_name>/<str:city_name>/', views.DistrictDistributionView.as_view(), name='district-distribution'),
+    
+    # 情感倾向分布数据
+    path('data/sentiment-distribution/', views.SentimentDistributionView.as_view(), name='sentiment-distribution'),
+    
+    # 情感得分与景区类型等级关系数据
+    path('data/sentiment-type/', views.SentimentTypeView.as_view(), name='sentiment-type'),
+    
+    # 景区类型平均门票价格
+    path('data/ticket-avg-price/', views.TicketAvgPriceView.as_view(), name='ticket-avg-price'),
+    
+    # 各景区类型门票价格箱线图数据
+    path('data/ticket-boxplot-by-type/', views.TicketBoxplotByTypeView.as_view(), name='ticket-boxplot-by-type'),
+    
+    # 指定景区类型各等级门票价格箱线图数据
+    path('data/ticket-boxplot-by-level/', views.TicketBoxplotByLevelView.as_view(), name='ticket-boxplot-by-level'),
 ] 

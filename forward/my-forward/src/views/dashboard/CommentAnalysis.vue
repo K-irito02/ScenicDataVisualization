@@ -1,65 +1,81 @@
 <template>
   <div class="comment-analysis-container">
     <el-row :gutter="20">
-      <el-col :span="24">
-        <card-container title="景区评论与情感分析">
-          <template #actions>
-            <el-select v-model="sortType" placeholder="排序方式" size="small" @change="handleSortChange">
-              <el-option label="评论数量" value="commentCount" />
-              <el-option label="情感得分" value="sentimentScore" />
-              <el-option label="情感强度" value="sentimentIntensity" />
-            </el-select>
-          </template>
-          
+      <el-col :span="12">
+        <card-container title="景区情感倾向分布">
           <div class="chart-wrapper">
             <base-chart 
-              :options="scatterOptions" 
-              height="450px"
-              @chartClick="handleChartClick"
+              :options="sentimentPieOptions" 
+              height="400px"
+              v-loading="sentimentLoading"
             />
           </div>
           
           <div class="analysis-summary">
             <h4>数据分析结论</h4>
             <ul>
-              <li>情感得分较高的景区集中在国家5A级景区和知名自然风景区</li>
-              <li>评论数量和情感得分呈现一定的正相关性，受欢迎的景区往往评价更高</li>
-              <li>部分小众景区尽管评论数量少，但情感得分较高，表明有特色的小众景区也有良好口碑</li>
-              <li>情感强度高的景区通常是那些能引起强烈情感共鸣的景区，如壮观的自然景观或独特的文化体验</li>
+              <li>情感倾向为"优"的景区占比最大，表明大部分景区评价良好</li>
+              <li>不同情感倾向的分布反映游客对景区的整体满意度</li>
+              <li>情感倾向为"良"的景区比例适中，说明有一定改进空间</li>
+              <li>情感倾向为"中"的景区需要重点关注，进行针对性改进</li>
             </ul>
           </div>
         </card-container>
       </el-col>
-    </el-row>
-    
-    <el-row :gutter="20" v-if="selectedScenic">
-      <el-col :span="24">
-        <card-container :title="`${selectedScenic.scenicName} - 评论词云分析`">
+      
+      <el-col :span="12">
+        <card-container title="景区类型情感分析">
           <template #actions>
-            <el-button type="text" @click="clearSelectedScenic">返回总览</el-button>
+            <el-select v-model="selectedType" placeholder="选择景区类型" size="small" @change="handleTypeChange">
+              <el-option 
+                v-for="type in scenicTypes" 
+                :key="type" 
+                :label="type" 
+                :value="type" 
+              />
+            </el-select>
           </template>
           
           <div class="chart-wrapper">
             <base-chart 
-              :options="wordCloudOptions" 
-              height="350px"
+              :options="sentimentBubbleOptions" 
+              height="500px"
+              style="width: 100%;"
+              v-loading="typeLoading"
             />
+            
+            <!-- 添加备用数据表格，确保数据可见 -->
+            <div v-if="typeData.length > 0" class="data-table-backup">
+              <h4>景区类型情感数据表</h4>
+              <el-table 
+                :data="typeData.filter(item => item.level !== 'xxx' && item.level !== 'null' && item.level !== null)" 
+                stripe 
+                style="width: 100%"
+              >
+                <el-table-column prop="level" label="景区级别" />
+                <el-table-column prop="avg_sentiment_score" label="情感得分">
+                  <template #default="scope">
+                    {{ Math.floor(Number(scope.row.avg_sentiment_score)) }}.00
+                  </template>
+                </el-table-column>
+                <el-table-column prop="avg_sentiment_magnitude" label="情感强度">
+                  <template #default="scope">
+                    {{ Number(scope.row.avg_sentiment_magnitude).toFixed(2) }}
+                  </template>
+                </el-table-column>
+                <el-table-column prop="count" label="景区数量" />
+              </el-table>
+            </div>
           </div>
           
-          <div class="analysis-detail">
-            <h4>游客关注点分析</h4>
-            <p>基于词云分析，游客对该景区评论中最关注的几个方面是：</p>
-            <el-row :gutter="20">
-              <el-col :span="8" v-for="(aspect, index) in topAspects" :key="index">
-                <div class="aspect-card">
-                  <h5>{{ aspect.name }}</h5>
-                  <p>{{ aspect.description }}</p>
-                  <div class="sentiment-indicator" :class="getSentimentClass(aspect.sentiment)">
-                    {{ getSentimentLabel(aspect.sentiment) }}
-                  </div>
-                </div>
-              </el-col>
-            </el-row>
+          <div class="analysis-summary">
+            <h4>数据分析结论</h4>
+            <ul>
+              <li>随着景区等级的提高，情感得分总体呈上升趋势</li>
+              <li>高等级景区通常能引起更强烈的情感反应</li>
+              <li>同类型不同等级景区间的情感得分差异反映了等级评定的合理性</li>
+              <li>情感强度高的景区往往具有更鲜明的特色和更好的服务</li>
+            </ul>
           </div>
         </card-container>
       </el-col>
@@ -71,11 +87,28 @@
 import { defineComponent, ref, onMounted, computed } from 'vue'
 import CardContainer from '@/components/common/CardContainer.vue'
 import BaseChart from '@/components/charts/BaseChart.vue'
-import { useScenicStore } from '@/stores/scenic'
 import type { EChartsOption } from 'echarts'
 import { ElMessage } from 'element-plus'
-import 'echarts-wordcloud'
 import axios from 'axios'
+
+// 导入景区类型数据
+import typeLevelData from '@/assets/search/type_level_data.json'
+
+interface SentimentDistData {
+  name: string;
+  value: number;
+}
+
+interface TypeLevelData {
+  level: string;
+  avg_sentiment_score: number;
+  avg_sentiment_magnitude: number;
+  count: number;
+}
+
+interface TypeLevelDataMap {
+  [key: string]: string[];
+}
 
 export default defineComponent({
   name: 'CommentAnalysis',
@@ -84,246 +117,319 @@ export default defineComponent({
     BaseChart
   },
   setup() {
-    const scenicStore = useScenicStore()
-    const commentData = ref<any[]>([])
-    const wordCloudData = ref<any[]>([])
-    const sortType = ref('commentCount')
-    const selectedScenic = ref<any>(null)
-    const loading = ref(false)
-    const wordcloudLoading = ref(false)
-    const currentScenicId = ref('')
+    const sentimentData = ref<SentimentDistData[]>([])
+    const typeData = ref<TypeLevelData[]>([])
+    const selectedType = ref('景区')
+    const sentimentLoading = ref(false)
+    const typeLoading = ref(false)
     
-    // 模拟顶级关注点数据
-    const topAspects = ref([
-      {
-        name: '风景美丽',
-        description: '游客普遍对景区自然风光给予高度评价',
-        sentiment: 0.8
-      },
-      {
-        name: '服务质量',
-        description: '对景区工作人员的服务态度褒贬不一',
-        sentiment: 0.5
-      },
-      {
-        name: '价格合理',
-        description: '大部分游客认为票价与体验匹配',
-        sentiment: 0.7
+    // 从导入的JSON中获取景区类型列表
+    const scenicTypes = computed(() => {
+      // 获取所有类型
+      const types = typeLevelData.types || [];
+      // 将"景区"替换为"A级景区"
+      return types.map(type => type === '景区' ? 'A级景区' : type);
+    })
+    
+    // 获取当前选择类型的等级列表
+    const currentTypeLevels = computed(() => {
+      if (selectedType.value) {
+        // 根据景区类型获取对应的等级列表
+        const levels = (typeLevelData.typeLevels as TypeLevelDataMap)[selectedType.value]
+        return levels || []
       }
-    ])
+      return []
+    })
     
-    // 情感分数转换为标签
-    const getSentimentLabel = (score: number) => {
-      if (score >= 0.7) return '非常正面'
-      if (score >= 0.5) return '较为正面'
-      if (score >= 0.3) return '中性偏正面'
-      if (score >= 0.0) return '中性'
-      return '偏负面'
-    }
-    
-    // 情感分数转换为样式类
-    const getSentimentClass = (score: number) => {
-      if (score >= 0.7) return 'very-positive'
-      if (score >= 0.5) return 'positive'
-      if (score >= 0.3) return 'neutral-positive'
-      if (score >= 0.0) return 'neutral'
-      return 'negative'
-    }
-    
-    // 散点图配置
-    const scatterOptions = computed<EChartsOption>(() => ({
+    // 情感倾向饼图配置
+    const sentimentPieOptions = computed<EChartsOption>(() => ({
       title: {
-        text: '景区评论数量与情感得分关系',
+        text: '景区情感倾向分布',
         left: 'center'
       },
       tooltip: {
         trigger: 'item',
-        formatter: function(params: any) {
-          const data = params.data
-          return `${data[3]}<br/>评论数量: ${data[0]}<br/>情感得分: ${data[1]}<br/>情感强度: ${data[2]}`
-        }
+        formatter: '{a} <br/>{b}: {c} ({d}%)'
       },
-      xAxis: {
-        name: '评论数量',
-        nameLocation: 'middle',
-        nameGap: 30,
-        scale: true
-      },
-      yAxis: {
-        name: '情感得分',
-        nameLocation: 'middle',
-        nameGap: 30,
-        scale: true
-      },
-      visualMap: {
-        min: 0,
-        max: 1,
-        dimension: 2,  // 情感强度维度
-        calculable: true,
+      legend: {
         orient: 'horizontal',
-        left: 'center',
-        bottom: 10,
-        text: ['情感强烈', '情感平淡'],
-        inRange: {
-          color: ['#50a3ba', '#eac736', '#d94e5d']
-        }
-      },
-      grid: {
-        top: 60,
-        bottom: 90
+        bottom: 0,
+        data: sentimentData.value.map(item => item.name)
       },
       series: [
         {
-          type: 'scatter',
-          symbolSize: function(data: any) {
-            // 基于评论数量调整点的大小
-            return Math.sqrt(data[0]) / 5 + 10
+          name: '情感倾向',
+          type: 'pie',
+          radius: ['40%', '70%'],
+          avoidLabelOverlap: false,
+          itemStyle: {
+            borderRadius: 10,
+            borderColor: '#fff',
+            borderWidth: 2
           },
-          data: commentData.value.map(item => [
-            item.commentCount,
-            item.sentimentScore,
-            item.sentimentIntensity,
-            item.scenicName
-          ]),
+          label: {
+            show: false,
+            position: 'center'
+          },
           emphasis: {
-            focus: 'series',
             label: {
               show: true,
-              formatter: function(param: any) {
-                return param.data[3]
-              },
-              position: 'top'
+              fontSize: 20,
+              fontWeight: 'bold'
             }
-          }
+          },
+          labelLine: {
+            show: false
+          },
+          data: sentimentData.value.map(item => ({
+            name: item.name,
+            value: item.value
+          })),
+          color: ['#67c23a', '#e6a23c', '#f56c6c']
         }
       ]
     }))
     
-    // 词云图配置
-    const wordCloudOptions = computed(() => ({
-      title: {
-        text: selectedScenic.value ? `${selectedScenic.value.scenicName} 热门评论词` : '热门评论词',
-        left: 'center'
-      },
-      tooltip: {
-        show: true
-      },
-      series: [{
-        type: 'wordCloud',
-        shape: 'circle',
-        left: 'center',
-        top: 'center',
-        width: '80%',
-        height: '80%',
-        right: undefined,
-        bottom: undefined,
-        sizeRange: [12, 60],
-        rotationRange: [-45, 45],
-        rotationStep: 10,
-        gridSize: 8,
-        drawOutOfBound: false,
-        textStyle: {
-          fontFamily: 'sans-serif',
-          fontWeight: 'bold',
-          color: function() {
-            return 'rgb(' + [
-              Math.round(Math.random() * 160),
-              Math.round(Math.random() * 160),
-              Math.round(Math.random() * 160)
-            ].join(',') + ')'
+    // 情感得分与景区类型等级气泡图配置
+    const sentimentBubbleOptions = computed<EChartsOption>(() => {
+      // 获取当前选择类型的等级列表
+      const validLevels = currentTypeLevels.value
+      
+      // 添加调试信息
+      console.log('当前选择类型:', selectedType.value)
+      console.log('后端返回数据:', typeData.value)
+      console.log('有效级别列表:', validLevels)
+      
+      // 过滤掉xxx和null
+      const filteredData = typeData.value.filter(item => {
+        // 排除level为xxx或null的数据
+        return item.level !== 'xxx' && 
+               item.level !== 'null' && 
+               item.level !== null &&
+               item.level !== undefined;
+      });
+      
+      // 极简处理，直接从过滤后的数据中提取数据
+      const simplifiedData = filteredData.map(item => {
+        const score = Number(item.avg_sentiment_score);
+        // 使用向下取整，与表格保持一致
+        return Math.floor(score); // 改为向下取整，与表格保持一致
+      });
+      
+      // 打印额外的响应信息，确认数据正常
+      console.log('原始数据中项目数量:', typeData.value.length);
+      console.log('过滤后数据项目数量:', filteredData.length);
+      console.log('处理后的数据项目数量:', simplifiedData.length);
+      if (filteredData.length > 0) {
+        console.log('第一个数据样本:', filteredData[0]);
+      }
+      
+      // 获取X轴标签
+      const xAxisLabels = filteredData.map(item => item.level);
+      
+      console.log('简化后的数据:', simplifiedData);
+      console.log('X轴标签:', xAxisLabels);
+      
+      // 计算最大值，用于Y轴范围
+      let maxScore = 300;
+      if (simplifiedData.length > 0) {
+        // 计算最大值并向上取整，去除小数部分
+        const rawMax = Math.max(...simplifiedData);
+        maxScore = Math.ceil(rawMax * 1.1); // 增加10%空间并向上取整
+        console.log('计算的最大得分:', maxScore);
+      }
+      
+      // 使用符合ECharts类型定义的配置
+      return {
+        title: {
+          text: `${selectedType.value === 'A级景区' ? 'A级景区' : selectedType.value}情感得分与等级关系`,
+          left: 'center'
+        },
+        tooltip: {
+          trigger: 'axis',
+          formatter: function(params: any) {
+            const param = params[0];
+            // 保持与Y轴格式一致，显示为整数.00
+            return `${param.name}: ${Math.floor(param.value)}.00`;
           }
         },
-        emphasis: {
-          focus: 'self',
-          textStyle: {
-            shadowBlur: 10,
-            shadowColor: '#333'
+        grid: {
+          left: '10%',
+          right: '10%',
+          bottom: '15%',
+          top: '15%',
+          containLabel: true
+        },
+        xAxis: {
+          type: 'category',
+          data: xAxisLabels,
+          axisLabel: {
+            interval: 0, // 强制显示所有标签
+            rotate: 30, // 旋转标签以防重叠
+            fontSize: 12,
+            margin: 8
           }
         },
-        data: wordCloudData.value.length ? wordCloudData.value : [
-          { name: '数据加载中', value: 10 }
+        yAxis: {
+          type: 'value',
+          name: '情感得分',
+          min: 0,
+          max: maxScore,
+          axisLabel: {
+            formatter: function(value: number) {
+              // 保留整数部分加 .00 后缀
+              return Math.floor(value) + '.00';
+            }
+          }
+        },
+        series: [
+          {
+            name: '情感得分',
+            type: 'bar',
+            data: simplifiedData,
+            itemStyle: {
+              color: '#409EFF'
+            },
+            label: {
+              show: true,
+              position: 'top',
+              formatter: function(params: any) {
+                // 保持与Y轴格式一致，显示为整数.00
+                return Math.floor(params.value) + '.00';
+              }
+            },
+            barWidth: '50%' // 调整柱子宽度，使图表更美观
+          }
         ]
-      }]
-    } as any))
+      } as EChartsOption;
+    })
     
-    // 获取评论数据
-    const fetchCommentData = async () => {
-      loading.value = true;
+    // 获取情感倾向分布数据
+    const fetchSentimentData = async () => {
+      sentimentLoading.value = true
       
       try {
-        const response = await axios.get('/api/data/comment-analysis/');
-        commentData.value = response.data;
-        loading.value = false;
+        // 请求情感倾向分布数据
+        const response = await axios.get('/data/sentiment-distribution/')
+        
+        // 这里假设后端返回格式为 [{name: '优', value: 100}, {name: '良', value: 50}, {name: '中', value: 30}]
+        sentimentData.value = response.data
+        
+        sentimentLoading.value = false
       } catch (error) {
-        console.error('获取评论数据失败:', error);
-        ElMessage.error('获取评论数据失败');
-        loading.value = false;
+        console.error('获取情感倾向分布数据失败:', error)
+        ElMessage.error('获取情感倾向分布数据失败')
+        
+        // 使用模拟数据（仅供开发测试）
+        sentimentData.value = [
+          { name: '优', value: 65 },
+          { name: '良', value: 25 },
+          { name: '中', value: 10 }
+        ]
+        
+        sentimentLoading.value = false
       }
-    };
+    }
     
-    // 获取词云数据
-    const fetchWordCloudData = async (scenicId: string) => {
-      wordcloudLoading.value = true;
+    // 获取情感得分与景区类型等级关系数据
+    const fetchTypeData = async (scenicType: string) => {
+      typeLoading.value = true
       
       try {
-        const response = await axios.get(`/api/data/word-cloud/${scenicId}/`);
-        wordCloudData.value = response.data;
-        currentScenicId.value = scenicId;
-        wordcloudLoading.value = false;
+        // 根据景区类型构建请求参数
+        let params: Record<string, string> = { type: scenicType }
+        
+        // 处理不同类型的查询方式
+        // 对于"A级景区"(原"景区")和"水利风景区"，我们使用特殊处理
+        if (scenicType === 'A级景区') {
+          // A级景区查询使用"景区"类型，级别将是5A、4A等
+          params = { type: '景区' }
+        } else if (scenicType === '水利风景区') {
+          // 水利风景区查询"是"
+          params = { type: '水利风景区', level: '是' }
+        } else {
+          // 其他类型使用组合查询
+          params = { type: scenicType }
+        }
+        
+        // 请求情感得分与景区类型等级关系数据
+        const response = await axios.get('/data/sentiment-type/', { params })
+        
+        console.log('API响应数据:', response.data)
+        console.log('API响应数据类型:', typeof response.data)
+        console.log('是否为数组:', Array.isArray(response.data))
+        
+        if (Array.isArray(response.data) && response.data.length > 0) {
+          console.log('第一项数据类型:', typeof response.data[0])
+          console.log('第一项情感得分类型:', typeof response.data[0].avg_sentiment_score)
+          console.log('第一项情感得分值:', response.data[0].avg_sentiment_score)
+        }
+        
+        // 这里假设后端返回格式为 [{level: '国家级', avg_sentiment_score: 254.38, avg_sentiment_magnitude: 0.18, count: 42}, ...]
+        typeData.value = response.data
+        
+        typeLoading.value = false
       } catch (error) {
-        console.error('获取词云数据失败:', error);
-        ElMessage.error('获取词云数据失败');
-        wordcloudLoading.value = false;
+        console.error('获取情感得分与景区类型等级关系数据失败:', error)
+        ElMessage.error('获取情感得分与景区类型等级关系数据失败')
+        
+        // 使用模拟数据（仅供开发测试）
+        if (scenicType === '森林公园') {
+          typeData.value = [
+            { level: '国家级', avg_sentiment_score: 254.38, avg_sentiment_magnitude: 0.18, count: 42 },
+            { level: '省级', avg_sentiment_score: 178.95, avg_sentiment_magnitude: 0.15, count: 36 },
+            { level: '市级', avg_sentiment_score: 125.64, avg_sentiment_magnitude: 0.12, count: 28 }
+          ]
+        } else if (scenicType === '景区') {
+          typeData.value = [
+            { level: '5A景区', avg_sentiment_score: 290.52, avg_sentiment_magnitude: 0.22, count: 25 },
+            { level: '4A景区', avg_sentiment_score: 240.18, avg_sentiment_magnitude: 0.19, count: 68 },
+            { level: '3A景区', avg_sentiment_score: 185.73, avg_sentiment_magnitude: 0.15, count: 97 },
+            { level: '2A景区', avg_sentiment_score: 150.34, avg_sentiment_magnitude: 0.12, count: 45 },
+            { level: '省级景区', avg_sentiment_score: 130.87, avg_sentiment_magnitude: 0.10, count: 32 }
+          ]
+        } else {
+          // 默认模拟数据
+          typeData.value = [
+            { level: '国家级', avg_sentiment_score: 230.45, avg_sentiment_magnitude: 0.20, count: 38 },
+            { level: '省级', avg_sentiment_score: 180.12, avg_sentiment_magnitude: 0.16, count: 42 }
+          ]
+        }
+        
+        typeLoading.value = false
       }
-    };
-    
-    // 排序评论数据
-    const sortCommentData = () => {
-      if (sortType.value === 'commentCount') {
-        commentData.value.sort((a, b) => b.commentCount - a.commentCount)
-      } else if (sortType.value === 'sentimentScore') {
-        commentData.value.sort((a, b) => b.sentimentScore - a.sentimentScore)
-      } else if (sortType.value === 'sentimentIntensity') {
-        commentData.value.sort((a, b) => b.sentimentIntensity - a.sentimentIntensity)
-      }
     }
     
-    // 处理排序变更
-    const handleSortChange = () => {
-      sortCommentData()
+    // 处理景区类型变更
+    const handleTypeChange = () => {
+      fetchTypeData(selectedType.value)
     }
     
-    // 处理图表点击事件
-    const handleChartClick = (params: any) => {
-      const index = params.dataIndex
-      if (index >= 0 && index < commentData.value.length) {
-        selectedScenic.value = commentData.value[index]
-        fetchWordCloudData(selectedScenic.value.scenicId)
-      }
-    }
-    
-    // 清除选中的景区
-    const clearSelectedScenic = () => {
-      selectedScenic.value = null
-    }
-    
+    // 在组件挂载后，初始化获取数据
     onMounted(() => {
-      fetchCommentData()
+      fetchSentimentData()
+      // 初始化时如果选择的是"景区"，需要修改为"A级景区"
+      if (selectedType.value === '景区') {
+        selectedType.value = 'A级景区'
+      }
+      fetchTypeData(selectedType.value)
+      
+      // 添加延迟检查，确保图表渲染
+      setTimeout(() => {
+        console.log('图表渲染检查 - 当前气泡图配置:', sentimentBubbleOptions.value);
+      }, 2000);
     })
     
     return {
-      commentData,
-      wordCloudData,
-      sortType,
-      selectedScenic,
-      topAspects,
-      scatterOptions,
-      wordCloudOptions,
-      handleSortChange,
-      handleChartClick,
-      clearSelectedScenic,
-      getSentimentLabel,
-      getSentimentClass
+      sentimentData,
+      typeData,
+      selectedType,
+      scenicTypes,
+      sentimentPieOptions,
+      sentimentBubbleOptions,
+      sentimentLoading,
+      typeLoading,
+      handleTypeChange
     }
   }
 })
@@ -339,14 +445,14 @@ export default defineComponent({
   margin-bottom: 20px;
 }
 
-.analysis-summary, .analysis-detail {
+.analysis-summary {
   background-color: #f8f9fa;
   padding: 15px;
   border-radius: 4px;
   margin-top: 10px;
 }
 
-.analysis-summary h4, .analysis-detail h4 {
+.analysis-summary h4 {
   margin-top: 0;
   margin-bottom: 10px;
   color: #303133;
@@ -361,56 +467,17 @@ export default defineComponent({
   margin-bottom: 8px;
 }
 
-.aspect-card {
-  background-color: white;
-  border-radius: 4px;
+.data-table-backup {
+  margin-top: 20px;
+  border: 1px solid #ebeef5;
   padding: 15px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-  height: 100%;
-  margin-bottom: 15px;
-}
-
-.aspect-card h5 {
-  margin-top: 0;
-  margin-bottom: 10px;
-  font-size: 16px;
-}
-
-.aspect-card p {
-  color: #606266;
-  font-size: 14px;
-}
-
-.sentiment-indicator {
-  display: inline-block;
-  padding: 2px 8px;
   border-radius: 4px;
-  font-size: 12px;
-  margin-top: 10px;
+  background-color: #f8f9fa;
 }
 
-.very-positive {
-  background-color: #67c23a;
-  color: white;
+.data-table-backup h4 {
+  margin-top: 0;
+  margin-bottom: 15px;
+  text-align: center;
 }
-
-.positive {
-  background-color: #85ce61;
-  color: white;
-}
-
-.neutral-positive {
-  background-color: #e6a23c;
-  color: white;
-}
-
-.neutral {
-  background-color: #909399;
-  color: white;
-}
-
-.negative {
-  background-color: #f56c6c;
-  color: white;
-}
-</style> 
+</style>

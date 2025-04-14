@@ -135,4 +135,42 @@ export function getDistrictDistribution(provinceName: string, cityName: string) 
     url: `/data/district-distribution/${provinceName}/${cityName}/`,
     method: 'get'
   });
+}
+
+/**
+ * 获取景区类型平均门票价格
+ * @param scenicType 景区类型
+ */
+export function getTicketAvgPrice(scenicType: string) {
+  return request({
+    url: '/data/ticket-avg-price/',
+    method: 'get',
+    params: {
+      type: scenicType
+    }
+  });
+}
+
+/**
+ * 获取各景区类型门票价格箱线图数据
+ */
+export function getTicketBoxplotByType() {
+  return request({
+    url: '/data/ticket-boxplot-by-type/',
+    method: 'get'
+  });
+}
+
+/**
+ * 获取指定景区类型各等级门票价格箱线图数据
+ * @param scenicType 景区类型
+ */
+export function getTicketBoxplotByLevel(scenicType: string) {
+  return request({
+    url: '/data/ticket-boxplot-by-level/',
+    method: 'get',
+    params: {
+      type: scenicType
+    }
+  });
 } 

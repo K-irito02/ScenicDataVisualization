@@ -68,6 +68,9 @@ class TimeData(models.Model):
     scenic_name = models.CharField(max_length=100, verbose_name='景区名')
     city_name = models.CharField(max_length=50, verbose_name='省份名')
     time_range = models.CharField(max_length=200, blank=True, null=True, verbose_name='开放时间段')
+    type = models.CharField(max_length=50, blank=True, null=True, verbose_name='景区类型')
+    weekdays = models.CharField(max_length=100, blank=True, null=True, verbose_name='适用工作日')
+    scenic_id = models.CharField(max_length=50, blank=True, null=True, verbose_name='景区ID')
     
     def __str__(self):
         return self.scenic_name

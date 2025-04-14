@@ -11,7 +11,10 @@ import {
   getFilterOptions as apiGetFilterOptions,
   getScenicDetail,
   getProvinceCityDistribution,
-  getDistrictDistribution
+  getDistrictDistribution,
+  getTicketAvgPrice as apiGetTicketAvgPrice,
+  getTicketBoxplotByType as apiGetTicketBoxplotByType,
+  getTicketBoxplotByLevel as apiGetTicketBoxplotByLevel
 } from '../api'
 
 interface ProvinceData {
@@ -347,6 +350,39 @@ export const useScenicStore = defineStore('scenic', {
         return response.data
       } catch (error) {
         console.error('获取区县景区分布数据失败:', error)
+        return []
+      }
+    },
+    
+    // 获取门票平均价格数据
+    async getTicketAvgPrice(scenicType: string) {
+      try {
+        const response = await apiGetTicketAvgPrice(scenicType)
+        return response.data
+      } catch (error) {
+        console.error('获取门票平均价格数据失败:', error)
+        return []
+      }
+    },
+    
+    // 获取各景区类型的箱线图数据
+    async getTicketBoxplotByType() {
+      try {
+        const response = await apiGetTicketBoxplotByType()
+        return response.data
+      } catch (error) {
+        console.error('获取景区类型箱线图数据失败:', error)
+        return []
+      }
+    },
+    
+    // 获取指定景区类型各等级的箱线图数据
+    async getTicketBoxplotByLevel(scenicType: string) {
+      try {
+        const response = await apiGetTicketBoxplotByLevel(scenicType)
+        return response.data
+      } catch (error) {
+        console.error('获取景区等级箱线图数据失败:', error)
         return []
       }
     }
