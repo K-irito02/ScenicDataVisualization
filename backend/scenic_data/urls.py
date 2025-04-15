@@ -52,4 +52,7 @@ urlpatterns = [
     
     # 指定景区类型各等级门票价格箱线图数据
     path('data/ticket-boxplot-by-level/', views.TicketBoxplotByLevelView.as_view(), name='ticket-boxplot-by-level'),
+    
+    # 景区类型分布数据（用于雷达图和旭日图）
+    path('data/scenic-type-distribution/', views.ScenicTypeDistributionView.as_view(), name='scenic-type-distribution'),
 ] 

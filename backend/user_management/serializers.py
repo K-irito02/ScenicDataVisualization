@@ -3,6 +3,7 @@ from django.contrib.auth.models import User
 from .models import UserProfile, UserFavorite, UserActionRecord
 from django.contrib.auth import authenticate
 from .utils import redis_client
+from django.core.validators import URLValidator
 
 class UserSerializer(serializers.ModelSerializer):
     """用户序列化器"""
@@ -149,6 +150,36 @@ class ProfileUpdateSerializer(serializers.ModelSerializer):
         model = UserProfile
         fields = ('username', 'email', 'avatar', 'location')
     
+    def validate_avatar(self, value):
+        """验证并处理avatar URL"""
+        if not value:
+            return value
+            
+        # 记录原始值，方便调试
+        original_value = value
+        print(f"验证avatar字段，原始值: '{original_value}'")
+        
+        # 如果是相对路径，确保以/开头
+        if not value.startswith('http') and not value.startswith('/'):
+            value = '/' + value
+            print(f"添加前导斜杠后的avatar值: '{value}'")
+        
+        # 验证URL格式
+        if value.startswith('/'):
+            # 对于相对URL，直接接受
+            print(f"接受相对路径avatar: '{value}'")
+            return value
+        else:
+            try:
+                # 验证绝对URL的格式有效性
+                validator = URLValidator()
+                validator(value)
+                print(f"接受有效的绝对URL: '{value}'")
+                return value
+            except Exception as e:
+                print(f"Avatar URL验证失败: {str(e)}, 值: '{value}'")
+                raise serializers.ValidationError(f"请提供有效的URL地址，当前值 '{value}' 不是有效的URL格式。")
+    
     def update(self, instance, validated_data):
         user_data = validated_data.pop('user', {})
         user = instance.user
@@ -163,6 +194,7 @@ class ProfileUpdateSerializer(serializers.ModelSerializer):
         # 更新UserProfile模型字段
         if 'avatar' in validated_data:
             instance.avatar = validated_data['avatar']
+            print(f"更新用户 {user.username} 的头像为: '{validated_data['avatar']}'")
         if 'location' in validated_data:
             instance.location = validated_data['location']
         instance.save()
@@ -171,10 +203,62 @@ class ProfileUpdateSerializer(serializers.ModelSerializer):
 
 class UserFavoriteSerializer(serializers.ModelSerializer):
     """用户收藏序列化器"""
+    # 添加景区详细信息
+    id = serializers.CharField(source='scenic_id')
+    name = serializers.SerializerMethodField()
+    image = serializers.SerializerMethodField()
+    province = serializers.SerializerMethodField()
+    city = serializers.SerializerMethodField()
+    level = serializers.SerializerMethodField()
+    
     class Meta:
         model = UserFavorite
-        fields = ('id', 'user', 'scenic_id', 'added_time')
-        read_only_fields = ('id', 'user', 'added_time')
+        fields = ('id', 'name', 'image', 'province', 'city', 'level', 'added_time')
+    
+    def get_name(self, obj):
+        # 从ScenicData中获取景区名称
+        from scenic_data.models import ScenicData
+        try:
+            scenic = ScenicData.objects.get(scenic_id=obj.scenic_id)
+            return scenic.name
+        except ScenicData.DoesNotExist:
+            return f"未知景区({obj.scenic_id})"
+    
+    def get_image(self, obj):
+        # 从ScenicData中获取景区图片
+        from scenic_data.models import ScenicData
+        try:
+            scenic = ScenicData.objects.get(scenic_id=obj.scenic_id)
+            return scenic.image_url or '/static/images/default-scenic.jpg'
+        except ScenicData.DoesNotExist:
+            return '/static/images/default-scenic.jpg'
+    
+    def get_province(self, obj):
+        # 从ScenicData中获取景区省份
+        from scenic_data.models import ScenicData
+        try:
+            scenic = ScenicData.objects.get(scenic_id=obj.scenic_id)
+            return scenic.province
+        except ScenicData.DoesNotExist:
+            return '未知'
+    
+    def get_city(self, obj):
+        # 从ScenicData中获取景区城市
+        from scenic_data.models import ScenicData
+        try:
+            scenic = ScenicData.objects.get(scenic_id=obj.scenic_id)
+            return scenic.city
+        except ScenicData.DoesNotExist:
+            return '未知'
+    
+    def get_level(self, obj):
+        # 从ScenicData中获取景区级别
+        from scenic_data.models import ScenicData
+        try:
+            scenic = ScenicData.objects.get(scenic_id=obj.scenic_id)
+            return scenic.scenic_type.split(',')[0] if scenic.scenic_type else '无级别'
+        except (ScenicData.DoesNotExist, IndexError):
+            return '无级别'
 
 class UserActionRecordSerializer(serializers.ModelSerializer):
     """用户操作记录序列化器"""

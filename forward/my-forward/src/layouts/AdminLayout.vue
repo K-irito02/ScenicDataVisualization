@@ -10,8 +10,21 @@ const route = useRoute()
 const isCollapse = ref(false)
 
 const handleLogout = () => {
-  userStore.logout()
-  router.push('/admin')
+  // 确保正确清除所有认证信息
+  console.log('管理员执行退出登录操作');
+  userStore.logout();
+  
+  // 使用setTimeout确保store状态更新完成后再重定向
+  setTimeout(() => {
+    console.log('管理员登出完成，准备跳转到登录页面');
+    // 先离开当前路由，避免路由守卫拦截
+    router.push('/logout-redirect');
+    
+    // 再跳转到管理员登录页
+    setTimeout(() => {
+      router.push('/admin');
+    }, 100);
+  }, 100);
 }
 
 const activeMenu = computed(() => {

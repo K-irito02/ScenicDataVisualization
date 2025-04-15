@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
+import { User, Lock, Picture } from '@element-plus/icons-vue'
 
 interface LoginResponse {
   token?: string
@@ -55,19 +56,13 @@ const handleLogin = async (formEl: FormInstance | undefined) => {
             }
           }
           
-          // 直接设置localStorage，避免依赖Store
-          localStorage.setItem('token', mockResponse.data.token)
-          localStorage.setItem('userId', mockResponse.data.user_id)
-          localStorage.setItem('username', mockResponse.data.username)
-          localStorage.setItem('email', mockResponse.data.email)
-          localStorage.setItem('avatar', mockResponse.data.avatar || '')
-          localStorage.setItem('location', mockResponse.data.location || '')
-          localStorage.setItem('isAdmin', mockResponse.data.is_admin.toString())
-          localStorage.setItem('favorites', JSON.stringify([]))
+          // 使用更安全的sessionStorage
+          const tokenExpiry = Date.now() + (24 * 60 * 60 * 1000); // 24小时后过期
           
-          // 同时也更新Store
+          // 设置用户信息到Store
           await userStore.setUserInfo({
             token: mockResponse.data.token,
+            tokenExpiry,
             userId: mockResponse.data.user_id,
             username: mockResponse.data.username,
             email: mockResponse.data.email,
@@ -75,17 +70,18 @@ const handleLogin = async (formEl: FormInstance | undefined) => {
             location: mockResponse.data.location,
             isAdmin: mockResponse.data.is_admin,
             favorites: []
-          })
+          });
           
           ElMessage.success('登录成功，正在跳转...')
           
-          // 确保状态已更新
-          console.log('登录成功，localStorage状态:', {
-            token: localStorage.getItem('token') ? '已设置' : '未设置',
-            userId: localStorage.getItem('userId'),
-            username: localStorage.getItem('username')
-          })
-          console.log('登录成功，Store状态:', userStore.getUserInfo())
+          // 检查登录状态
+          const userInfo = userStore.getUserInfo()
+          console.log('登录后用户状态:', {
+            isLoggedIn: !!userInfo.token,
+            token: userInfo.token ? `${userInfo.token.substring(0, 10)}...` : 'null',
+            username: userInfo.username,
+            tokenExpiry: new Date(userInfo.tokenExpiry).toLocaleString()
+          });
           
           // 使用延时确保状态更新
           setTimeout(() => {
@@ -95,36 +91,18 @@ const handleLogin = async (formEl: FormInstance | undefined) => {
           return
         }
         
-        // 原有的API调用登录逻辑
+        // 正常API调用登录逻辑
         console.log('开始调用登录API...')
         const loginResult = await userStore.login(loginForm.username, loginForm.password)
         console.log('登录API调用成功:', loginResult)
-        
-        // 确保token直接保存到localStorage
-        const responseData = loginResult as LoginResponse
-        if (responseData.token) {
-          console.log('API返回了token，确保保存到localStorage')
-          localStorage.setItem('token', responseData.token)
-          localStorage.setItem('userId', responseData.user_id || '')
-          localStorage.setItem('username', responseData.username || '')
-          localStorage.setItem('isAdmin', (responseData.is_admin || false).toString())
-        } else {
-          console.error('API返回中没有找到token:', loginResult)
-        }
         
         // 检查登录状态
         const userInfo = userStore.getUserInfo()
         console.log('登录后用户状态:', {
           isLoggedIn: !!userInfo.token,
           token: userInfo.token ? `${userInfo.token.substring(0, 10)}...` : 'null',
-          username: userInfo.username
-        })
-        
-        // 检查localStorage
-        console.log('localStorage状态:', {
-          token: localStorage.getItem('token') ? '已设置' : '未设置',
-          userId: localStorage.getItem('userId'),
-          username: localStorage.getItem('username')
+          username: userInfo.username,
+          tokenExpiry: new Date(userInfo.tokenExpiry).toLocaleString()
         })
         
         // 使用延时确保状态已完全更新
@@ -160,7 +138,7 @@ const goToAdminLogin = () => {
   <div class="login-container">
     <div class="login-box">
       <div class="logo-container">
-        <el-icon size="60"><Picture /></el-icon>
+        <el-icon :size="60"><Picture /></el-icon>
         <h2 class="system-title">全国景区的数据分析及可视化系统</h2>
       </div>
       
@@ -177,8 +155,11 @@ const goToAdminLogin = () => {
           <el-input 
             v-model="loginForm.username"
             placeholder="请输入用户名或邮箱"
-            prefix-icon="User"
-          />
+          >
+            <template #prefix>
+              <el-icon><User /></el-icon>
+            </template>
+          </el-input>
         </el-form-item>
         
         <el-form-item label="密码" prop="password">
@@ -186,9 +167,12 @@ const goToAdminLogin = () => {
             v-model="loginForm.password"
             type="password"
             placeholder="请输入密码"
-            prefix-icon="Lock"
             show-password
-          />
+          >
+            <template #prefix>
+              <el-icon><Lock /></el-icon>
+            </template>
+          </el-input>
         </el-form-item>
         
         <div class="form-actions">
@@ -247,27 +231,23 @@ const goToAdminLogin = () => {
   margin-bottom: 30px;
 }
 
-.logo {
-  height: 60px;
-  margin-bottom: 10px;
-}
-
 .system-title {
   font-size: 20px;
-  color: #333;
   text-align: center;
-  margin: 0;
+  margin-top: 15px;
+  color: #333;
+  font-weight: 500;
 }
 
 .login-title {
-  font-size: 24px;
-  color: #333;
+  font-size: 22px;
   text-align: center;
-  margin-bottom: 30px;
+  margin-bottom: 20px;
+  color: #333;
 }
 
 .login-form {
-  width: 100%;
+  margin-top: 20px;
 }
 
 .form-actions {
@@ -278,29 +258,32 @@ const goToAdminLogin = () => {
 
 .forgot-password {
   font-size: 14px;
+  color: #999;
+  padding: 0;
 }
 
 .login-button {
   width: 100%;
-  padding: 12px 0;
-  font-size: 16px;
+  padding: 12px 20px;
   margin-bottom: 20px;
 }
 
 .form-footer {
-  text-align: center;
-  margin-bottom: 20px;
-  color: #606266;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  color: #666;
 }
 
 .register-link {
   margin-left: 5px;
-  font-weight: bold;
+  font-weight: 500;
+  padding: 0;
 }
 
 .admin-login-link {
   text-align: center;
-  margin-top: 10px;
-  font-size: 14px;
+  margin-top: 15px;
 }
 </style> 

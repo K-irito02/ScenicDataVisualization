@@ -1,14 +1,20 @@
-from django.shortcuts import render
+from django.shortcuts import render, get_object_or_404
 from rest_framework import views, viewsets, permissions, status, generics
 from rest_framework.response import Response
 from rest_framework.decorators import api_view, permission_classes, action
-from django.db.models import Count, Min, Max, Avg, F, Q
+from django.db.models import Count, Min, Max, Avg, F, Q, Value, FloatField, IntegerField
 from django.db import connections
-from django.db.models.functions import Coalesce
+from django.db.models.functions import Coalesce, Cast
 from django.shortcuts import get_object_or_404
 from collections import defaultdict, Counter
 import json
 import re
+from django.utils import timezone
+from django.http import Http404
+from django.urls import reverse
+from django.contrib.auth.models import User
+from django.db import connection, connections
+import os  # 添加os模块用于路径处理
 
 from .models import (
     ScenicData, PriceData, ProvinceTraffic, TimeData, TrafficData,
@@ -255,87 +261,258 @@ class OpenTimesView(views.APIView):
     permission_classes = [permissions.AllowAny]
     
     def get(self, request):
-        # 获取开放时间数据
-        time_data = TimeData.objects.all()
-        
-        # 创建用于存储处理后的数据
-        processed_data = []
-        
-        # 使用字典记录每个景区的ID或名称，避免重复
-        scenic_ids = {}
-        
-        # 第一步：收集所有景区的基本信息
-        for item in time_data:
-            scenic_id = item.scenic_id or f"scenic_{item.id}"
-            if scenic_id not in scenic_ids:
-                scenic_ids[scenic_id] = {
-                    'id': scenic_id,
-                    'name': item.scenic_name,
-                    'city': item.city_name,
-                    'type': item.type or '其他',  # 默认类型为'其他'
-                    'time_ranges': [],
-                    'weekdays': item.weekdays or '周一-周日',  # 默认为全周
-                }
+        try:
+            # 只查询数据库中已存在的字段
+            raw_data = TimeData.objects.all().values('id', 'scenic_name', 'city_name', 'time_range', 'weekdays')
             
-            # 添加时间范围
-            if item.time_range:
-                time_ranges = item.time_range.split(',')
-                for time_range in time_ranges:
-                    time_range = time_range.strip()
-                    if time_range and time_range not in scenic_ids[scenic_id]['time_ranges']:
-                        scenic_ids[scenic_id]['time_ranges'].append(time_range)
-        
-        # 第二步：整理每个景区的开放时间数据，处理重叠时间段
-        for scenic_id, info in scenic_ids.items():
-            # 解析并合并时间段
-            time_points = set()  # 用集合存储所有小时点，自动去重
+            # 创建用于存储处理后的数据
+            processed_data = []
             
-            for time_range in info['time_ranges']:
-                try:
-                    # 解析时间范围，例如"08:00-17:30"
-                    start_time, end_time = time_range.split('-')
+            # 使用字典记录每个景区的信息，以景区名称为键，避免重复
+            scenic_data = {}
+            
+            # 第一步：收集所有景区的基本信息
+            for item in raw_data:
+                # 使用景区名称作为唯一标识（假设景区名称是唯一的）
+                scenic_name = item['scenic_name']
+                
+                if scenic_name not in scenic_data:
+                    # 初始化景区数据
+                    scenic_data[scenic_name] = {
+                        'id': f"scenic_{item['id']}",
+                        'name': scenic_name,
+                        'city': item['city_name'],
+                        'time_ranges': set(),  # 使用集合去重
+                        'normalized_time_ranges': set(),  # 用于存储标准化后的时间范围
+                        'workdays': set(),     # 使用集合去重
+                        'all_week': False      # 是否全周开放标志
+                    }
+                
+                # 处理工作日信息 - 检查是否全周开放
+                weekday_str = item['weekdays'] or ''
+                weekday_str = weekday_str.strip()
+                
+                if not weekday_str or '全周' in weekday_str or '每天' in weekday_str or '周一-周日' in weekday_str:
+                    scenic_data[scenic_name]['all_week'] = True
+                else:
+                    # 标准化分隔符
+                    weekday_str = weekday_str.replace('，', ',').replace('、', ',').replace(';', ',').replace('；', ',')
+                    # 将"至"和"到"替换为"-"
+                    weekday_str = weekday_str.replace('至', '-').replace('到', '-')
                     
-                    # 将时间转换为小时数（简化为整数小时）
-                    start_hour = int(start_time.split(':')[0])
-                    end_hour = int(end_time.split(':')[0])
-                    
-                    # 确保结束时间不小于开始时间
-                    if end_hour < start_hour:
-                        end_hour += 24  # 处理跨天的情况
-                    
-                    # 添加该时间范围内的所有小时点
-                    for hour in range(start_hour, end_hour + 1):
-                        hour = hour % 24  # 确保小时在0-23范围内
-                        time_points.add(hour)
-                        
-                except Exception as e:
-                    # 如果解析失败，继续处理下一个时间段
-                    print(f"解析时间范围失败: {time_range}, 错误: {e}")
+                    # 分割并处理每个工作日或工作日范围
+                    for part in weekday_str.split(','):
+                        part = part.strip()
+                        if not part:
+                            continue
+                            
+                        if '-' in part:
+                            # 处理工作日范围
+                            try:
+                                start_day, end_day = [d.strip() for d in part.split('-', 1)]
+                                weekdays_range = self._expand_weekday_range(start_day, end_day)
+                                scenic_data[scenic_name]['workdays'].update(weekdays_range)
+                                
+                                # 检查是否等同于全周
+                                if len(weekdays_range) >= 7:
+                                    scenic_data[scenic_name]['all_week'] = True
+                            except Exception as e:
+                                print(f"解析工作日范围失败: {part}, 错误: {e}")
+                        else:
+                            # 单个工作日
+                            if part in ['周一', '周二', '周三', '周四', '周五', '周六', '周日']:
+                                scenic_data[scenic_name]['workdays'].add(part)
+                
+                # 检查工作日集合是否等同于全周
+                if len(scenic_data[scenic_name]['workdays']) >= 7:
+                    scenic_data[scenic_name]['all_week'] = True
+                
+                # 处理时间范围
+                time_range_str = item['time_range'] or ''
+                time_range_str = time_range_str.strip()
+                
+                if not time_range_str:
                     continue
+                    
+                # 检查是否24小时
+                if '00:00-24:00' in time_range_str or '0:00-24:00' in time_range_str or '全天' in time_range_str or '24小时' in time_range_str:
+                    scenic_data[scenic_name]['time_ranges'].add('00:00-24:00')
+                    scenic_data[scenic_name]['normalized_time_ranges'].add('00:00-24:00')
+                    continue
+                
+                # 处理多个时间范围
+                for time_part in time_range_str.split(','):
+                    time_part = time_part.strip()
+                    if not time_part:
+                        continue
+                        
+                    # 标准化时间格式
+                    time_part = time_part.replace('：', ':')
+                    
+                    # 跳过单个时间点
+                    if '-' not in time_part and ':' in time_part:
+                        continue
+                        
+                    # 处理时间范围
+                    if '-' in time_part:
+                        try:
+                            start_time, end_time = [t.strip() for t in time_part.split('-', 1)]
+                            
+                            # 标准化时间格式（确保包含冒号并且小时部分为两位数）
+                            start_hour, start_minute = self._normalize_time(start_time)
+                            end_hour, end_minute = self._normalize_time(end_time)
+                            
+                            # 格式化为标准时间字符串
+                            normalized_start_time = f"{start_hour:02d}:{start_minute:02d}"
+                            normalized_end_time = f"{end_hour:02d}:{end_minute:02d}"
+                            normalized_time_range = f"{normalized_start_time}-{normalized_end_time}"
+                            
+                            # 检查是否与已有时间段存在包含关系
+                            is_contained = False
+                            for existing_range in list(scenic_data[scenic_name]['normalized_time_ranges']):
+                                if existing_range == normalized_time_range:
+                                    # 完全相同，不需要添加
+                                    is_contained = True
+                                    break
+                                
+                                # 检查是否包含或被包含
+                                existing_start, existing_end = existing_range.split('-')
+                                existing_start_hour, existing_start_minute = map(int, existing_start.split(':'))
+                                existing_end_hour, existing_end_minute = map(int, existing_end.split(':'))
+                                
+                                # 转换为分钟表示以便比较
+                                start_mins = start_hour * 60 + start_minute
+                                end_mins = end_hour * 60 + end_minute
+                                existing_start_mins = existing_start_hour * 60 + existing_start_minute
+                                existing_end_mins = existing_end_hour * 60 + existing_end_minute
+                                
+                                # 检查包含关系
+                                if (start_mins >= existing_start_mins and end_mins <= existing_end_mins):
+                                    # 当前时间段被已有时间段包含，不需要添加
+                                    is_contained = True
+                                    break
+                            
+                            if not is_contained:
+                                # 添加标准化的时间范围
+                                scenic_data[scenic_name]['normalized_time_ranges'].add(normalized_time_range)
+                                # 保存原始格式，用于显示
+                                standard_time_range = f"{normalized_start_time}-{normalized_end_time}"
+                                scenic_data[scenic_name]['time_ranges'].add(standard_time_range)
+                        except Exception as e:
+                            print(f"解析时间范围失败: {time_part}, 错误: {e}")
             
-            # 将所有工作日解析为标准格式
-            weekdays = self._parse_weekdays(info['weekdays'])
+            # 第二步：整理数据并输出
+            for scenic_name, info in scenic_data.items():
+                # 整理工作日信息
+                weekdays_str = '周一-周日' if info['all_week'] else self._optimize_weekdays(info['workdays'])
+                
+                # 整理时间范围 - 使用normalized_time_ranges进行去重和排序
+                time_ranges_list = sorted(list(info['time_ranges']))
+                
+                # 添加到结果列表，每个景区只添加一次
+                processed_data.append({
+                    'id': info['id'],
+                    'name': info['name'],
+                    'timeRange': ','.join(time_ranges_list),
+                    'weekdays': weekdays_str,
+                    'count': 1  # 每个景区只计数一次
+                })
             
-            # 将处理后的数据添加到结果列表
-            processed_data.append({
-                'id': info['id'],
-                'name': info['name'],
-                'type': info['type'],
-                'timeRange': ','.join(info['time_ranges']),
-                'weekdays': weekdays,
-                'count': 1  # 每个景区只计数一次
-            })
+            # 返回处理后的数据
+            result = {
+                'time_ranges': processed_data,
+                'total_count': len(processed_data)
+            }
+            
+            return Response(result)
+            
+        except Exception as e:
+            # 如果出现错误，返回错误信息
+            print(f"处理开放时间数据失败: {e}")
+            import traceback
+            traceback.print_exc()
+            
+            return Response({
+                'error': '获取开放时间数据失败',
+                'detail': str(e)
+            }, status=500)
+    
+    def _normalize_time(self, time_str):
+        """
+        将时间字符串标准化为小时和分钟
+        返回 (hour, minute) 元组
+        """
+        if ':' not in time_str and time_str.isdigit():
+            # 只有小时数，如 "9"
+            return int(time_str), 0
+        elif ':' in time_str:
+            # 包含小时和分钟，如 "9:30"
+            hour, minute = time_str.split(':')
+            return int(hour), int(minute)
+        else:
+            # 无法解析的格式
+            raise ValueError(f"无法解析时间格式: {time_str}")
+    
+    def _expand_weekday_range(self, start_day, end_day):
+        """展开工作日范围为具体工作日列表"""
+        weekdays = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
+        result = []
         
-        # 返回处理后的数据
-        result = {
-            'time_ranges': processed_data,
-            'total_count': len(processed_data)
-        }
+        if start_day not in weekdays or end_day not in weekdays:
+            return result
+            
+        start_idx = weekdays.index(start_day)
+        end_idx = weekdays.index(end_day)
         
-        return Response(result)
+        if start_idx <= end_idx:
+            # 常规情况：如周一-周五
+            return weekdays[start_idx:end_idx+1]
+        else:
+            # 跨周情况：如周日-周二
+            return weekdays[start_idx:] + weekdays[:end_idx+1]
+    
+    def _optimize_weekdays(self, weekdays_set):
+        """优化工作日表示，尝试将连续的工作日合并为范围表示"""
+        if not weekdays_set:
+            return ''
+            
+        weekdays_order = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
+        # 将工作日集合转换为有序列表
+        sorted_weekdays = sorted(list(weekdays_set), key=lambda d: weekdays_order.index(d))
+        
+        # 如果包含所有7天，直接返回"周一-周日"
+        if len(sorted_weekdays) == 7:
+            return '周一-周日'
+            
+        # 尝试查找连续的工作日范围
+        ranges = []
+        current_range = []
+        
+        for day in sorted_weekdays:
+            idx = weekdays_order.index(day)
+            if not current_range:
+                current_range.append(day)
+            elif idx == weekdays_order.index(current_range[-1]) + 1:
+                current_range.append(day)
+            else:
+                ranges.append(current_range)
+                current_range = [day]
+        
+        if current_range:
+            ranges.append(current_range)
+        
+        # 将范围转换为字符串表示
+        result_parts = []
+        for r in ranges:
+            if len(r) >= 3:  # 3天或更多使用范围表示
+                result_parts.append(f"{r[0]}-{r[-1]}")
+            else:  # 1-2天使用逗号分隔
+                result_parts.extend(r)
+        
+        return ','.join(result_parts)
     
     def _parse_weekdays(self, weekdays_str):
-        """解析工作日字符串为标准格式"""
+        """解析工作日字符串为标准格式（保留用于兼容）"""
         if not weekdays_str:
             return '周一-周日'  # 默认返回全周
         
@@ -506,7 +683,7 @@ class ScenicSearchView(views.APIView):
                 # 处理类型和级别组合
                 if scenic_type and level:
                     # 特殊处理A级景区
-                    if scenic_type == '景区':
+                    if scenic_type == '景区' or scenic_type == 'A级景区':
                         print(f"[类型+级别] 特殊处理景区类型: 查询包含'{level}'的景区")
                         query &= Q(scenic_type__icontains=level)
                     else:
@@ -522,7 +699,7 @@ class ScenicSearchView(views.APIView):
                 
                 # 仅类型
                 elif scenic_type:
-                    if scenic_type == '景区':
+                    if scenic_type == '景区' or scenic_type == 'A级景区':
                         # 景区类型特殊处理：包含所有A级景区
                         print(f"[类型筛选] 执行景区类型搜索: 包含所有A级和省级景区")
                         type_query = (
@@ -1439,106 +1616,63 @@ class TicketBoxplotByTypeView(views.APIView):
 class TicketBoxplotByLevelView(views.APIView):
     """指定景区类型各等级门票价格箱线图数据"""
     permission_classes = [permissions.AllowAny]
-
+    
     def get(self, request):
-        try:
-            # 获取请求参数
-            scenic_type = request.GET.get('type', '景区')
+        # 获取请求参数
+        scenic_type = request.GET.get('type', '景区')
+        
+        # 获取所有景区数据
+        all_scenic_data = ScenicData.objects.all()
+        
+        # 构建查询条件
+        if scenic_type == '景区':
+            # 对于景区类型，查询以5A景区、4A景区等开头的景区
+            query = Q(scenic_type__contains='5A景区') | Q(scenic_type__contains='4A景区') | \
+                    Q(scenic_type__contains='3A景区') | Q(scenic_type__contains='2A景区') | \
+                    Q(scenic_type__contains='省级景区')
             
-            # 获取所有景区数据
-            all_scenic_data = ScenicData.objects.all()
+            # 定义要分析的景区等级
+            scenic_levels = ['5A景区', '4A景区', '3A景区', '2A景区', '省级景区']
+        elif scenic_type == '水利风景区':
+            # 对于水利风景区，查询包含"水利风景区"的记录
+            query = Q(scenic_type__contains='水利风景区')
             
-            # 构建查询条件
-            if scenic_type == '景区':
-                # 对于景区类型，查询以5A景区、4A景区等开头的景区
-                query = Q(scenic_type__contains='5A景区') | Q(scenic_type__contains='4A景区') | \
-                        Q(scenic_type__contains='3A景区') | Q(scenic_type__contains='2A景区') | \
-                        Q(scenic_type__contains='省级景区')
-                
-                # 定义要分析的景区等级
-                scenic_levels = ['5A景区', '4A景区', '3A景区', '2A景区', '省级景区']
-            elif scenic_type == '水利风景区':
-                # 对于水利风景区，查询包含"水利风景区"的记录
-                query = Q(scenic_type__contains='水利风景区')
-                
-                # 水利风景区只有"是"一个等级
-                scenic_levels = ['水利风景区']
-            else:
-                # 对于其他类型，查询包含该类型的记录
-                query = Q(scenic_type__contains=scenic_type)
-                
-                # 从type_level_data.json文件中获取该类型的等级列表
-                import json
-                try:
-                    with open('forward/my-forward/src/assets/search/type_level_data.json', 'r', encoding='utf-8') as f:
-                        type_level_data = json.load(f)
-                        scenic_levels = type_level_data.get('typeLevels', {}).get(scenic_type, [])
-                except (FileNotFoundError, json.JSONDecodeError):
-                    # 如果文件不存在或解析失败，使用默认等级
-                    scenic_levels = ['国家级', '省级', '市级', '县级']
+            # 水利风景区只有"是"一个等级
+            scenic_levels = ['水利风景区']
+        else:
+            # 对于其他类型，查询包含该类型的记录
+            query = Q(scenic_type__contains=scenic_type)
             
-            # 执行查询，获取符合条件的景区数据
-            type_scenic_data = all_scenic_data.filter(query)
-            
-            result = []
-            
-            if scenic_type == '景区':
-                # 对于景区类型，按5A、4A等级分组
-                for level in scenic_levels:
-                    # 收集该等级的所有价格数据
-                    price_data = []
-                    
-                    for scenic in type_scenic_data:
-                        if level in scenic.scenic_type:
-                            price_str = scenic.min_price
-                            if price_str and price_str not in ['请咨询景区', '免费']:
-                                try:
-                                    price = float(price_str)
-                                    price_data.append(price)
-                                except (ValueError, TypeError):
-                                    pass  # 忽略无法转换为数字的价格
-                    
-                    # 计算箱线图数据
-                    if price_data:
-                        # 排序价格数据
-                        price_data.sort()
-                        
-                        # 计算最小值、最大值、中位数和四分位数
-                        min_price = min(price_data)
-                        max_price = max(price_data)
-                        
-                        # 计算中位数和四分位数
-                        n = len(price_data)
-                        median_idx = n // 2
-                        median_price = price_data[median_idx] if n % 2 == 1 else (price_data[median_idx-1] + price_data[median_idx]) / 2
-                        
-                        q1_idx = n // 4
-                        q1_price = price_data[q1_idx] if n % 4 != 0 else (price_data[q1_idx-1] + price_data[q1_idx]) / 2
-                        
-                        q3_idx = 3 * n // 4
-                        q3_price = price_data[q3_idx] if 3 * n % 4 != 0 else (price_data[q3_idx-1] + price_data[q3_idx]) / 2
-                        
-                        result.append({
-                            'level': level,
-                            'min_price': round(min_price, 2),
-                            'q1_price': round(q1_price, 2),
-                            'median_price': round(median_price, 2),
-                            'q3_price': round(q3_price, 2),
-                            'max_price': round(max_price, 2),
-                            'count': len(price_data)
-                        })
-            elif scenic_type == '水利风景区':
-                # 对于水利风景区，只统计一个等级
+            # 从type_level_data.json文件中获取该类型的等级列表
+            import json
+            try:
+                with open('forward/my-forward/src/assets/search/type_level_data.json', 'r', encoding='utf-8') as f:
+                    type_level_data = json.load(f)
+                    scenic_levels = type_level_data.get('typeLevels', {}).get(scenic_type, [])
+            except (FileNotFoundError, json.JSONDecodeError):
+                # 如果文件不存在或解析失败，使用默认等级
+                scenic_levels = ['国家级', '省级', '市级', '县级']
+        
+        # 执行查询，获取符合条件的景区数据
+        type_scenic_data = all_scenic_data.filter(query)
+        
+        result = []
+        
+        if scenic_type == '景区':
+            # 对于景区类型，按5A、4A等级分组
+            for level in scenic_levels:
+                # 收集该等级的所有价格数据
                 price_data = []
                 
                 for scenic in type_scenic_data:
-                    price_str = scenic.min_price
-                    if price_str and price_str not in ['请咨询景区', '免费']:
-                        try:
-                            price = float(price_str)
-                            price_data.append(price)
-                        except (ValueError, TypeError):
-                            pass  # 忽略无法转换为数字的价格
+                    if level in scenic.scenic_type:
+                        price_str = scenic.min_price
+                        if price_str and price_str not in ['请咨询景区', '免费']:
+                            try:
+                                price = float(price_str)
+                                price_data.append(price)
+                            except (ValueError, TypeError):
+                                pass  # 忽略无法转换为数字的价格
                 
                 # 计算箱线图数据
                 if price_data:
@@ -1561,7 +1695,7 @@ class TicketBoxplotByLevelView(views.APIView):
                     q3_price = price_data[q3_idx] if 3 * n % 4 != 0 else (price_data[q3_idx-1] + price_data[q3_idx]) / 2
                     
                     result.append({
-                        'level': '水利风景区',
+                        'level': level,
                         'min_price': round(min_price, 2),
                         'q1_price': round(q1_price, 2),
                         'median_price': round(median_price, 2),
@@ -1569,64 +1703,223 @@ class TicketBoxplotByLevelView(views.APIView):
                         'max_price': round(max_price, 2),
                         'count': len(price_data)
                     })
-            else:
-                # 对于其他类型，提取"类型:等级"格式的信息
-                level_price_map = {}
+        elif scenic_type == '水利风景区':
+            # 对于水利风景区，只统计一个等级
+            price_data = []
+            
+            for scenic in type_scenic_data:
+                price_str = scenic.min_price
+                if price_str and price_str not in ['请咨询景区', '免费']:
+                    try:
+                        price = float(price_str)
+                        price_data.append(price)
+                    except (ValueError, TypeError):
+                        pass  # 忽略无法转换为数字的价格
+            
+            # 计算箱线图数据
+            if price_data:
+                # 排序价格数据
+                price_data.sort()
                 
-                for scenic in type_scenic_data:
-                    # 从scenic_type字段中提取类型和等级
-                    types_and_levels = scenic.scenic_type.split(',')
-                    for item in types_and_levels:
-                        item = item.strip()
-                        if scenic_type in item:
-                            # 提取等级
-                            if ':' in item:
-                                level = item.split(':')[1].strip()
-                                
-                                # 处理价格
-                                price_str = scenic.min_price
-                                if price_str and price_str not in ['请咨询景区', '免费']:
-                                    try:
-                                        price = float(price_str)
-                                        if level not in level_price_map:
-                                            level_price_map[level] = []
+                # 计算最小值、最大值、中位数和四分位数
+                min_price = min(price_data)
+                max_price = max(price_data)
+                
+                # 计算中位数和四分位数
+                n = len(price_data)
+                median_idx = n // 2
+                median_price = price_data[median_idx] if n % 2 == 1 else (price_data[median_idx-1] + price_data[median_idx]) / 2
+                
+                q1_idx = n // 4
+                q1_price = price_data[q1_idx] if n % 4 != 0 else (price_data[q1_idx-1] + price_data[q1_idx]) / 2
+                
+                q3_idx = 3 * n // 4
+                q3_price = price_data[q3_idx] if 3 * n % 4 != 0 else (price_data[q3_idx-1] + price_data[q3_idx]) / 2
+                
+                result.append({
+                    'level': '水利风景区',
+                    'min_price': round(min_price, 2),
+                    'q1_price': round(q1_price, 2),
+                    'median_price': round(median_price, 2),
+                    'q3_price': round(q3_price, 2),
+                    'max_price': round(max_price, 2),
+                    'count': len(price_data)
+                })
+        else:
+            # 对于其他类型，提取"类型:等级"格式的信息
+            level_price_map = {}
+            
+            for scenic in type_scenic_data:
+                # 从scenic_type字段中提取类型和等级
+                types_and_levels = scenic.scenic_type.split(',')
+                for item in types_and_levels:
+                    item = item.strip()
+                    if scenic_type in item:
+                        # 提取等级
+                        if ':' in item:
+                            level = item.split(':')[1].strip()
+                            
+                            # 处理价格
+                            price_str = scenic.min_price
+                            if price_str and price_str not in ['请咨询景区', '免费']:
+                                try:
+                                    price = float(price_str)
+                                    if level not in level_price_map:
+                                        level_price_map[level] = []
                                         
                                         level_price_map[level].append(price)
-                                    except (ValueError, TypeError):
-                                        pass  # 忽略无法转换为数字的价格
-                
-                # 计算各等级的箱线图数据
-                for level, price_data in level_price_map.items():
-                    if price_data:
-                        # 排序价格数据
-                        price_data.sort()
-                        
-                        # 计算最小值、最大值、中位数和四分位数
-                        min_price = min(price_data)
-                        max_price = max(price_data)
-                        
-                        # 计算中位数和四分位数
-                        n = len(price_data)
-                        median_idx = n // 2
-                        median_price = price_data[median_idx] if n % 2 == 1 else (price_data[median_idx-1] + price_data[median_idx]) / 2
-                        
-                        q1_idx = n // 4
-                        q1_price = price_data[q1_idx] if n % 4 != 0 else (price_data[q1_idx-1] + price_data[q1_idx]) / 2
-                        
-                        q3_idx = 3 * n // 4
-                        q3_price = price_data[q3_idx] if 3 * n % 4 != 0 else (price_data[q3_idx-1] + price_data[q3_idx]) / 2
-                        
-                        result.append({
-                            'level': level,
-                            'min_price': round(min_price, 2),
-                            'q1_price': round(q1_price, 2),
-                            'median_price': round(median_price, 2),
-                            'q3_price': round(q3_price, 2),
-                            'max_price': round(max_price, 2),
-                            'count': len(price_data)
-                        })
+                                except (ValueError, TypeError):
+                                    pass  # 忽略无法转换为数字的价格
             
-            return Response(result)
-        except Exception as e:
-            logger.error(f"获取景区类型各等级箱线图数据失败: {str(e)}")
-            return Response({"error": "获取数据失败"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            # 计算各等级的箱线图数据
+            for level, price_data in level_price_map.items():
+                if price_data:
+                    # 排序价格数据
+                    price_data.sort()
+                    
+                    # 计算最小值、最大值、中位数和四分位数
+                    min_price = min(price_data)
+                    max_price = max(price_data)
+                    
+                    # 计算中位数和四分位数
+                    n = len(price_data)
+                    median_idx = n // 2
+                    median_price = price_data[median_idx] if n % 2 == 1 else (price_data[median_idx-1] + price_data[median_idx]) / 2
+                    
+                    q1_idx = n // 4
+                    q1_price = price_data[q1_idx] if n % 4 != 0 else (price_data[q1_idx-1] + price_data[q1_idx]) / 2
+                    
+                    q3_idx = 3 * n // 4
+                    q3_price = price_data[q3_idx] if 3 * n % 4 != 0 else (price_data[q3_idx-1] + price_data[q3_idx]) / 2
+                    
+                    result.append({
+                        'level': level,
+                        'min_price': round(min_price, 2),
+                        'q1_price': round(q1_price, 2),
+                        'median_price': round(median_price, 2),
+                        'q3_price': round(q3_price, 2),
+                        'max_price': round(max_price, 2),
+                        'count': len(price_data)
+                    })
+        
+        return Response(result)
+
+class ScenicTypeDistributionView(views.APIView):
+    """景区类型分布数据视图 - 用于雷达图和旭日图"""
+    permission_classes = [permissions.AllowAny]
+    
+    def get(self, request):
+        # 加载类型和等级的映射
+        # 使用os.path获取文件的绝对路径
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        json_file_path = os.path.join(current_dir, 'type_level_data.json')
+        
+        try:
+            with open(json_file_path, 'r', encoding='utf-8') as f:
+                type_level_data = json.load(f)
+        except FileNotFoundError:
+            # 如果找不到文件，返回错误响应
+            return Response({"error": "配置文件不存在"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        types = type_level_data['types']
+        type_levels = type_level_data['typeLevels']
+        
+        # 针对雷达图的数据 - 各类型景区数量
+        radar_data = []
+        # 针对旭日图的数据 - 各类型的等级分布
+        sunburst_data = []
+        root_data = {"name": "景区类型", "children": []}
+        
+        # 初始化未分类景区计数
+        unclassified_count = 0
+        
+        # 处理所有景区数据
+        scenic_data = ScenicData.objects.all()
+        
+        # 类型计数字典
+        type_counts = defaultdict(int)
+        # 类型-等级计数字典
+        type_level_counts = defaultdict(lambda: defaultdict(int))
+        
+        for scenic in scenic_data:
+            # 检查是否有景区类型字段
+            if not scenic.scenic_type or scenic.scenic_type in ['null', 'xxx', '']:
+                unclassified_count += 1
+                continue
+            
+            # 已找到的类型标记
+            found_types = set()
+            
+            # 按照类型分割字符串
+            type_items = scenic.scenic_type.split(',')
+            
+            for item in type_items:
+                item = item.strip()
+                
+                # 处理"景区"类型 (5A景区、4A景区等)
+                if any(level in item for level in ["5A景区", "4A景区", "3A景区", "2A景区", "省级景区"]):
+                    type_counts["景区"] += 1
+                    found_types.add("景区")
+                    
+                    # 确定景区的具体等级
+                    for level in ["5A景区", "4A景区", "3A景区", "2A景区", "省级景区"]:
+                        if level in item:
+                            type_level_counts["景区"][level] += 1
+                            break
+                
+                # 处理"水利风景区"类型
+                elif "水利风景区" in item:
+                    type_counts["水利风景区"] += 1
+                    found_types.add("水利风景区")
+                    type_level_counts["水利风景区"]["是"] += 1
+                
+                # 处理其他类型（格式为"类型:等级"）
+                else:
+                    # 尝试分割类型和等级
+                    parts = item.split(':')
+                    
+                    if len(parts) == 2:
+                        scenic_type, level = parts
+                        
+                        # 检查是否是已知类型
+                        if scenic_type in types:
+                            type_counts[scenic_type] += 1
+                            found_types.add(scenic_type)
+                            type_level_counts[scenic_type][level] += 1
+            
+            # 如果没有找到任何已知类型，则归为未分类
+            if not found_types:
+                unclassified_count += 1
+        
+        # 处理雷达图数据
+        for scenic_type in types:
+            radar_data.append({
+                "name": scenic_type,
+                "value": type_counts[scenic_type]
+            })
+        
+        # 添加未分类类型（仅对雷达图）
+        radar_data.append({
+            "name": "未分类景区",
+            "value": unclassified_count
+        })
+        
+        # 处理旭日图数据
+        for scenic_type in types:
+            if type_counts[scenic_type] > 0:
+                type_node = {"name": scenic_type, "value": type_counts[scenic_type], "children": []}
+                
+                # 添加该类型的所有等级
+                for level, count in type_level_counts[scenic_type].items():
+                    if count > 0:
+                        type_node["children"].append({
+                            "name": level,
+                            "value": count
+                        })
+                
+                root_data["children"].append(type_node)
+        
+        return Response({
+            "radar_data": radar_data,
+            "sunburst_data": root_data
+        })

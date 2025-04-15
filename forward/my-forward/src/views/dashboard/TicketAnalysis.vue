@@ -11,7 +11,6 @@ interface ExtendedOpenTimeData {
   timeRange: string
   count: number
   weekdays?: string
-  type?: string
   id?: string
   name?: string
 }
@@ -663,11 +662,23 @@ const initHeatmapChart = () => {
     // 初始化一个 7x24 的零矩阵 (7天 x 24小时)
     const heatmapMatrix: number[][] = Array(7).fill(0).map(() => Array(24).fill(0))
     
+    // 创建一个用于跟踪每个景区在每个时间点是否已经计数的映射
+    // 格式: {scenic_id1: {0_9: true, 1_10: true, ...}, scenic_id2: {...}}
+    // 0_9表示周一9点，1_10表示周二10点，以此类推
+    const scenicTimeMap: Record<string, Record<string, boolean>> = {}
+    
     // 处理数据填充热力图矩阵
     data.forEach((item: ExtendedOpenTimeData) => {
-      if (!item.timeRange) {
-        console.log(`项目缺少 timeRange 属性:`, item)
+      if (!item.timeRange || !item.id) {
+        console.log(`项目缺少必要属性:`, item)
         return
+      }
+      
+      const scenicId = item.id
+      
+      // 初始化当前景区的时间点映射
+      if (!scenicTimeMap[scenicId]) {
+        scenicTimeMap[scenicId] = {}
       }
       
       // 解析工作日信息
@@ -684,7 +695,7 @@ const initHeatmapChart = () => {
         return
       }
       
-      // 更新热力图矩阵
+      // 更新热力图矩阵，确保每个景区的每个时间点只计数一次
       weekdayList.forEach(day => {
         const dayIndex = weekdays.indexOf(day)
         if (dayIndex < 0) return
@@ -692,7 +703,15 @@ const initHeatmapChart = () => {
         hourRanges.forEach(hourRange => {
           for (let hour = hourRange[0]; hour < hourRange[1]; hour++) {
             if (hour >= 0 && hour < 24) {
-              heatmapMatrix[dayIndex][hour] += 1
+              // 创建时间点的唯一标识，例如"0_9"表示周一9点
+              const timeKey = `${dayIndex}_${hour}`
+              
+              // 检查该景区的这个时间点是否已经计数过
+              if (!scenicTimeMap[scenicId][timeKey]) {
+                // 如果没有计数过，则递增矩阵中的值并标记为已计数
+                heatmapMatrix[dayIndex][hour] += 1
+                scenicTimeMap[scenicId][timeKey] = true
+              }
             }
           }
         })
@@ -731,9 +750,10 @@ const initHeatmapChart = () => {
         }
       },
       grid: {
-        left: '3%',
+        left: '4%',
         right: '4%',
-        bottom: '10%',
+        top: '8%',
+        bottom: '15%',
         containLabel: true
       },
       xAxis: {
@@ -746,12 +766,12 @@ const initHeatmapChart = () => {
           interval: 0,
           rotate: 45,
           margin: 8,
-          fontSize: 10,
-          formatter: (value: string) => value  // 简化显示
+          fontSize: 9,
+          formatter: (value: string) => value.split(':')[0]  // 只显示小时数
         },
         name: '小时',
-        nameLocation: 'middle',
-        nameGap: 40
+        nameLocation: 'end',
+        nameGap: 5
       },
       yAxis: {
         type: 'category',
@@ -807,20 +827,21 @@ const initRadarChart = (data: ExtendedOpenTimeData[]) => {
   
   if (!data || data.length === 0) return
   
-  // 统计不同景区类型在8个时间段的分布
-  const typeData: Record<string, number[]> = {
-    '景区': Array(8).fill(0),
-    '博物馆': Array(8).fill(0),
-    '水利风景区': Array(8).fill(0),
-    '公园': Array(8).fill(0),
-    '其他': Array(8).fill(0)
-  }
+  // 统计所有景区在8个时间段的分布（不再按类型区分）
+  const timeDistribution = Array(8).fill(0)
+  
+  // 创建一个用于跟踪每个景区在每个时间段是否已经计数的映射
+  const scenicRangeMap: Record<string, Record<number, boolean>> = {}
   
   data.forEach((item: ExtendedOpenTimeData) => {
-    if (!item.timeRange) return
+    if (!item.timeRange || !item.id) return
     
-    // 如果没有类型信息，使用默认类型"其他"
-    const type = item.type && Object.keys(typeData).includes(item.type) ? item.type : '其他'
+    const scenicId = item.id
+    
+    // 初始化当前景区的时间段映射
+    if (!scenicRangeMap[scenicId]) {
+      scenicRangeMap[scenicId] = {}
+    }
     
     // 解析时间范围
     const hourRanges = parseTimeRanges(item.timeRange)
@@ -830,24 +851,27 @@ const initRadarChart = (data: ExtendedOpenTimeData[]) => {
         if (hour >= 0 && hour < 24) {
           // 将小时映射到8个时间段
           const rangeIndex = hourToRangeIndex(hour)
-          typeData[type][rangeIndex] += 1; // 每个景区每个时间段只计数一次（由后端保证）
+          
+          // 检查该景区的这个时间段是否已经计数过
+          if (!scenicRangeMap[scenicId][rangeIndex]) {
+            // 如果没有计数过，则递增分布数据并标记为已计数
+            timeDistribution[rangeIndex] += 1
+            scenicRangeMap[scenicId][rangeIndex] = true
+          }
         }
       }
     })
   })
   
-  console.log('生成的雷达图数据:', typeData)
-  console.log('雷达图数据中是否有非零值:', Object.values(typeData).some(values => values.some(v => v > 0)))
+  console.log('生成的雷达图数据:', timeDistribution)
+  console.log('雷达图数据中是否有非零值:', timeDistribution.some(v => v > 0))
   
   // 将数据转换为雷达图所需格式
-  const seriesData = Object.keys(typeData).map(type => {
-    const hasData = typeData[type].some(v => v > 0)
-    return {
-      name: type,
-      value: hasData ? typeData[type] : [],  // 如果没有数据，使用空数组而不是null
-      areaStyle: { opacity: 0.3 }
-    }
-  }).filter(item => item.value.length > 0)  // 过滤掉没有数据的系列
+  const seriesData = [{
+    name: '景区开放数量',
+    value: timeDistribution,
+    areaStyle: { opacity: 0.3 }
+  }]
   
   radarData.value = seriesData
   
@@ -857,12 +881,12 @@ const initRadarChart = (data: ExtendedOpenTimeData[]) => {
   }
   
   // 计算最大值，避免所有数据为0的问题
-  const maxValue = Math.max(1, ...Object.values(typeData).flat())
+  const maxValue = Math.max(1, ...timeDistribution)
   
   // 配置雷达图
   const option: EChartsOption = {
     title: {
-      text: '不同类型景区开放时间分布',
+      text: '景区开放时间分布',
       left: 'center',
       textStyle: {
         fontSize: 14
@@ -870,13 +894,6 @@ const initRadarChart = (data: ExtendedOpenTimeData[]) => {
     },
     tooltip: {
       trigger: 'item'
-    },
-    legend: {
-      bottom: '5%',
-      data: Object.keys(typeData).filter(type => {
-        // 只显示有数据的类型
-        return typeData[type].some(v => v > 0)
-      })
     },
     radar: {
       indicator: timeRangeNames.map(name => ({ 
@@ -1074,7 +1091,7 @@ onUnmounted(() => {
         <el-card class="chart-card">
           <template #header>
             <div class="card-header">
-              <span class="title-text">不同类型景区开放时间分布</span>
+              <span class="title-text">景区开放时间分布</span>
             </div>
           </template>
           
@@ -1099,7 +1116,7 @@ onUnmounted(() => {
               type="info"
               :closable="false"
             >
-              雷达图展示了不同类型景区在各时间段的开放情况对比，便于分析不同类型景区的开放时间特点
+              雷达图展示了景区在各时间段的开放情况，便于分析景区的开放时间特点
             </el-alert>
           </div>
         </el-card>

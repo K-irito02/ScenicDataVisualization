@@ -1,29 +1,9 @@
 <template>
   <div class="comment-analysis-container">
-    <el-row :gutter="20">
+    <el-row :gutter="30">
+      <!-- 左侧列 - 图表区域 -->
       <el-col :span="12">
-        <card-container title="景区情感倾向分布">
-          <div class="chart-wrapper">
-            <base-chart 
-              :options="sentimentPieOptions" 
-              height="400px"
-              v-loading="sentimentLoading"
-            />
-          </div>
-          
-          <div class="analysis-summary">
-            <h4>数据分析结论</h4>
-            <ul>
-              <li>情感倾向为"优"的景区占比最大，表明大部分景区评价良好</li>
-              <li>不同情感倾向的分布反映游客对景区的整体满意度</li>
-              <li>情感倾向为"良"的景区比例适中，说明有一定改进空间</li>
-              <li>情感倾向为"中"的景区需要重点关注，进行针对性改进</li>
-            </ul>
-          </div>
-        </card-container>
-      </el-col>
-      
-      <el-col :span="12">
+        <!-- 条形图在上面 -->
         <card-container title="景区类型情感分析">
           <template #actions>
             <el-select v-model="selectedType" placeholder="选择景区类型" size="small" @change="handleTypeChange">
@@ -39,33 +19,50 @@
           <div class="chart-wrapper">
             <base-chart 
               :options="sentimentBubbleOptions" 
-              height="500px"
+              height="490px"
               style="width: 100%;"
               v-loading="typeLoading"
             />
-            
-            <!-- 添加备用数据表格，确保数据可见 -->
-            <div v-if="typeData.length > 0" class="data-table-backup">
-              <h4>景区类型情感数据表</h4>
-              <el-table 
-                :data="typeData.filter(item => item.level !== 'xxx' && item.level !== 'null' && item.level !== null)" 
-                stripe 
-                style="width: 100%"
-              >
-                <el-table-column prop="level" label="景区级别" />
-                <el-table-column prop="avg_sentiment_score" label="情感得分">
-                  <template #default="scope">
-                    {{ Math.floor(Number(scope.row.avg_sentiment_score)) }}.00
-                  </template>
-                </el-table-column>
-                <el-table-column prop="avg_sentiment_magnitude" label="情感强度">
-                  <template #default="scope">
-                    {{ Number(scope.row.avg_sentiment_magnitude).toFixed(2) }}
-                  </template>
-                </el-table-column>
-                <el-table-column prop="count" label="景区数量" />
-              </el-table>
-            </div>
+          </div>
+        </card-container>
+        
+        <!-- 饼图在下面 -->
+        <card-container title="景区情感倾向分布" class="mt-20 bottom-card">
+          <div class="chart-wrapper">
+            <base-chart 
+              :options="sentimentPieOptions" 
+              height="400px"
+              v-loading="sentimentLoading"
+            />
+          </div>
+        </card-container>
+      </el-col>
+      
+      <!-- 右侧列 - 分析区域 -->
+      <el-col :span="12">
+        <!-- 条形图分析在上面 -->
+        <card-container title="景区类型情感数据分析">
+          <div v-if="typeData.length > 0" class="data-table-backup">
+            <h4>景区类型情感数据表</h4>
+            <el-table 
+              :data="typeData.filter(item => item.level !== 'xxx' && item.level !== 'null' && item.level !== null)" 
+              stripe 
+              style="width: 100%"
+              size="small"
+            >
+              <el-table-column prop="level" label="景区级别" />
+              <el-table-column prop="avg_sentiment_score" label="情感得分">
+                <template #default="scope">
+                  {{ Math.floor(Number(scope.row.avg_sentiment_score)) }}.00
+                </template>
+              </el-table-column>
+              <el-table-column prop="avg_sentiment_magnitude" label="情感强度">
+                <template #default="scope">
+                  {{ Number(scope.row.avg_sentiment_magnitude).toFixed(2) }}
+                </template>
+              </el-table-column>
+              <el-table-column prop="count" label="景区数量" />
+            </el-table>
           </div>
           
           <div class="analysis-summary">
@@ -75,6 +72,19 @@
               <li>高等级景区通常能引起更强烈的情感反应</li>
               <li>同类型不同等级景区间的情感得分差异反映了等级评定的合理性</li>
               <li>情感强度高的景区往往具有更鲜明的特色和更好的服务</li>
+            </ul>
+          </div>
+        </card-container>
+        
+        <!-- 饼图分析在下面 -->
+        <card-container title="情感倾向分析" class="mt-20 bottom-card">
+          <div class="analysis-summary">
+            <h4>数据分析结论</h4>
+            <ul>
+              <li>情感倾向为"优"的景区占比最大，表明大部分景区评价良好</li>
+              <li>不同情感倾向的分布反映游客对景区的整体满意度</li>
+              <li>情感倾向为"良"的景区比例适中，说明有一定改进空间</li>
+              <li>情感倾向为"中"的景区需要重点关注，进行针对性改进</li>
             </ul>
           </div>
         </card-container>
@@ -160,7 +170,7 @@ export default defineComponent({
         {
           name: '情感倾向',
           type: 'pie',
-          radius: ['40%', '70%'],
+          radius: ['20%', '70%'],
           avoidLabelOverlap: false,
           itemStyle: {
             borderRadius: 10,
@@ -190,7 +200,7 @@ export default defineComponent({
       ]
     }))
     
-    // 情感得分与景区类型等级气泡图配置
+    // 情感得分与景区类型等级条形图配置
     const sentimentBubbleOptions = computed<EChartsOption>(() => {
       // 获取当前选择类型的等级列表
       const validLevels = currentTypeLevels.value
@@ -310,7 +320,7 @@ export default defineComponent({
       
       try {
         // 请求情感倾向分布数据
-        const response = await axios.get('/data/sentiment-distribution/')
+        const response = await axios.get('/api/data/sentiment-distribution/')
         
         // 这里假设后端返回格式为 [{name: '优', value: 100}, {name: '良', value: 50}, {name: '中', value: 30}]
         sentimentData.value = response.data
@@ -319,13 +329,6 @@ export default defineComponent({
       } catch (error) {
         console.error('获取情感倾向分布数据失败:', error)
         ElMessage.error('获取情感倾向分布数据失败')
-        
-        // 使用模拟数据（仅供开发测试）
-        sentimentData.value = [
-          { name: '优', value: 65 },
-          { name: '良', value: 25 },
-          { name: '中', value: 10 }
-        ]
         
         sentimentLoading.value = false
       }
@@ -353,7 +356,7 @@ export default defineComponent({
         }
         
         // 请求情感得分与景区类型等级关系数据
-        const response = await axios.get('/data/sentiment-type/', { params })
+        const response = await axios.get('/api/data/sentiment-type/', { params })
         
         console.log('API响应数据:', response.data)
         console.log('API响应数据类型:', typeof response.data)
@@ -372,29 +375,6 @@ export default defineComponent({
       } catch (error) {
         console.error('获取情感得分与景区类型等级关系数据失败:', error)
         ElMessage.error('获取情感得分与景区类型等级关系数据失败')
-        
-        // 使用模拟数据（仅供开发测试）
-        if (scenicType === '森林公园') {
-          typeData.value = [
-            { level: '国家级', avg_sentiment_score: 254.38, avg_sentiment_magnitude: 0.18, count: 42 },
-            { level: '省级', avg_sentiment_score: 178.95, avg_sentiment_magnitude: 0.15, count: 36 },
-            { level: '市级', avg_sentiment_score: 125.64, avg_sentiment_magnitude: 0.12, count: 28 }
-          ]
-        } else if (scenicType === '景区') {
-          typeData.value = [
-            { level: '5A景区', avg_sentiment_score: 290.52, avg_sentiment_magnitude: 0.22, count: 25 },
-            { level: '4A景区', avg_sentiment_score: 240.18, avg_sentiment_magnitude: 0.19, count: 68 },
-            { level: '3A景区', avg_sentiment_score: 185.73, avg_sentiment_magnitude: 0.15, count: 97 },
-            { level: '2A景区', avg_sentiment_score: 150.34, avg_sentiment_magnitude: 0.12, count: 45 },
-            { level: '省级景区', avg_sentiment_score: 130.87, avg_sentiment_magnitude: 0.10, count: 32 }
-          ]
-        } else {
-          // 默认模拟数据
-          typeData.value = [
-            { level: '国家级', avg_sentiment_score: 230.45, avg_sentiment_magnitude: 0.20, count: 38 },
-            { level: '省级', avg_sentiment_score: 180.12, avg_sentiment_magnitude: 0.16, count: 42 }
-          ]
-        }
         
         typeLoading.value = false
       }
@@ -416,7 +396,7 @@ export default defineComponent({
       
       // 添加延迟检查，确保图表渲染
       setTimeout(() => {
-        console.log('图表渲染检查 - 当前气泡图配置:', sentimentBubbleOptions.value);
+        console.log('图表渲染检查 - 当前条形图配置:', sentimentBubbleOptions.value);
       }, 2000);
     })
     
@@ -442,7 +422,7 @@ export default defineComponent({
 
 .chart-wrapper {
   width: 100%;
-  margin-bottom: 20px;
+  margin-bottom: 0%;
 }
 
 .analysis-summary {
@@ -468,7 +448,8 @@ export default defineComponent({
 }
 
 .data-table-backup {
-  margin-top: 20px;
+  margin-top: 10px;
+  margin-bottom: 10px;
   border: 1px solid #ebeef5;
   padding: 15px;
   border-radius: 4px;
@@ -479,5 +460,32 @@ export default defineComponent({
   margin-top: 0;
   margin-bottom: 15px;
   text-align: center;
+}
+
+.mt-20 {
+  margin-top: 20px;
+}
+
+.title-with-select {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+/* 确保底部两张卡片高度一致 */
+.el-row {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.el-col {
+  display: flex;
+  flex-direction: column;
+}
+
+.bottom-card {
+  flex: 1;
+  margin-bottom: 0;
 }
 </style>

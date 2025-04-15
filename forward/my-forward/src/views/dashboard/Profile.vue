@@ -4,6 +4,7 @@ import { useUserStore } from '@/stores/user'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import axios from 'axios'
+import { Check, Upload, Picture, Location } from '@element-plus/icons-vue'
 
 const userStore = useUserStore()
 const activeTab = ref('info')
@@ -34,20 +35,94 @@ const rules = reactive<FormRules>({
 })
 
 // 上传头像
-const handleAvatarUpload = (file: File) => {
+const handleAvatarUpload = (options: any) => {
   uploading.value = true
   
-  // 这里应该是上传到服务器的逻辑
-  // 模拟上传过程
-  const reader = new FileReader()
-  reader.readAsDataURL(file)
-  reader.onload = () => {
-    profileForm.avatar = reader.result as string
-    uploading.value = false
-    ElMessage.success('头像上传成功')
+  // 从el-upload的http-request选项获取文件
+  const file = options.file
+  
+  // 检查文件是否有效
+  if (!file) {
+    ElMessage.error('文件无效，请重新选择');
+    uploading.value = false;
+    return false;
   }
   
-  return false // 阻止 el-upload 自动上传
+  console.log('准备上传文件:', file.name, file.type, file.size);
+  
+  // 创建FormData对象上传文件
+  const formData = new FormData();
+  formData.append('avatar', file);
+  
+  // 上传到服务器
+  axios({
+    method: 'post',
+    url: '/api/users/upload-avatar/',
+    data: formData,
+    headers: {
+      'Content-Type': 'multipart/form-data',
+      'Authorization': `Token ${userStore.token}`
+    }
+  }).then(response => {
+    console.log('头像上传成功响应:', response.data);
+    
+    // 确保响应中包含头像URL
+    if (!response.data.avatar_url) {
+      throw new Error('服务器未返回头像URL');
+    }
+    
+    // 获取头像相对路径 - 使用服务器返回的原始路径
+    let avatarPath = response.data.avatar_url;
+    console.log('服务器返回的头像路径:', avatarPath);
+    
+    // 确保路径以斜杠开头
+    if (!avatarPath.startsWith('/')) {
+      avatarPath = '/' + avatarPath;
+    }
+    
+    // 保存相对路径用于资料更新
+    profileForm.avatar = avatarPath;
+    
+    // 为了前端显示，构建完整URL
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+    let displayUrl = avatarPath;
+    
+    // 构建完整URL进行显示
+    if (!displayUrl.startsWith('http')) {
+      // 去除URL中可能的双斜杠
+      if (displayUrl.startsWith('/') && baseUrl.endsWith('/')) {
+        displayUrl = `${baseUrl}${displayUrl.substring(1)}`;
+      } else if (!displayUrl.startsWith('/') && !baseUrl.endsWith('/')) {
+        displayUrl = `${baseUrl}/${displayUrl}`;
+      } else {
+        displayUrl = `${baseUrl}${displayUrl}`;
+      }
+    }
+    
+    console.log('显示用的完整头像URL:', displayUrl);
+    
+    // 更新用户存储中的头像 - 使用相对路径
+    userStore.setUserInfo({ avatar: avatarPath });
+    ElMessage.success('头像上传成功');
+    
+    // 调用上传成功回调
+    if (options.onSuccess) {
+      options.onSuccess(response.data);
+    }
+  }).catch(error => {
+    console.error('头像上传完整错误:', error);
+    if (error.response) {
+      console.error('服务器响应:', error.response.data);
+    }
+    ElMessage.error(`头像上传失败: ${error.message || '未知错误'}`);
+    
+    // 调用上传失败回调
+    if (options.onError) {
+      options.onError(error);
+    }
+  }).finally(() => {
+    uploading.value = false;
+  });
 }
 
 // 保存个人信息
@@ -58,6 +133,13 @@ const saveProfile = async (formEl: FormInstance | undefined) => {
     if (valid) {
       loading.value = true
       try {
+        console.log('提交更新的个人资料:', {
+          username: profileForm.username,
+          email: profileForm.email,
+          location: profileForm.location,
+          avatar: profileForm.avatar
+        });
+        
         await userStore.updateProfile({
           username: profileForm.username,
           email: profileForm.email,
@@ -66,7 +148,16 @@ const saveProfile = async (formEl: FormInstance | undefined) => {
         })
         ElMessage.success('个人资料更新成功')
       } catch (error: any) {
-        ElMessage.error(error.response?.data?.message || '更新失败，请稍后重试')
+        console.error('个人资料更新错误:', error);
+        
+        // 显示更详细的错误信息
+        if (error.response?.data?.errors?.avatar) {
+          ElMessage.error(`头像URL格式错误: ${error.response.data.errors.avatar.join(', ')}`);
+        } else if (error.response?.data?.message) {
+          ElMessage.error(error.response.data.message);
+        } else {
+          ElMessage.error(error.message || '更新失败，请稍后重试');
+        }
       } finally {
         loading.value = false
       }
@@ -78,12 +169,28 @@ const saveProfile = async (formEl: FormInstance | undefined) => {
 const getFavorites = async () => {
   favoritesLoading.value = true
   try {
-    const response = await axios.get('/api/favorites/list/', {
-      headers: { Authorization: `Bearer ${userStore.token}` }
+    // 使用userStore提供的方法获取收藏列表
+    await userStore.fetchFavorites()
+    // 从API获取完整的收藏详情
+    const response = await axios.get('/api/favorites/', {
+      headers: { Authorization: `Token ${userStore.token}` }
     })
-    favorites.value = response.data
+    
+    console.log('收藏列表响应数据:', response.data);
+    
+    // 处理不同结构的响应数据
+    if (Array.isArray(response.data)) {
+      favorites.value = response.data;
+    } else if (response.data && Array.isArray(response.data.results)) {
+      favorites.value = response.data.results;
+    } else {
+      // 处理其他类型的响应格式
+      favorites.value = [];
+      console.warn('收藏列表数据格式不符合预期:', response.data);
+    }
   } catch (error) {
     ElMessage.error('获取收藏列表失败，请稍后重试')
+    console.error('获取收藏列表错误:', error)
   } finally {
     favoritesLoading.value = false
   }
@@ -133,7 +240,7 @@ const userInfo = computed(() => {
     <el-card>
       <template #header>
         <div class="card-header">
-          <span>个人中心</span>
+          <span class="header-title">个人中心</span>
         </div>
       </template>
       
@@ -144,19 +251,43 @@ const userInfo = computed(() => {
             <div class="avatar-section">
               <el-avatar 
                 :src="profileForm.avatar || 'https://cube.elemecdn.com/3/7c/3ea6beec64369c2642b92c6726f1epng.png'" 
-                :size="100" 
-              />
-              <el-upload
-                class="avatar-uploader"
-                action=""
-                :show-file-list="false"
-                :auto-upload="false"
-                :on-change="handleAvatarUpload"
+                :size="120" 
+                class="user-avatar"
               >
-                <el-button type="primary" size="small" :loading="uploading">
-                  更换头像
-                </el-button>
-              </el-upload>
+                <template #error>
+                  <el-icon style="font-size: 30px; color: #909399;"><Picture /></el-icon>
+                </template>
+              </el-avatar>
+              <div class="avatar-upload-container">
+                <el-upload
+                  class="avatar-uploader"
+                  action=""
+                  :show-file-list="false"
+                  :auto-upload="false"
+                  :http-request="handleAvatarUpload"
+                  accept="image/jpeg,image/png,image/gif"
+                  :before-upload="(file: File) => { 
+                    const isLt5M = file.size / 1024 / 1024 < 5;
+                    if (!isLt5M) {
+                      ElMessage.error('上传头像不能超过5MB!');
+                      return false;
+                    }
+                    const isImage = ['image/jpeg', 'image/png', 'image/gif'].includes(file.type);
+                    if (!isImage) {
+                      ElMessage.error('只能上传JPG、PNG或GIF格式的图片!');
+                      return false;
+                    }
+                    return true;
+                  }"
+                >
+                  <el-button type="primary" size="small" :loading="uploading" class="upload-btn">
+                    <el-icon class="el-icon--left"><Upload /></el-icon>更换头像
+                  </el-button>
+                  <div class="el-upload__tip">
+                    支持 JPG、PNG、GIF 格式，不超过 5MB
+                  </div>
+                </el-upload>
+              </div>
             </div>
             
             <div class="info-form-section">
@@ -165,13 +296,14 @@ const userInfo = computed(() => {
                 :model="profileForm"
                 :rules="rules"
                 label-position="top"
+                class="profile-form"
               >
                 <el-form-item label="用户名" prop="username">
-                  <el-input v-model="profileForm.username" />
+                  <el-input v-model="profileForm.username" placeholder="请输入用户名" />
                 </el-form-item>
                 
                 <el-form-item label="邮箱" prop="email">
-                  <el-input v-model="profileForm.email" />
+                  <el-input v-model="profileForm.email" placeholder="请输入邮箱地址" />
                 </el-form-item>
                 
                 <el-form-item label="所在地" prop="location">
@@ -183,8 +315,9 @@ const userInfo = computed(() => {
                     type="primary" 
                     @click="saveProfile(profileFormRef)" 
                     :loading="loading"
+                    class="save-btn"
                   >
-                    保存修改
+                    <el-icon class="el-icon--left"><Check /></el-icon>保存修改
                   </el-button>
                 </el-form-item>
               </el-form>
@@ -194,7 +327,14 @@ const userInfo = computed(() => {
         
         <!-- 收藏列表标签页 -->
         <el-tab-pane label="我的收藏" name="favorites">
-          <el-empty v-if="favorites.length === 0 && !favoritesLoading" description="暂无收藏内容" />
+          <el-empty v-if="favorites.length === 0 && !favoritesLoading" description="暂无收藏内容">
+            <template #description>
+              <p>您还没有收藏任何景区</p>
+              <el-button type="primary" @click="$router.push('/dashboard/search')">
+                去浏览景区
+              </el-button>
+            </template>
+          </el-empty>
           
           <div v-loading="favoritesLoading" class="favorites-container">
             <el-card 
@@ -263,6 +403,12 @@ const userInfo = computed(() => {
   align-items: center;
 }
 
+.header-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #303133;
+}
+
 .user-info-container {
   display: flex;
   flex-direction: column;
@@ -274,25 +420,69 @@ const userInfo = computed(() => {
   flex-direction: column;
   align-items: center;
   gap: 15px;
+  padding: 20px;
+  background-color: #f5f7fa;
+  border-radius: 8px;
+}
+
+.user-avatar {
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+  border: 4px solid #fff;
+}
+
+.avatar-upload-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 10px;
 }
 
 .avatar-uploader {
   margin-top: 5px;
 }
 
+.upload-btn {
+  transition: all 0.3s;
+}
+
+.upload-btn:hover {
+  transform: translateY(-2px);
+}
+
+.el-upload__tip {
+  margin-top: 8px;
+  color: #909399;
+  font-size: 12px;
+}
+
 .info-form-section {
   margin-top: 20px;
 }
 
+.profile-form .el-form-item {
+  margin-bottom: 22px;
+}
+
+.save-btn {
+  width: 100%;
+  margin-top: 10px;
+}
+
 .favorites-container {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 20px;
   margin-top: 20px;
 }
 
 .favorite-item {
   height: 100%;
+  transition: all 0.3s;
+}
+
+.favorite-item:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 15px rgba(0, 0, 0, 0.1);
 }
 
 .favorite-content {
@@ -303,9 +493,10 @@ const userInfo = computed(() => {
 
 .scenic-image {
   width: 100%;
-  height: 150px;
+  height: 180px;
   object-fit: cover;
   border-radius: 4px;
+  margin-bottom: 12px;
 }
 
 .image-placeholder {
@@ -328,6 +519,7 @@ const userInfo = computed(() => {
   margin: 0 0 10px 0;
   font-size: 16px;
   font-weight: 600;
+  color: #303133;
 }
 
 .scenic-location {
@@ -336,17 +528,17 @@ const userInfo = computed(() => {
   gap: 5px;
   color: #606266;
   font-size: 14px;
-  margin-bottom: 5px;
+  margin-bottom: 10px;
 }
 
 .scenic-level {
-  margin-top: 5px;
+  margin-top: 8px;
 }
 
 .actions {
   display: flex;
   justify-content: space-between;
-  margin-top: 10px;
+  margin-top: 15px;
 }
 
 @media (min-width: 768px) {
@@ -356,13 +548,13 @@ const userInfo = computed(() => {
   }
   
   .avatar-section {
-    width: 200px;
+    width: 250px;
   }
   
   .info-form-section {
     flex: 1;
     margin-top: 0;
-    margin-left: 40px;
+    margin-left: 30px;
   }
 }
 </style> 

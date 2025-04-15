@@ -65,12 +65,17 @@ class ProvinceTraffic(models.Model):
 
 class TimeData(models.Model):
     """景区开放时间数据模型"""
+    scenic_id = models.CharField(max_length=20, null=True, blank=True, verbose_name='景区ID')
     scenic_name = models.CharField(max_length=100, verbose_name='景区名')
-    city_name = models.CharField(max_length=50, verbose_name='省份名')
+    city_name = models.CharField(max_length=50, verbose_name='城市名')
     time_range = models.CharField(max_length=200, blank=True, null=True, verbose_name='开放时间段')
-    type = models.CharField(max_length=50, blank=True, null=True, verbose_name='景区类型')
+    date_range = models.CharField(max_length=200, blank=True, null=True, verbose_name='日期范围')
     weekdays = models.CharField(max_length=100, blank=True, null=True, verbose_name='适用工作日')
-    scenic_id = models.CharField(max_length=50, blank=True, null=True, verbose_name='景区ID')
+    season = models.CharField(max_length=50, blank=True, null=True, verbose_name='季节')
+    is_holiday = models.BooleanField(default=False, verbose_name='是否节假日')
+    is_closed = models.BooleanField(default=False, verbose_name='是否关闭')
+    is_24h = models.BooleanField(default=False, verbose_name='是否24小时开放')
+    stop_ticket_time = models.CharField(max_length=50, blank=True, null=True, verbose_name='停止售票时间')
     
     def __str__(self):
         return self.scenic_name

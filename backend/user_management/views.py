@@ -103,39 +103,71 @@ class ProfileUpdateView(APIView):
     
     def put(self, request):
         try:
-            profile = request.user.profile
-        except UserProfile.DoesNotExist:
-            profile = UserProfile.objects.create(user=request.user)
-        
-        serializer = ProfileUpdateSerializer(profile, data=request.data, partial=True)
-        if serializer.is_valid():
-            serializer.save()
+            print(f"收到用户资料更新请求: 用户:{request.user.username}, 数据:{request.data}")
             
-            # 记录更新操作
-            UserActionRecord.objects.create(
-                user=request.user,
-                action_type='update_profile',
-                details='更新个人资料'
-            )
+            # 使用更可靠的方法获取或创建profile
+            profile, created = UserProfile.objects.get_or_create(user=request.user)
             
-            # 准备响应数据
-            user = request.user
+            if created:
+                print(f"为用户 {request.user.username} 创建了新的资料记录")
+            
+            # 打印请求中的avatar字段值
+            if 'avatar' in request.data:
+                print(f"请求中的avatar值: '{request.data['avatar']}'")
+            
+            serializer = ProfileUpdateSerializer(profile, data=request.data, partial=True)
+            
+            if serializer.is_valid():
+                serializer.save()
+                
+                # 记录更新操作
+                UserActionRecord.objects.create(
+                    user=request.user,
+                    action_type='update_profile',
+                    details='更新个人资料'
+                )
+                
+                # 准备响应数据
+                user = request.user
+                return Response({
+                    'success': True,
+                    'user': {
+                        'id': user.id,
+                        'username': user.username,
+                        'email': user.email,
+                        'avatar': profile.avatar,
+                        'location': profile.location,
+                        'isAdmin': user.is_staff
+                    }
+                })
+            
+            # 详细记录验证错误
+            print(f"用户资料更新验证失败: {serializer.errors}")
+            
+            # 特别检查avatar字段错误
+            if 'avatar' in serializer.errors:
+                print(f"Avatar字段错误: {serializer.errors['avatar']}")
+                
+                # 如果是URL验证错误，提供更具体的帮助信息
+                if any('有效的URL' in str(err) for err in serializer.errors['avatar']):
+                    serializer.errors['avatar'].append("头像URL必须是有效的URL格式，请提供合法的URL路径")
+            
             return Response({
-                'success': True,
-                'user': {
-                    'id': user.id,
-                    'username': user.username,
-                    'email': user.email,
-                    'avatar': profile.avatar,
-                    'location': profile.location,
-                    'isAdmin': user.is_staff
-                }
-            })
-        
-        return Response({
-            'success': False,
-            'errors': serializer.errors
-        }, status=status.HTTP_400_BAD_REQUEST)
+                'success': False,
+                'errors': serializer.errors,
+                'message': '资料更新失败，请检查提交的数据'
+            }, status=status.HTTP_400_BAD_REQUEST)
+            
+        except Exception as e:
+            import traceback
+            error_detail = traceback.format_exc()
+            print(f"处理用户资料更新时发生异常: {str(e)}\n{error_detail}")
+            
+            return Response({
+                'success': False,
+                'message': f'服务器处理请求时出错: {str(e)}',
+                'error_type': e.__class__.__name__
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class FavoriteToggleView(APIView):
     """景区收藏切换视图"""
@@ -183,6 +215,93 @@ class UserFavoritesView(generics.ListAPIView):
     
     def get_queryset(self):
         return UserFavorite.objects.filter(user=self.request.user)
+
+class UploadAvatarView(APIView):
+    """用户头像上传视图"""
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def post(self, request):
+        try:
+            print(f"收到头像上传请求，FILES: {request.FILES}, DATA: {request.data}")
+            
+            avatar_file = request.FILES.get('avatar')
+            
+            if not avatar_file:
+                print("错误: 未提供头像文件")
+                return Response({
+                    'success': False,
+                    'message': '未提供头像文件'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            print(f"收到文件: {avatar_file.name}, 大小: {avatar_file.size}, 类型: {avatar_file.content_type}")
+            
+            # 文件大小限制(5MB)
+            if avatar_file.size > 5 * 1024 * 1024:
+                return Response({
+                    'success': False,
+                    'message': '文件大小不能超过5MB'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # 检查文件类型
+            valid_types = ['image/jpeg', 'image/png', 'image/gif']
+            if avatar_file.content_type not in valid_types:
+                return Response({
+                    'success': False,
+                    'message': f'只支持JPEG、PNG或GIF格式的图片，当前类型: {avatar_file.content_type}'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # 上传到静态文件目录
+            import os
+            from django.conf import settings
+            
+            # 创建用户媒体目录
+            user_media_dir = os.path.join(settings.MEDIA_ROOT, f'avatars/user_{request.user.id}')
+            os.makedirs(user_media_dir, exist_ok=True)
+            print(f"用户媒体目录: {user_media_dir}")
+            
+            # 生成文件名
+            import time
+            file_name = f"avatar_{int(time.time())}.{avatar_file.name.split('.')[-1]}"
+            file_path = os.path.join(user_media_dir, file_name)
+            print(f"保存文件路径: {file_path}")
+            
+            # 保存文件
+            with open(file_path, 'wb+') as destination:
+                for chunk in avatar_file.chunks():
+                    destination.write(chunk)
+            
+            # 更新用户头像URL
+            avatar_url = f"/media/avatars/user_{request.user.id}/{file_name}"
+            
+            try:
+                profile = request.user.profile
+            except UserProfile.DoesNotExist:
+                profile = UserProfile.objects.create(user=request.user)
+            
+            profile.avatar = avatar_url
+            profile.save()
+            
+            # 记录上传操作
+            UserActionRecord.objects.create(
+                user=request.user,
+                action_type='update_profile',
+                details='上传头像'
+            )
+            
+            print(f"头像上传成功，URL: {avatar_url}")
+            return Response({
+                'success': True,
+                'avatar_url': avatar_url
+            })
+            
+        except Exception as e:
+            print(f"头像上传失败: {e}")
+            import traceback
+            traceback.print_exc()
+            return Response({
+                'success': False,
+                'message': f'头像上传失败: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class SendEmailCodeView(APIView):
     """发送邮箱验证码视图"""

@@ -11,7 +11,7 @@ export function getProvinceDistribution() {
   
   // 真实API调用（暂时注释）
   return request({
-    url: '/data/province-distribution/',
+    url: '/api/data/province-distribution/',
     method: 'get'
   });
 }
@@ -21,7 +21,7 @@ export function getProvinceDistribution() {
  */
 export function getScenicLevels() {
   return request({
-    url: '/data/scenic-levels/',
+    url: '/api/data/scenic-levels/',
     method: 'get'
   });
 }
@@ -31,7 +31,7 @@ export function getScenicLevels() {
  */
 export function getTicketPrices() {
   return request({
-    url: '/data/ticket-prices/',
+    url: '/api/data/ticket-prices/',
     method: 'get'
   });
 }
@@ -41,7 +41,7 @@ export function getTicketPrices() {
  */
 export function getOpenTimes() {
   return request({
-    url: '/data/open-times/',
+    url: '/api/data/open-times/',
     method: 'get'
   });
 }
@@ -51,7 +51,7 @@ export function getOpenTimes() {
  */
 export function getCommentAnalysis() {
   return request({
-    url: '/data/comment-analysis/',
+    url: '/api/data/comment-analysis/',
     method: 'get'
   });
 }
@@ -62,7 +62,7 @@ export function getCommentAnalysis() {
  */
 export function getWordCloud(scenicId: string) {
   return request({
-    url: `/data/word-cloud/${scenicId}/`,
+    url: `/api/data/word-cloud/${scenicId}/`,
     method: 'get'
   });
 }
@@ -72,7 +72,7 @@ export function getWordCloud(scenicId: string) {
  */
 export function getTransportation() {
   return request({
-    url: '/data/transportation/',
+    url: '/api/data/transportation/',
     method: 'get'
   });
 }
@@ -84,7 +84,7 @@ export function getTransportation() {
  */
 export function searchScenic(keyword: string, filters?: any) {
   return request({
-    url: '/scenic/search/',
+    url: '/api/scenic/search/',
     method: 'get',
     params: {
       keyword: keyword,
@@ -98,7 +98,7 @@ export function searchScenic(keyword: string, filters?: any) {
  */
 export function getFilterOptions() {
   return request({
-    url: '/data/filter-options/',
+    url: '/api/data/filter-options/',
     method: 'get'
   });
 }
@@ -109,7 +109,7 @@ export function getFilterOptions() {
  */
 export function getScenicDetail(scenicId: string | number) {
   return request({
-    url: `/scenic/${scenicId}/`,
+    url: `/api/scenic/${scenicId}/`,
     method: 'get'
   });
 }
@@ -120,7 +120,7 @@ export function getScenicDetail(scenicId: string | number) {
  */
 export function getProvinceCityDistribution(provinceName: string) {
   return request({
-    url: `/data/province-city-distribution/${provinceName}/`,
+    url: `/api/data/province-city-distribution/${provinceName}/`,
     method: 'get'
   });
 }
@@ -132,7 +132,7 @@ export function getProvinceCityDistribution(provinceName: string) {
  */
 export function getDistrictDistribution(provinceName: string, cityName: string) {
   return request({
-    url: `/data/district-distribution/${provinceName}/${cityName}/`,
+    url: `/api/data/district-distribution/${provinceName}/${cityName}/`,
     method: 'get'
   });
 }
@@ -143,7 +143,7 @@ export function getDistrictDistribution(provinceName: string, cityName: string) 
  */
 export function getTicketAvgPrice(scenicType: string) {
   return request({
-    url: '/data/ticket-avg-price/',
+    url: '/api/data/ticket-avg-price/',
     method: 'get',
     params: {
       type: scenicType
@@ -156,7 +156,7 @@ export function getTicketAvgPrice(scenicType: string) {
  */
 export function getTicketBoxplotByType() {
   return request({
-    url: '/data/ticket-boxplot-by-type/',
+    url: '/api/data/ticket-boxplot-by-type/',
     method: 'get'
   });
 }
@@ -167,10 +167,20 @@ export function getTicketBoxplotByType() {
  */
 export function getTicketBoxplotByLevel(scenicType: string) {
   return request({
-    url: '/data/ticket-boxplot-by-level/',
+    url: '/api/data/ticket-boxplot-by-level/',
     method: 'get',
     params: {
       type: scenicType
     }
+  });
+}
+
+/**
+ * 获取景区类型分布数据（用于雷达图和旭日图）
+ */
+export function getScenicTypeDistribution() {
+  return request({
+    url: '/api/data/scenic-type-distribution/',
+    method: 'get'
   });
 } 

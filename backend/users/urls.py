@@ -1,5 +1,6 @@
 from django.urls import path
 from . import views
+from user_management.views import UploadAvatarView, ProfileUpdateView
 
 """
 用户管理相关的URL配置
@@ -13,8 +14,11 @@ urlpatterns = [
     # 示例：用户注册
     # path('register/', views.register_view, name='register'),
 
-    # 示例：用户个人资料
-    # path('profile/', views.profile_view, name='profile'),
+    # 用户个人资料
+    path('profile/', ProfileUpdateView.as_view(), name='profile'),
+
+    # 上传头像
+    path('upload-avatar/', UploadAvatarView.as_view(), name='upload-avatar'),
 
     # 更多用户相关的URL可以根据需要添加
 ] 

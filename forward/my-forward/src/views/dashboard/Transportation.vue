@@ -26,7 +26,7 @@
           <div v-else>
             <!-- 对全国视图使用Highcharts依赖轮图 -->
             <div v-if="selectedProvince === '全国'" class="chart-wrapper">
-              <div id="highcharts-container" style="width:100%; height:800px;"></div>
+              <div id="highcharts-container" style="width:100%; height:900px;"></div>
             </div>
             <!-- 对省级视图使用ECharts图表 -->
             <div v-else class="chart-wrapper">
@@ -46,7 +46,6 @@
 import { defineComponent, ref, onMounted, computed, watch } from 'vue'
 import CardContainer from '@/components/common/CardContainer.vue'
 import BaseChart from '@/components/charts/BaseChart.vue'
-import * as echarts from 'echarts'
 import type { 
   EChartsOption, 
 } from 'echarts'
@@ -728,7 +727,7 @@ export default defineComponent({
       if (container) {
         Highcharts.chart(container, {
           chart: {
-            height: 800,  // 增加图表高度
+            height: 850,  // 增加图表高度
             backgroundColor: '#FFFFFF'
           },
           title: {

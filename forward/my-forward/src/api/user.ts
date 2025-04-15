@@ -7,7 +7,7 @@ import request from './axios';
  */
 export function login(username: string, password: string) {
   return request({
-    url: '/login/',
+    url: '/api/login/',
     method: 'post',
     data: { username, password }
   });
@@ -22,7 +22,7 @@ export function login(username: string, password: string) {
  */
 export function register(username: string, email: string, password: string, code: string) {
   return request({
-    url: '/register/',
+    url: '/api/register/',
     method: 'post',
     data: {
       username,
@@ -38,10 +38,65 @@ export function register(username: string, email: string, password: string, code
  * @param profileData 用户资料数据
  */
 export function updateProfile(profileData: any) {
+  console.log('准备更新个人资料:', profileData);
+  
+  // 检查 avatar 是否是完整 URL
+  let avatar = profileData.avatar || '';
+  
+  // 如果是完整 URL，尝试提取路径部分
+  if (avatar && avatar.startsWith('http')) {
+    try {
+      const url = new URL(avatar);
+      // 只发送路径部分，不包括域名
+      avatar = url.pathname;
+      console.log('提取的头像路径:', avatar);
+    } catch (e) {
+      console.error('无法解析头像 URL:', e);
+      // 错误时保留原始值
+      avatar = profileData.avatar;
+    }
+  } else if (avatar && !avatar.startsWith('/')) {
+    // 确保以斜杠开头的相对路径
+    avatar = '/' + avatar;
+    console.log('调整后的头像路径:', avatar);
+  }
+  
+  // 创建一个格式化的请求对象，方便调试
+  const requestData = {
+    username: profileData.username,
+    email: profileData.email,
+    location: profileData.location || '',
+    avatar: avatar
+  };
+  
+  console.log('发送到服务器的更新资料数据:', requestData);
+  
   return request({
-    url: '/users/profile/',
+    url: '/api/users/profile/',
     method: 'put',
-    data: profileData
+    data: requestData
+  }).catch(error => {
+    console.error('更新个人资料失败:', error);
+    
+    // 详细记录错误信息
+    if (error.response) {
+      console.error('服务器响应错误状态码:', error.response.status);
+      console.error('服务器响应错误数据:', error.response.data);
+      
+      // 针对具体字段错误提供更多信息
+      if (error.response.data && error.response.data.errors) {
+        const errors = error.response.data.errors;
+        for (const field in errors) {
+          console.error(`字段 ${field} 错误:`, errors[field]);
+        }
+      }
+    } else if (error.request) {
+      console.error('请求已发送但没有收到响应:', error.request);
+    } else {
+      console.error('请求配置错误:', error.message);
+    }
+    
+    throw error; // 继续抛出错误，让上层组件处理
   });
 }
 
@@ -51,7 +106,7 @@ export function updateProfile(profileData: any) {
  */
 export function toggleFavorite(scenicId: string) {
   return request({
-    url: '/favorites/toggle/',
+    url: '/api/favorites/toggle/',
     method: 'post',
     data: { scenic_id: scenicId }
   });
@@ -62,7 +117,7 @@ export function toggleFavorite(scenicId: string) {
  */
 export function getFavorites() {
   return request({
-    url: '/favorites/',
+    url: '/api/favorites/',
     method: 'get'
   });
 } 

@@ -10,8 +10,17 @@ const route = useRoute()
 const isCollapse = ref(false)
 
 const handleLogout = () => {
-  userStore.logout()
-  router.push('/')
+  console.log('执行退出登录操作');
+  userStore.logout();
+  
+  setTimeout(() => {
+    console.log('登出完成，准备跳转到登录页面');
+    router.push('/logout-redirect');
+    
+    setTimeout(() => {
+      router.push('/login');
+    }, 100);
+  }, 100);
 }
 
 const activeMenu = computed(() => {

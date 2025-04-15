@@ -22,6 +22,16 @@ const routes: Array<RouteRecordRaw> = [
     component: () => import('@/views/AdminLogin.vue')
   },
   {
+    path: '/logout-redirect',
+    name: 'LogoutRedirect',
+    component: {
+      render: () => null,
+      beforeRouteEnter(to: RouteLocationNormalized, from: RouteLocationNormalized, next: NavigationGuardNext) {
+        next('/login');
+      }
+    }
+  },
+  {
     path: '/dashboard',
     name: 'Dashboard',
     component: () => import('@/layouts/DashboardLayout.vue'),
@@ -110,16 +120,35 @@ const router = createRouter({
 })
 
 router.beforeEach((to: RouteLocationNormalized, _from: RouteLocationNormalized, next: NavigationGuardNext) => {
-  // 简单的路由守卫，可以在这里做登录验证
-  const token = localStorage.getItem('token')
-  const isAdmin = localStorage.getItem('isAdmin')
+  // 使用sessionStorage替代localStorage
+  const token = sessionStorage.getItem('token')
+  const isAdmin = sessionStorage.getItem('isAdmin')
   
-  // 强制重新读取所有localStorage项，防止缓存问题
+  // 强制重新读取所有sessionStorage项，防止缓存问题
   const allStorage = {
-    token: localStorage.getItem('token'),
-    userId: localStorage.getItem('userId'),
-    username: localStorage.getItem('username'),
-    isAdmin: localStorage.getItem('isAdmin')
+    token: sessionStorage.getItem('token'),
+    userId: sessionStorage.getItem('userId'),
+    username: sessionStorage.getItem('username'),
+    isAdmin: sessionStorage.getItem('isAdmin'),
+    tokenExpiry: sessionStorage.getItem('tokenExpiry')
+  }
+  
+  // 检查token是否过期
+  const tokenExpiry = parseInt(sessionStorage.getItem('tokenExpiry') || '0')
+  const isTokenExpired = tokenExpiry && Date.now() > tokenExpiry
+  
+  if (token && isTokenExpired) {
+    console.log('Token已过期，清除认证信息')
+    // 清除过期的token
+    sessionStorage.removeItem('token')
+    sessionStorage.removeItem('tokenExpiry')
+    sessionStorage.removeItem('userId')
+    sessionStorage.removeItem('username')
+    sessionStorage.removeItem('email')
+    sessionStorage.removeItem('avatar')
+    sessionStorage.removeItem('location')
+    sessionStorage.removeItem('isAdmin')
+    sessionStorage.removeItem('favorites')
   }
   
   console.log('路由守卫详细信息:', {
@@ -127,12 +156,24 @@ router.beforeEach((to: RouteLocationNormalized, _from: RouteLocationNormalized, 
     from: _from.path,
     token: token ? `${token.substring(0, 10)}...` : 'null',
     isAdmin: isAdmin === 'true', 
-    localStorage_isAdmin: isAdmin,
-    allStorage
+    sessionStorage_isAdmin: isAdmin,
+    allStorage,
+    isTokenExpired
   })
   
+  // 处理特殊路由的访问逻辑
+  
+  // 1. 公开页面 - 允许任何人访问
+  const publicPages = ['/login', '/register', '/admin']
+  const isPublicPage = publicPages.includes(to.path) || to.path === '/'
+  
+  // 2. 用户仅页面 - 需要普通用户权限
+  const userOnlyPages = to.path.startsWith('/dashboard')
+  // 3. 管理员页面 - 需要管理员权限
+  const adminOnlyPages = to.path.startsWith('/admin-dashboard')
+  
   // 处理登录后的循环重定向问题
-  if (to.path === '/login' && token) {
+  if (publicPages.includes(to.path) && token && !isTokenExpired) {
     console.log('已登录用户尝试访问登录页，重定向到dashboard')
     next({ path: '/dashboard' }) 
     return
@@ -141,23 +182,25 @@ router.beforeEach((to: RouteLocationNormalized, _from: RouteLocationNormalized, 
   // 注入到Vue对象，方便调试
   if (window && !(window as any).vueDebug) {
     (window as any).vueDebug = {
-      localStorage,
+      sessionStorage,
       router,
       getTokenInfo: () => {
         return {
-          token: localStorage.getItem('token'),
-          isAdmin: localStorage.getItem('isAdmin'),
-          username: localStorage.getItem('username')
+          token: sessionStorage.getItem('token'),
+          isAdmin: sessionStorage.getItem('isAdmin'),
+          username: sessionStorage.getItem('username'),
+          tokenExpiry: sessionStorage.getItem('tokenExpiry')
         }
       }
     }
     console.log('已为window对象添加vueDebug属性，可在控制台查看认证信息')
   }
   
-  if (to.path.startsWith('/dashboard') && !token) {
-    console.log('未登录，重定向到登录页')
+  // 路由访问控制逻辑
+  if (userOnlyPages && (!token || isTokenExpired)) {
+    console.log('未登录或Token已过期，重定向到登录页')
     next({ name: 'Login' })
-  } else if (to.path.startsWith('/admin-dashboard') && (!token || isAdmin !== 'true')) {
+  } else if (adminOnlyPages && (!token || isAdmin !== 'true' || isTokenExpired)) {
     console.log('非管理员，重定向到管理员登录页')
     next({ name: 'AdminLogin' })
   } else {

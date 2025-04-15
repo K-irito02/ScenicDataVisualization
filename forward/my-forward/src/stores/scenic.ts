@@ -14,7 +14,8 @@ import {
   getDistrictDistribution,
   getTicketAvgPrice as apiGetTicketAvgPrice,
   getTicketBoxplotByType as apiGetTicketBoxplotByType,
-  getTicketBoxplotByLevel as apiGetTicketBoxplotByLevel
+  getTicketBoxplotByLevel as apiGetTicketBoxplotByLevel,
+  getScenicTypeDistribution
 } from '../api'
 
 interface ProvinceData {
@@ -69,6 +70,19 @@ interface TransportationFlow {
   value: number
 }
 
+// 雷达图数据接口
+interface RadarDataItem {
+  name: string
+  value: number
+}
+
+// 旭日图数据接口
+interface SunburstDataItem {
+  name: string
+  value: number
+  children?: SunburstDataItem[]
+}
+
 // 定义搜索表单状态接口
 interface SearchFormState {
   keyword: string
@@ -102,6 +116,10 @@ export const useScenicStore = defineStore('scenic', {
     wetlandLevelPrices: [] as ScenicLevel[],
     culturalLevelPrices: [] as ScenicLevel[],
     natureLevelPrices: [] as ScenicLevel[],
+    
+    // 景区类型分布数据
+    typeRadarData: [] as RadarDataItem[],
+    typeSunburstData: {} as SunburstDataItem,
     
     // 模块三：门票与开放时间
     ticketPrices: {
@@ -384,6 +402,27 @@ export const useScenicStore = defineStore('scenic', {
       } catch (error) {
         console.error('获取景区等级箱线图数据失败:', error)
         return []
+      }
+    },
+    
+    // 获取景区类型分布数据（用于雷达图和旭日图）
+    async getScenicTypeDistribution() {
+      try {
+        const response = await getScenicTypeDistribution()
+        // 检查响应数据结构是否符合预期
+        if (response && response.data && response.data.radar_data && response.data.sunburst_data) {
+          this.typeRadarData = response.data.radar_data
+          this.typeSunburstData = response.data.sunburst_data
+          return response.data
+        } else {
+          console.error('景区类型分布数据结构异常:', response)
+          // 保持数据不变
+          return null
+        }
+      } catch (error) {
+        console.error('获取景区类型分布数据失败:', error)
+        // 保持数据不变
+        return null
       }
     }
   }
