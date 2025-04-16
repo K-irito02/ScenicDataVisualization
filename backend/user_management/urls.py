@@ -10,6 +10,7 @@ urlpatterns = [
     # 用户资料相关
     path('users/profile/', views.ProfileUpdateView.as_view(), name='profile-update'),
     path('users/upload-avatar/', views.UploadAvatarView.as_view(), name='upload-avatar'),
+    path('users/delete-account/', views.DeleteAccountView.as_view(), name='delete-account'),
     
     # 用户收藏相关
     path('favorites/toggle/', views.FavoriteToggleView.as_view(), name='favorite-toggle'),

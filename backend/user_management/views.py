@@ -252,16 +252,51 @@ class UploadAvatarView(APIView):
             
             # 上传到静态文件目录
             import os
+            import uuid
             from django.conf import settings
+            
+            # 输出媒体目录信息
+            print(f"媒体根目录设置: {settings.MEDIA_ROOT}")
+            print(f"媒体根目录是否存在: {os.path.exists(settings.MEDIA_ROOT)}")
+            
+            # 确保媒体根目录存在
+            os.makedirs(settings.MEDIA_ROOT, exist_ok=True)
+            print(f"确保媒体根目录创建完成")
             
             # 创建用户媒体目录
             user_media_dir = os.path.join(settings.MEDIA_ROOT, f'avatars/user_{request.user.id}')
             os.makedirs(user_media_dir, exist_ok=True)
             print(f"用户媒体目录: {user_media_dir}")
+            print(f"用户媒体目录是否存在: {os.path.exists(user_media_dir)}")
             
-            # 生成文件名
+            # 删除用户之前的头像文件（可选）
+            try:
+                # 查找用户之前的头像
+                profile = request.user.profile
+                if profile.avatar:
+                    # 处理相对路径和绝对路径两种情况
+                    if profile.avatar.startswith('/media/'):
+                        old_path = os.path.join(settings.MEDIA_ROOT, profile.avatar.lstrip('/media/'))
+                    elif profile.avatar.startswith('media/'):
+                        old_path = os.path.join(settings.MEDIA_ROOT, profile.avatar.lstrip('media/'))
+                    else:
+                        # 其他情况，例如外部URL，则跳过删除
+                        old_path = None
+                    
+                    if old_path and os.path.exists(old_path):
+                        print(f"删除旧头像文件: {old_path}")
+                        os.remove(old_path)
+                        print(f"旧头像文件已删除")
+            except Exception as e:
+                print(f"删除旧头像文件失败: {str(e)}")
+                # 继续处理，不中断上传流程
+            
+            # 生成唯一文件名，确保每次上传都用不同的文件名
             import time
-            file_name = f"avatar_{int(time.time())}.{avatar_file.name.split('.')[-1]}"
+            random_uuid = uuid.uuid4().hex[:8]  # 生成8位随机UUID
+            timestamp = int(time.time())
+            file_ext = avatar_file.name.split('.')[-1]
+            file_name = f"avatar_{timestamp}_{random_uuid}.{file_ext}"
             file_path = os.path.join(user_media_dir, file_name)
             print(f"保存文件路径: {file_path}")
             
@@ -270,8 +305,12 @@ class UploadAvatarView(APIView):
                 for chunk in avatar_file.chunks():
                     destination.write(chunk)
             
+            # 检查文件是否成功保存
+            print(f"文件是否成功保存: {os.path.exists(file_path)}, 大小: {os.path.getsize(file_path) if os.path.exists(file_path) else '未知'}")
+            
             # 更新用户头像URL
             avatar_url = f"/media/avatars/user_{request.user.id}/{file_name}"
+            print(f"设置的头像URL: {avatar_url}")
             
             try:
                 profile = request.user.profile
@@ -289,9 +328,13 @@ class UploadAvatarView(APIView):
             )
             
             print(f"头像上传成功，URL: {avatar_url}")
+            # 打印服务器域名信息，帮助调试
+            print(f"请求域名信息: {request.build_absolute_uri('/')}")
+            
             return Response({
                 'success': True,
-                'avatar_url': avatar_url
+                'avatar_url': avatar_url,
+                'full_url': request.build_absolute_uri(avatar_url)  # 添加返回完整URL
             })
             
         except Exception as e:
@@ -308,6 +351,9 @@ class SendEmailCodeView(APIView):
     permission_classes = [permissions.AllowAny]
     
     def post(self, request):
+        import logging
+        logger = logging.getLogger(__name__)
+        
         email = request.data.get('email')
         if not email:
             return Response({
@@ -319,26 +365,123 @@ class SendEmailCodeView(APIView):
         code = ''.join(random.choices('0123456789', k=6))
         
         try:
-            # 发送邮件
-            send_mail(
-                subject='景区数据分析系统 - 验证码',
-                message=f'您的验证码是：{code}，有效期为5分钟。请勿将验证码泄露给他人。',
-                from_email=settings.EMAIL_HOST_USER,
-                recipient_list=[email],
-                fail_silently=False,
-            )
+            logger.info(f"准备为邮箱 {email} 生成验证码")
             
-            # 将验证码保存到Redis，设置5分钟过期
+            # 首先尝试保存验证码到Redis
             redis_key = f'email_code:{email}'
-            redis_client.setex(redis_key, 300, code)
+            try:
+                redis_client.setex(redis_key, 300, code)
+                logger.info(f"验证码已保存到Redis: {email}")
+            except Exception as redis_error:
+                logger.error(f"Redis保存验证码失败: {str(redis_error)}")
+                return Response({
+                    'success': False,
+                    'message': '验证码生成失败，请稍后重试'
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             
+            # 在开发模式下输出验证码，方便测试
+            if settings.DEBUG:
+                print(f"[DEBUG] 邮箱 {email} 的验证码: {code}")
+            
+            # 在单独的try-except块中处理邮件发送
+            try:
+                from django.core.mail import EmailMessage
+                email_message = EmailMessage(
+                    subject='景区数据分析系统 - 验证码',
+                    body=f'您的验证码是：{code}，有效期为5分钟。请勿将验证码泄露给他人。',
+                    from_email=settings.EMAIL_HOST_USER,
+                    to=[email]
+                )
+                email_message.send(fail_silently=False)
+                logger.info(f"邮件已发送到 {email}")
+            except Exception as email_error:
+                logger.error(f"邮件发送失败: {str(email_error)}")
+                # 尽管邮件发送失败，但验证码已保存到Redis
+                # 在实际生产环境中可能需要返回错误，但为了方便测试，我们仍返回成功
+                if settings.DEBUG:
+                    return Response({
+                        'success': True,
+                        'message': '验证码已生成但邮件发送失败，请查看服务器日志获取验证码',
+                        'debug_code': code if settings.DEBUG else None
+                    })
+                else:
+                    return Response({
+                        'success': False,
+                        'message': '邮件发送失败，请稍后重试'
+                    }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+            # 邮件发送成功，返回成功响应
             return Response({
                 'success': True,
                 'message': '验证码已发送，请查收邮件'
             })
             
         except Exception as e:
+            import traceback
+            error_details = traceback.format_exc()
+            logger.error(f"验证码处理过程发生异常: {str(e)}\n{error_details}")
+            
             return Response({
                 'success': False,
                 'message': '验证码发送失败，请稍后重试'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class DeleteAccountView(APIView):
+    """用户删除账户视图"""
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def post(self, request):
+        user = request.user
+        password = request.data.get('password')
+        
+        if not password:
+            return Response({
+                'success': False,
+                'message': '请提供密码以确认删除操作'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # 验证用户密码
+        if not user.check_password(password):
+            return Response({
+                'success': False,
+                'message': '密码不正确，无法删除账户'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            # 删除与该用户相关的所有数据
+            with transaction.atomic():
+                # 删除用户的token
+                Token.objects.filter(user=user).delete()
+                
+                # 删除用户的收藏记录
+                UserFavorite.objects.filter(user=user).delete()
+                
+                # 删除用户的行为记录
+                UserActionRecord.objects.filter(user=user).delete()
+                
+                # 记录一条账户删除的操作记录（虽然马上也会被删除）
+                UserActionRecord.objects.create(
+                    user=user,
+                    action_type='delete_account',
+                    details='用户删除自己的账户'
+                )
+                
+                # 删除用户的个人资料
+                try:
+                    if hasattr(user, 'profile'):
+                        user.profile.delete()
+                except Exception as e:
+                    print(f"删除用户资料时出错: {str(e)}")
+                
+                # 最后删除用户账户
+                user.delete()
+                
+            return Response({
+                'success': True,
+                'message': '账户已成功删除'
+            })
+        except Exception as e:
+            return Response({
+                'success': False,
+                'message': f'删除账户时出错: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

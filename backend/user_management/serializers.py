@@ -93,9 +93,9 @@ class RegisterSerializer(serializers.ModelSerializer):
             print(f"验证码不匹配: 输入={value}, 存储={stored_code}")
             raise serializers.ValidationError("验证码错误")
         
-        # 验证成功后删除验证码
-        redis_client.delete(redis_key)
-        print(f"验证码验证成功，已从Redis中删除: {redis_key}")
+        # 不在此处删除验证码，而是在create方法成功后删除
+        # 将验证码保存在实例中，供create方法使用
+        self._redis_key = redis_key
         return value
     
     def create(self, validated_data):
@@ -104,13 +104,7 @@ class RegisterSerializer(serializers.ModelSerializer):
             # 移除验证码字段
             validated_data.pop('code')
             
-            # 检查用户名是否已存在
-            if User.objects.filter(username=validated_data['username']).exists():
-                raise serializers.ValidationError({'username': ['该用户名已被使用']})
-            
-            # 检查邮箱是否已存在
-            if User.objects.filter(email=validated_data['email']).exists():
-                raise serializers.ValidationError({'email': ['该邮箱已被注册']})
+            # 不再重复检查用户名和邮箱，因为Model已有唯一性约束，会自动抛出异常
             
             # 创建用户
             user = User.objects.create_user(
@@ -129,6 +123,15 @@ class RegisterSerializer(serializers.ModelSerializer):
                 # 如果创建资料失败，删除已创建的用户
                 user.delete()
                 raise serializers.ValidationError({'profile': ['创建用户资料失败']})
+            
+            # 验证成功且用户创建成功后，才删除Redis中的验证码
+            try:
+                if hasattr(self, '_redis_key'):
+                    redis_client.delete(self._redis_key)
+                    print(f"验证码验证成功，已从Redis中删除: {self._redis_key}")
+            except Exception as e:
+                print(f"删除Redis验证码失败: {str(e)}")
+                # 验证码删除失败不阻止用户创建
             
             return user
         except Exception as e:
@@ -159,26 +162,20 @@ class ProfileUpdateSerializer(serializers.ModelSerializer):
         original_value = value
         print(f"验证avatar字段，原始值: '{original_value}'")
         
-        # 如果是相对路径，确保以/开头
-        if not value.startswith('http') and not value.startswith('/'):
-            value = '/' + value
-            print(f"添加前导斜杠后的avatar值: '{value}'")
-        
-        # 验证URL格式
-        if value.startswith('/'):
-            # 对于相对URL，直接接受
-            print(f"接受相对路径avatar: '{value}'")
+        # 如果是完整URL，直接返回
+        if value.startswith('http://') or value.startswith('https://'):
+            print(f"接受完整URL avatar值: '{value}'")
             return value
-        else:
-            try:
-                # 验证绝对URL的格式有效性
-                validator = URLValidator()
-                validator(value)
-                print(f"接受有效的绝对URL: '{value}'")
-                return value
-            except Exception as e:
-                print(f"Avatar URL验证失败: {str(e)}, 值: '{value}'")
-                raise serializers.ValidationError(f"请提供有效的URL地址，当前值 '{value}' 不是有效的URL格式。")
+        
+        # 如果是相对路径，确保以/media/开头
+        if not value.startswith('/media/'):
+            if value.startswith('media/'):
+                value = '/' + value
+            elif not value.startswith('/'):
+                value = '/media/' + value
+                
+        print(f"标准化后的avatar值: '{value}'")
+        return value
     
     def update(self, instance, validated_data):
         user_data = validated_data.pop('user', {})

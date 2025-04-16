@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { login as apiLogin, register as apiRegister, updateProfile as apiUpdateProfile, toggleFavorite as apiToggleFavorite, getFavorites as apiGetFavorites } from '../api'
+import { login as apiLogin, register as apiRegister, updateProfile as apiUpdateProfile, toggleFavorite as apiToggleFavorite, getFavorites as apiGetFavorites, deleteAccount as apiDeleteAccount } from '../api'
 
 interface UserState {
   token: string
@@ -297,6 +297,20 @@ export const useUserStore = defineStore('user', {
         isAdmin: this.isAdmin,
         favorites: this.favorites
       }
+    },
+    
+    deleteAccount(password: string) {
+      return new Promise((resolve, reject) => {
+        apiDeleteAccount(password)
+          .then(response => {
+            // 删除成功后，清除用户信息并登出
+            this.logout();
+            resolve(response);
+          })
+          .catch(error => {
+            reject(error);
+          });
+      });
     }
   }
 }) 

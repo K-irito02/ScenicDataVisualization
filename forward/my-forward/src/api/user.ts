@@ -40,8 +40,22 @@ export function register(username: string, email: string, password: string, code
 export function updateProfile(profileData: any) {
   console.log('准备更新个人资料:', profileData);
   
+  // 添加调试日志显示传入的头像URL
+  if (profileData.avatar) {
+    console.log('更新资料时的头像URL:', profileData.avatar);
+  }
+  
   // 检查 avatar 是否是完整 URL
   let avatar = profileData.avatar || '';
+  
+  // 分析头像URL的路径组成
+  console.log('头像URL分析:');
+  if (avatar.includes('?')) {
+    console.log('- 包含查询参数:', avatar.split('?')[0], '参数:', avatar.split('?')[1]);
+    // 移除时间戳查询参数，只保留基础URL
+    avatar = avatar.split('?')[0];
+    console.log('- 移除查询参数后:', avatar);
+  }
   
   // 如果是完整 URL，尝试提取路径部分
   if (avatar && avatar.startsWith('http')) {
@@ -119,5 +133,17 @@ export function getFavorites() {
   return request({
     url: '/api/favorites/',
     method: 'get'
+  });
+}
+
+/**
+ * 删除用户账户
+ * @param password 用户密码，用于确认操作
+ */
+export function deleteAccount(password: string) {
+  return request({
+    url: '/api/users/delete-account/',
+    method: 'post',
+    data: { password }
   });
 } 

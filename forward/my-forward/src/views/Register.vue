@@ -78,7 +78,7 @@ const sendCode = async () => {
     
     try {
       await request({
-        url: '/email/send-code/',
+        url: '/api/email/send-code/',
         method: 'post',
         data: { email: registerForm.email }
       })
@@ -94,8 +94,12 @@ const sendCode = async () => {
         }
       }, 1000)
     } catch (error: any) {
-      console.error('发送验证码错误详情:', error.response?.data)
-      if (error.response?.data?.errors) {
+      console.error('发送验证码错误详情:', error)
+      
+      // 检查是否为超时错误
+      if (error.message && error.message.includes('timeout')) {
+        ElMessage.error('发送验证码请求超时，请检查网络连接或稍后重试')
+      } else if (error.response?.data?.errors) {
         const errors = error.response.data.errors
         Object.keys(errors).forEach(key => {
           ElMessage.error(`${key}: ${errors[key].join(', ')}`)

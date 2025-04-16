@@ -5,7 +5,7 @@ from django.utils import timezone
 class UserProfile(models.Model):
     """用户个人资料模型"""
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
-    avatar = models.URLField(max_length=500, blank=True, default='', verbose_name='头像URL')
+    avatar = models.CharField(max_length=500, blank=True, default='', verbose_name='头像路径')  # 支持任意路径格式
     location = models.CharField(max_length=100, blank=True, default='', verbose_name='所在地')
     last_login = models.DateTimeField(default=timezone.now, verbose_name='最后登录时间')
     

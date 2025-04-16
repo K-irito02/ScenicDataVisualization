@@ -4,14 +4,18 @@ import { useUserStore } from '@/stores/user'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import axios from 'axios'
-import { Check, Upload, Picture, Location } from '@element-plus/icons-vue'
+import { Check, Upload, Picture, Location, Delete } from '@element-plus/icons-vue'
+import { useRoute, useRouter } from 'vue-router'
 
 const userStore = useUserStore()
+const route = useRoute()
+const router = useRouter()
 const activeTab = ref('info')
 const uploading = ref(false)
 const loading = ref(false)
 const favoritesLoading = ref(false)
 const favorites = ref<any[]>([])
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
 
 // 个人信息表单
 const profileForm = reactive({
@@ -33,6 +37,103 @@ const rules = reactive<FormRules>({
     { type: 'email', message: '请输入正确的邮箱地址', trigger: 'blur' }
   ]
 })
+
+// 获取完整的头像URL
+const getFullAvatarUrl = (avatar: string) => {
+  if (!avatar) return ''
+  
+  // 添加时间戳防止浏览器缓存头像
+  const timestamp = new Date().getTime()
+  
+  // 已经是完整URL的情况
+  if (avatar.startsWith('http')) {
+    return avatar.includes('?') ? `${avatar}&_t=${timestamp}` : `${avatar}?_t=${timestamp}`
+  }
+  
+  // 处理媒体文件路径
+  // 确保在开发环境中使用后端服务器URL
+  let baseUrl = apiBaseUrl
+  
+  // 针对媒体文件路径，确保使用apiBaseUrl
+  let url = ''
+  if (avatar.startsWith('/media/')) {
+    // 如果是媒体文件路径，直接使用apiBaseUrl
+    url = `${baseUrl}${avatar}`
+  } else if (avatar.startsWith('media/')) {
+    // 如果是不带前导斜杠的媒体路径
+    url = `${baseUrl}/${avatar}`
+  } else {
+    // 其他路径
+    url = baseUrl + (avatar.startsWith('/') ? avatar : `/${avatar}`)
+  }
+  
+  // 添加时间戳
+  return url.includes('?') ? `${url}&_t=${timestamp}` : `${url}?_t=${timestamp}`
+}
+
+// 刷新头像变量
+const avatarKey = ref(0)
+const refreshAvatar = () => {
+  avatarKey.value++
+  console.log('Avatar key updated:', avatarKey.value)
+  
+  // 强制刷新已加载的头像
+  const avatarImg = document.querySelector('.user-avatar img') as HTMLImageElement
+  if (avatarImg) {
+    // 添加随机参数强制浏览器重新加载
+    const originalSrc = avatarImg.src.split('?')[0]
+    avatarImg.src = `${originalSrc}?t=${new Date().getTime()}`
+    console.log('强制刷新头像元素:', avatarImg.src)
+  }
+}
+
+// 处理上传开始
+const handleAvatarUploadStart = () => {
+  uploading.value = true;
+  console.log('开始上传头像...');
+}
+
+// 处理上传错误
+const handleAvatarError = (error: any) => {
+  console.error('头像上传失败:', error);
+  ElMessage.error('头像上传失败，请稍后重试');
+  uploading.value = false;
+}
+
+// 处理头像上传成功
+const handleAvatarSuccess = (response: any) => {
+  console.log('头像上传成功响应:', response);
+  
+  // 确保响应中包含头像URL
+  if (!response.avatar_url) {
+    ElMessage.error('服务器未返回头像URL');
+    return;
+  }
+  
+  // 使用服务器返回的头像URL更新头像
+  let avatarUrl = response.avatar_url;
+  
+  // 确保URL格式正确（开头有/）
+  if (avatarUrl && !avatarUrl.startsWith('/') && !avatarUrl.startsWith('http')) {
+    avatarUrl = '/' + avatarUrl;
+  }
+  
+  console.log('处理后的头像URL:', avatarUrl);
+  
+  // 保存到表单中用于更新资料
+  profileForm.avatar = avatarUrl;
+  
+  // 更新用户存储中的头像
+  userStore.setUserInfo({ avatar: avatarUrl });
+  
+  // 强制刷新头像显示
+  refreshAvatar();
+  
+  // 设置上传状态为完成
+  uploading.value = false;
+  
+  ElMessage.success('头像上传成功');
+}
 
 // 上传头像
 const handleAvatarUpload = (options: any) => {
@@ -71,38 +172,25 @@ const handleAvatarUpload = (options: any) => {
       throw new Error('服务器未返回头像URL');
     }
     
-    // 获取头像相对路径 - 使用服务器返回的原始路径
-    let avatarPath = response.data.avatar_url;
-    console.log('服务器返回的头像路径:', avatarPath);
+    // 使用服务器返回的头像URL更新头像
+    let avatarUrl = response.data.avatar_url;
     
-    // 确保路径以斜杠开头
-    if (!avatarPath.startsWith('/')) {
-      avatarPath = '/' + avatarPath;
+    // 确保URL格式正确（开头有/）
+    if (avatarUrl && !avatarUrl.startsWith('/') && !avatarUrl.startsWith('http')) {
+      avatarUrl = '/' + avatarUrl;
     }
     
-    // 保存相对路径用于资料更新
-    profileForm.avatar = avatarPath;
+    console.log('处理后的头像URL:', avatarUrl);
     
-    // 为了前端显示，构建完整URL
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
-    let displayUrl = avatarPath;
+    // 保存到表单中用于更新资料
+    profileForm.avatar = avatarUrl;
     
-    // 构建完整URL进行显示
-    if (!displayUrl.startsWith('http')) {
-      // 去除URL中可能的双斜杠
-      if (displayUrl.startsWith('/') && baseUrl.endsWith('/')) {
-        displayUrl = `${baseUrl}${displayUrl.substring(1)}`;
-      } else if (!displayUrl.startsWith('/') && !baseUrl.endsWith('/')) {
-        displayUrl = `${baseUrl}/${displayUrl}`;
-      } else {
-        displayUrl = `${baseUrl}${displayUrl}`;
-      }
-    }
+    // 更新用户存储中的头像
+    userStore.setUserInfo({ avatar: avatarUrl });
     
-    console.log('显示用的完整头像URL:', displayUrl);
+    // 强制刷新头像显示
+    refreshAvatar();
     
-    // 更新用户存储中的头像 - 使用相对路径
-    userStore.setUserInfo({ avatar: avatarPath });
     ElMessage.success('头像上传成功');
     
     // 调用上传成功回调
@@ -133,6 +221,26 @@ const saveProfile = async (formEl: FormInstance | undefined) => {
     if (valid) {
       loading.value = true
       try {
+        // 确保从表单获取最新的头像URL
+        const currentAvatar = profileForm.avatar;
+        console.log('当前头像URL:', currentAvatar);
+        
+        // 尝试从本地存储获取最新的头像URL
+        console.log('用户存储中的头像URL:', userStore.avatar);
+        
+        // 获取最新头像URL (优先使用表单中的，再尝试用户存储中的)
+        const avatarToSubmit = currentAvatar || userStore.avatar;
+        console.log('即将提交的头像URL:', avatarToSubmit);
+        
+        // 检查头像URL是否为空
+        if (!avatarToSubmit || avatarToSubmit === '') {
+          console.log('头像URL为空，使用默认头像');
+          // 不阻止表单提交，只是记录日志
+        }
+        
+        // 确保资料表单中的avatar是最新的
+        profileForm.avatar = avatarToSubmit;
+        
         console.log('提交更新的个人资料:', {
           username: profileForm.username,
           email: profileForm.email,
@@ -146,6 +254,13 @@ const saveProfile = async (formEl: FormInstance | undefined) => {
           location: profileForm.location,
           avatar: profileForm.avatar
         })
+        
+        // 成功后强制刷新头像显示
+        setTimeout(() => {
+          refreshAvatar();
+          console.log('保存成功后刷新头像');
+        }, 100);
+        
         ElMessage.success('个人资料更新成功')
       } catch (error: any) {
         console.error('个人资料更新错误:', error);
@@ -216,9 +331,23 @@ const removeFavorite = async (scenicId: string) => {
 
 // 初始化
 onMounted(() => {
+  // 检查URL参数，如果有tab参数并且是'favorites'，则切换到收藏标签页
+  if (route.query.tab === 'favorites') {
+    activeTab.value = 'favorites'
+  }
+
   // 如果选择了收藏标签页，加载收藏列表
   if (activeTab.value === 'favorites') {
     getFavorites()
+  }
+  
+  // 确保头像URL正确格式化并加载
+  if (profileForm.avatar) {
+    console.log('初始化头像:', profileForm.avatar)
+    // 延迟100ms刷新头像，确保DOM已经加载
+    setTimeout(() => {
+      refreshAvatar()
+    }, 100)
   }
 })
 
@@ -233,6 +362,70 @@ const handleTabClick = (tab: any) => {
 const userInfo = computed(() => {
   return userStore.getUserInfo()
 })
+
+// 测试直接访问头像
+const testDirectAccess = () => {
+  if (!profileForm.avatar) {
+    ElMessage.warning('没有头像路径可以测试')
+    return
+  }
+  
+  // 构建完整URL
+  const fullUrl = getFullAvatarUrl(profileForm.avatar)
+  console.log('测试直接访问头像URL:', fullUrl)
+  
+  // 在新窗口中打开图片URL
+  window.open(fullUrl, '_blank')
+  
+  // 尝试预加载图片
+  const img = new Image()
+  img.onload = () => {
+    console.log('头像图片加载成功!')
+    ElMessage.success('头像图片加载成功!')
+  }
+  img.onerror = (e) => {
+    console.error('头像图片加载失败:', e)
+    ElMessage.error('头像图片加载失败，请检查网络控制台获取详细错误')
+  }
+  img.src = fullUrl
+}
+
+// 删除账户
+const deleteAccountVisible = ref(false)
+const deleteAccountPassword = ref('')
+const deleteAccountLoading = ref(false)
+
+const showDeleteAccountConfirm = () => {
+  const result = confirm('删除账户将永久移除您的所有数据，包括个人信息和收藏记录，此操作不可撤销。是否确认继续？')
+  if (result) {
+    deleteAccountVisible.value = true
+  }
+}
+
+const handleDeleteAccount = async () => {
+  if (!deleteAccountPassword.value) {
+    ElMessage.error('请输入密码以确认删除')
+    return
+  }
+  
+  deleteAccountLoading.value = true
+  try {
+    await userStore.deleteAccount(deleteAccountPassword.value)
+    ElMessage.success('账户已成功删除')
+    deleteAccountVisible.value = false
+    // 重定向到登录页面
+    router.push('/login')
+  } catch (error: any) {
+    if (error.response?.data?.message) {
+      ElMessage.error(error.response.data.message)
+    } else {
+      ElMessage.error('删除账户失败，请稍后重试')
+    }
+    console.error('删除账户失败:', error)
+  } finally {
+    deleteAccountLoading.value = false
+  }
+}
 </script>
 
 <template>
@@ -250,7 +443,8 @@ const userInfo = computed(() => {
           <div class="user-info-container">
             <div class="avatar-section">
               <el-avatar 
-                :src="profileForm.avatar || 'https://cube.elemecdn.com/3/7c/3ea6beec64369c2642b92c6726f1epng.png'" 
+                :key="avatarKey"
+                :src="profileForm.avatar ? getFullAvatarUrl(profileForm.avatar) : 'https://cube.elemecdn.com/3/7c/3ea6beec64369c2642b92c6726f1epng.png'" 
                 :size="120" 
                 class="user-avatar"
               >
@@ -258,13 +452,23 @@ const userInfo = computed(() => {
                   <el-icon style="font-size: 30px; color: #909399;"><Picture /></el-icon>
                 </template>
               </el-avatar>
-              <div class="avatar-upload-container">
+              
+              <!-- 头像操作按钮区域 -->
+              <div class="avatar-buttons">
+                <el-button type="primary" size="small" @click="testDirectAccess" class="avatar-btn">
+                  查看头像
+                </el-button>
+                
                 <el-upload
                   class="avatar-uploader"
-                  action=""
+                  action="/api/users/upload-avatar/"
+                  :headers="{ 'Authorization': `Token ${userStore.token}` }"
                   :show-file-list="false"
-                  :auto-upload="false"
-                  :http-request="handleAvatarUpload"
+                  :auto-upload="true"
+                  :on-success="handleAvatarSuccess"
+                  :on-error="handleAvatarError"
+                  :on-progress="handleAvatarUploadStart"
+                  name="avatar"
                   accept="image/jpeg,image/png,image/gif"
                   :before-upload="(file: File) => { 
                     const isLt5M = file.size / 1024 / 1024 < 5;
@@ -280,13 +484,15 @@ const userInfo = computed(() => {
                     return true;
                   }"
                 >
-                  <el-button type="primary" size="small" :loading="uploading" class="upload-btn">
+                  <el-button type="primary" size="small" :loading="uploading" class="avatar-btn upload-btn">
                     <el-icon class="el-icon--left"><Upload /></el-icon>更换头像
                   </el-button>
-                  <div class="el-upload__tip">
-                    支持 JPG、PNG、GIF 格式，不超过 5MB
-                  </div>
                 </el-upload>
+              </div>
+              
+              <!-- 提示信息 -->
+              <div class="el-upload__tip">
+                支持JPG、PNG、GIF格式，不超过5MB
               </div>
             </div>
             
@@ -320,6 +526,18 @@ const userInfo = computed(() => {
                     <el-icon class="el-icon--left"><Check /></el-icon>保存修改
                   </el-button>
                 </el-form-item>
+                
+                <!-- 账户安全区域 -->
+                <div style="margin-top: 30px; border-top: 1px solid #ebeef5; padding-top: 20px;">
+                  <h3 style="font-size: 16px; color: #303133; margin-bottom: 16px;">账户安全</h3>
+                  <el-button 
+                    type="danger" 
+                    @click="showDeleteAccountConfirm"
+                    plain
+                  >
+                    <el-icon class="el-icon--left"><Delete /></el-icon>删除账户
+                  </el-button>
+                </div>
               </el-form>
             </div>
           </div>
@@ -389,6 +607,41 @@ const userInfo = computed(() => {
         </el-tab-pane>
       </el-tabs>
     </el-card>
+    
+    <!-- 删除账户确认对话框 -->
+    <el-dialog
+      v-model="deleteAccountVisible"
+      title="确认删除账户"
+      width="400px"
+      :close-on-click-modal="false"
+      :close-on-press-escape="!deleteAccountLoading"
+    >
+      <div>
+        <p>请输入您的密码以确认删除账户：</p>
+        <el-input
+          v-model="deleteAccountPassword"
+          type="password"
+          placeholder="请输入密码"
+          show-password
+          class="delete-account-input"
+        />
+        <p class="dialog-warning">
+          提示：账户删除后将无法恢复，所有数据将被永久删除。
+        </p>
+      </div>
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button @click="deleteAccountVisible = false" :disabled="deleteAccountLoading">取消</el-button>
+          <el-button
+            type="danger"
+            @click="handleDeleteAccount"
+            :loading="deleteAccountLoading"
+          >
+            确认删除
+          </el-button>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -430,22 +683,23 @@ const userInfo = computed(() => {
   border: 4px solid #fff;
 }
 
-.avatar-upload-container {
+.avatar-buttons {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  margin-top: 10px;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 15px;
+  width: 100%;
 }
 
 .avatar-uploader {
-  margin-top: 5px;
+  display: inline-block;
 }
 
-.upload-btn {
+.avatar-btn {
   transition: all 0.3s;
 }
 
-.upload-btn:hover {
+.avatar-btn:hover {
   transform: translateY(-2px);
 }
 
@@ -453,6 +707,8 @@ const userInfo = computed(() => {
   margin-top: 8px;
   color: #909399;
   font-size: 12px;
+  text-align: center;
+  width: 100%;
 }
 
 .info-form-section {
@@ -539,6 +795,23 @@ const userInfo = computed(() => {
   display: flex;
   justify-content: space-between;
   margin-top: 15px;
+}
+
+.delete-account-input {
+  margin: 20px 0;
+  width: 100%;
+}
+
+.dialog-warning {
+  color: #e6a23c;
+  font-size: 14px;
+  margin-top: 16px;
+}
+
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
 }
 
 @media (min-width: 768px) {

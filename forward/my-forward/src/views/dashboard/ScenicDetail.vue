@@ -23,9 +23,13 @@
           <span>{{ scenic.address }}</span>
         </div>
         <div class="back-button">
-          <el-button type="primary" size="small" @click="goBackToSearch">
+          <el-button type="primary" size="small" @click="goBackToSearch" style="margin-right: 10px;">
             <el-icon><Back /></el-icon>
             返回筛选页面
+          </el-button>
+          <el-button type="success" size="small" @click="goBackToFavorites">
+            <el-icon><Back /></el-icon>
+            返回我的收藏
           </el-button>
         </div>
       </div>
@@ -551,7 +555,7 @@ export default defineComponent({
       
       try {
         await userStore.toggleFavorite(scenicId.value)
-        ElMessage.success(isFavorite.value ? '已取消收藏' : '收藏成功')
+        ElMessage.success(isFavorite.value ? '收藏成功' : '已取消收藏')
       } catch (error) {
         console.error('收藏操作失败:', error)
         ElMessage.error('收藏操作失败，请重试')
@@ -607,6 +611,14 @@ export default defineComponent({
       return iconMap[type] || 'Location'
     }
     
+    // 返回我的收藏页面
+    const goBackToFavorites = () => {
+      router.push({ 
+        path: '/dashboard/profile',
+        query: { tab: 'favorites' }
+      })
+    }
+    
     onMounted(() => {
       fetchScenicDetail();
     })
@@ -632,6 +644,7 @@ export default defineComponent({
       getTrafficIcon,
       getFacilityIcon,
       goBackToSearch,
+      goBackToFavorites,
       trafficContent
     }
   }
