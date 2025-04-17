@@ -1,139 +1,73 @@
-# 景区数据可视化平台后端
+# 全国景区数据分析及可视化系统后端
 
-## 项目简介
-
-这是景区数据可视化平台的后端服务，基于Django和Django REST Framework构建，为前端应用提供API服务。本项目处理用户认证、景区数据管理、数据分析处理等功能，并支持多数据库连接以满足不同的数据存储需求。
+## 项目介绍
+这是一个基于Django和Django REST Framework开发的全国景区数据分析及可视化系统后端。系统提供了景区数据管理、用户管理、收藏功能和数据分析等功能，为前端应用提供了全面的API支持。
 
 ## 技术栈
+- **Python 3.x**
+- **Django 5.1.6**
+- **Django REST Framework**
+- **MySQL** (单一数据库：scenic_area)
+- **Redis** (缓存)
+- **SMTP** (邮件服务)
 
-- **Web框架**: Django 5.1
-- **API框架**: Django REST Framework
-- **数据库**: 
-  - MySQL (用于结构化数据存储)
-  - MongoDB (用于景区原始数据存储)
-- **认证系统**: 
-  - Token认证
-  - Session认证
-- **跨域支持**: django-cors-headers
-- **数据处理**: 
-  - 自然语言处理(jieba分词)
-  - 情感分析
-  - 数据清洗与标准化
-- **缓存系统**: Redis
-- **邮件服务**: SMTP (通过QQ邮箱)
-
-## 目录结构
-
+## 项目结构
 ```
 backend/
-├── admin_management/          # 管理员功能模块
-│   ├── migrations/            # 数据库迁移文件
-│   ├── serializers.py         # 数据序列化
-│   ├── urls.py                # 路由配置
-│   ├── views.py               # 视图函数
-│   └── models.py              # 数据模型
-├── user_management/           # 用户管理模块
-│   ├── migrations/            # 数据库迁移文件
-│   ├── models.py              # 用户数据模型
-│   ├── serializers.py         # 用户数据序列化
-│   ├── urls.py                # 用户路由配置
-│   ├── utils.py               # 工具函数
-│   └── views.py               # 用户视图函数
-├── scenic_data/               # 景区数据模块
-│   ├── migrations/            # 数据库迁移文件
-│   ├── models.py              # 景区数据模型
-│   ├── serializers.py         # 景区数据序列化
-│   ├── urls.py                # 景区API路由
-│   └── views.py               # 景区数据视图函数
-├── data_processing/           # 数据处理模块
-│   ├── scripts/               # 数据处理脚本
-│   └── 数据处理方法和技术.md    # 数据处理方法文档
-├── __pycache__/               # Python缓存文件
-├── asgi.py                    # ASGI配置
-├── check_db.py                # 数据库检查工具
-├── db_routers.py              # 数据库路由配置
-├── manage.py                  # Django管理脚本
-├── settings.py                # 项目配置文件
-├── urls.py                    # 主路由配置
-└── wsgi.py                    # WSGI配置
+├── admin_management/     # 管理员功能模块
+├── data_processing/      # 数据处理脚本和方法
+├── scenic_data/          # 景区数据相关功能
+├── scripts/              # 辅助脚本
+│   └── migrate_hierarchy_tables.py  # 数据库迁移脚本
+├── user_management/      # 用户管理相关功能
+├── users/                # 用户资料和头像管理
+├── __init__.py
+├── asgi.py               # ASGI配置
+├── manage.py             # Django命令行工具
+├── settings.py           # 项目配置
+├── urls.py               # URL路由配置
+└── wsgi.py               # WSGI配置
 ```
 
-## 功能模块
+## 主要功能模块
+1. **景区数据管理** (`scenic_data`)
+   - 景区数据的增删改查
+   - 景区数据分析和可视化支持
+   - 景区分类和级别管理
 
-### 1. 用户管理系统
-- 用户注册与登录
-- 用户信息管理
-- 用户权限控制
-- 密码重置与修改
-- 邮件验证
+2. **用户管理** (`user_management`)
+   - 用户认证（登录、注册、找回密码）
+   - 用户收藏功能
+   - 权限管理
 
-### 2. 管理员系统
-- 管理员登录认证
-- 用户管理功能
-- 用户行为记录查询
-- 系统数据管理
+3. **用户资料** (`users`)
+   - 用户个人信息管理
+   - 头像上传和管理
 
-### 3. 景区数据管理
-- 景区基础数据查询
-- 景区地理分布数据
-- 景区等级与分类
-- 门票与开放时间
-- 评论与情感分析
-- 交通可达性分析
+4. **管理员功能** (`admin_management`)
+   - 系统管理员特有功能
+   - 数据审核与管理
 
-### 4. 数据处理系统
-- 文本数据预处理
-- 自然语言处理
-- 情感分析
-- 关键词提取
-- 数据集成与增强
-- 数据汇总与统计
+5. **数据处理** (`data_processing`)
+   - 数据分析和处理方法
+   - 数据导入导出功能
 
-## 数据库设计
-
-项目使用多数据库配置:
-
-1. **主数据库 (scenic_area)**
-   - 用户信息
-   - 景区基础数据
-   - 评论数据
-   - 用户行为记录
-
-2. **层次分析数据库 (hierarchy_ticketanalysis)**
-   - 景区等级与门票价格关系表
-
-数据库路由器`db_routers.py`实现了对不同模型的读写操作路由到相应的数据库。
+## 数据库配置
+项目使用MySQL数据库：
+- **scenic_area**: 存储景区、用户相关数据以及景区层次分析数据
 
 ## API接口
+API接口按功能模块组织：
+- `/api/` - 用户管理和景区数据接口
+- `/api/users/` - 用户资料和头像接口
+- `/api/admin/` - 管理员功能接口
+- `/admin/` - Django管理界面
 
-API接口按功能分为三类：
+## 环境配置
 
-### 用户接口
-- `POST /api/register/` - 用户注册
-- `POST /api/login/` - 用户登录
-- `GET /api/user-profile/` - 获取用户信息
-- `PUT /api/user-profile/` - 更新用户信息
-- `POST /api/change-password/` - 修改密码
-
-### 管理员接口
-- `POST /api/admin/login/` - 管理员登录
-- `GET /api/admin/users/` - 获取用户列表
-- `GET /api/admin/user-records/` - 获取用户行为记录
-
-### 景区数据接口
-- `GET /api/scenic/list/` - 获取景区列表
-- `GET /api/scenic/{id}/` - 获取景区详情
-- `GET /api/scenic/distribution/` - 获取景区地理分布
-- `GET /api/scenic/classification/` - 获取景区分类数据
-- `GET /api/scenic/ticket-analysis/` - 获取门票分析数据
-- `GET /api/scenic/comment-analysis/` - 获取评论分析数据
-- `GET /api/scenic/transportation/` - 获取交通分析数据
-
-## 部署与运行
-
-### 环境要求
-- Python 3.9+
-- MySQL 8.0+
+### 系统要求
+- Python 3.x
+- MySQL 5.7+
 - Redis (可选，用于缓存)
 
 ### 安装依赖
@@ -147,18 +81,30 @@ python manage.py makemigrations
 python manage.py migrate
 ```
 
+### 创建超级用户
+```bash
+python manage.py createsuperuser
+```
+
 ### 运行开发服务器
 ```bash
 python manage.py runserver
 ```
 
-### 生产环境部署
-生产环境推荐使用Gunicorn + Nginx的部署方式，确保关闭DEBUG模式并设置适当的ALLOWED_HOSTS。
+## 安全提示
+- 生产环境中请修改`settings.py`中的`SECRET_KEY`
+- 关闭`DEBUG`模式
+- 更新数据库密码和邮箱配置
+- 配置适当的`ALLOWED_HOSTS`
 
-## 安全注意事项
+## 部署说明
+1. 设置环境变量
+2. 配置静态文件收集
+3. 使用Gunicorn/uWSGI作为WSGI服务器
+4. 配置Nginx作为反向代理
+5. 设置SSL证书
 
-- 生产环境中更改默认密钥(SECRET_KEY)
-- 关闭DEBUG模式
-- 设置环境变量存储敏感信息
-- 限制CORS来源
-- 配置适当的安全中间件 
+## 注意事项
+- 项目使用Redis进行缓存，确保Redis服务已启动
+- 邮件功能使用的是QQ邮箱SMTP服务，请根据需要替换为其他服务商
+- 媒体文件存储在`media`目录下，确保该目录有适当的权限 

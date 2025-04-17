@@ -2,14 +2,14 @@ import request from './axios';
 
 /**
  * 用户登录
- * @param username 用户名
+ * @param username_or_email 用户名或邮箱
  * @param password 密码
  */
-export function login(username: string, password: string) {
+export function login(username_or_email: string, password: string) {
   return request({
     url: '/api/login/',
     method: 'post',
-    data: { username, password }
+    data: { username_or_email, password }
   });
 }
 
@@ -29,6 +29,36 @@ export function register(username: string, email: string, password: string, code
       email,
       password,
       code
+    }
+  });
+}
+
+/**
+ * 发送忘记密码验证码
+ * @param email 邮箱
+ */
+export function forgotPassword(email: string) {
+  return request({
+    url: '/api/forgot-password/',
+    method: 'post',
+    data: { email }
+  });
+}
+
+/**
+ * 重置密码
+ * @param email 邮箱
+ * @param code 验证码
+ * @param password 新密码
+ */
+export function resetPassword(email: string, code: string, password: string) {
+  return request({
+    url: '/api/reset-password/',
+    method: 'post',
+    data: {
+      email,
+      code,
+      password
     }
   });
 }

@@ -2,6 +2,9 @@ from django.urls import path
 from . import views
 
 urlpatterns = [
+    # 统计数据摘要
+    path('statistics/summary/', views.StatisticsSummaryView.as_view(), name='statistics-summary'),
+    
     # 省份景区分布数据
     path('data/province-distribution/', views.ProvinceDistributionView.as_view(), name='province-distribution'),
     
@@ -32,6 +35,9 @@ urlpatterns = [
     # 景区详情接口
     path('scenic/<str:pk>/', views.ScenicDetailView.as_view(), name='scenic-detail'),
     
+    # 附近景区接口
+    path('scenic/nearby/<str:scenic_id>/', views.NearbyScenicView.as_view(), name='nearby-scenic'),
+    
     # 省份城市景区分布数据
     path('data/province-city-distribution/<str:province_name>/', views.ProvinceCityDistributionView.as_view(), name='province-city-distribution'),
     
@@ -55,4 +61,7 @@ urlpatterns = [
     
     # 景区类型分布数据（用于雷达图和旭日图）
     path('data/scenic-type-distribution/', views.ScenicTypeDistributionView.as_view(), name='scenic-type-distribution'),
+    
+    # 图片代理路由
+    path('proxy/image/', views.ImageProxyView.as_view(), name='image_proxy'),
 ] 

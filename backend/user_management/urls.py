@@ -6,6 +6,8 @@ urlpatterns = [
     # 用户认证相关
     path('login/', views.LoginView.as_view(), name='login'),
     path('register/', views.RegisterView.as_view(), name='register'),
+    path('forgot-password/', views.ForgotPasswordView.as_view(), name='forgot-password'),
+    path('reset-password/', views.ResetPasswordView.as_view(), name='reset-password'),
     
     # 用户资料相关
     path('users/profile/', views.ProfileUpdateView.as_view(), name='profile-update'),

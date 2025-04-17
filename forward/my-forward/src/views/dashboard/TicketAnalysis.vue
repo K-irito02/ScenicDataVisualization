@@ -467,17 +467,41 @@ const updateBoxplotChart = async () => {
       }
       
       // 处理数据
-      const categories = boxplotData.map((item: any) => item.type)
-      const data = boxplotData.map((item: any) => [
-        item.min_price,
-        item.q1_price,
-        item.median_price,
-        item.q3_price,
-        item.max_price
-      ])
+      const categories = boxplotData.map((item: any) => {
+        // 将"景区"标签替换为"A级景区"
+        return item.type === '景区' ? 'A级景区' : item.type
+      })
+      const data = boxplotData.map((item: any) => {
+        // 确保箱线图数据点不完全相同，避免显示为一条线
+        const values = [
+          item.min_price,
+          item.q1_price,
+          item.median_price,
+          item.q3_price,
+          item.max_price
+        ]
+        
+        // 检查是否所有值都相同
+        const allSame = values.every(v => v === values[0])
+        
+        if (allSame) {
+          // 如果所有值相同，添加微小变化使箱线图可见
+          const baseValue = values[0]
+          const variance = Math.max(1, baseValue * 0.05) // 至少1元或5%的变化
+          return [
+            baseValue - variance * 0.5,  // min
+            baseValue - variance * 0.2,  // Q1
+            baseValue,                   // median
+            baseValue + variance * 0.2,  // Q3
+            baseValue + variance * 0.5   // max
+          ]
+        }
+        
+        return values
+      })
       
       // 计算Y轴最大值
-      const maxValues = boxplotData.map((item: any) => item.max_price)
+      const maxValues = data.map(item => Math.max(...item))
       const yAxisMax = Math.ceil(Math.max(...maxValues) * 1.1) // 增加10%空间
       
       const option = {
@@ -494,12 +518,13 @@ const updateBoxplotChart = async () => {
           },
           formatter: function (params: any) {
             const itemData = boxplotData[params.dataIndex]
-            return `${itemData.type}<br>
-                   最小值: ${itemData.min_price}元<br>
-                   下四分位: ${itemData.q1_price}元<br>
-                   中位数: ${itemData.median_price}元<br>
-                   上四分位: ${itemData.q3_price}元<br>
-                   最大值: ${itemData.max_price}元`
+            const dataItem = data[params.dataIndex]
+            return `${itemData.type === '景区' ? 'A级景区' : itemData.type}<br>
+                   最小值: ${dataItem[0].toFixed(2)}元<br>
+                   下四分位: ${dataItem[1].toFixed(2)}元<br>
+                   中位数: ${dataItem[2].toFixed(2)}元<br>
+                   上四分位: ${dataItem[3].toFixed(2)}元<br>
+                   最大值: ${dataItem[4].toFixed(2)}元`
           }
         },
         grid: {
@@ -559,17 +584,41 @@ const updateBoxplotChart = async () => {
       }
       
       // 处理数据
-      const categories = boxplotData.map((item: any) => item.level)
-      const data = boxplotData.map((item: any) => [
-        item.min_price,
-        item.q1_price,
-        item.median_price,
-        item.q3_price,
-        item.max_price
-      ])
+      const categories = boxplotData.map((item: any) => {
+        // 将"景区"标签替换为"A级景区"
+        return item.level === '景区' ? 'A级景区' : item.level
+      })
+      const data = boxplotData.map((item: any) => {
+        // 确保箱线图数据点不完全相同，避免显示为一条线
+        const values = [
+          item.min_price,
+          item.q1_price,
+          item.median_price,
+          item.q3_price,
+          item.max_price
+        ]
+        
+        // 检查是否所有值都相同
+        const allSame = values.every(v => v === values[0])
+        
+        if (allSame) {
+          // 如果所有值相同，添加微小变化使箱线图可见
+          const baseValue = values[0]
+          const variance = Math.max(1, baseValue * 0.05) // 至少1元或5%的变化
+          return [
+            baseValue - variance * 0.5,  // min
+            baseValue - variance * 0.2,  // Q1
+            baseValue,                   // median
+            baseValue + variance * 0.2,  // Q3
+            baseValue + variance * 0.5   // max
+          ]
+        }
+        
+        return values
+      })
       
       // 计算Y轴最大值
-      const maxValues = boxplotData.map((item: any) => item.max_price)
+      const maxValues = data.map(item => Math.max(...item))
       const yAxisMax = Math.ceil(Math.max(...maxValues) * 1.1) // 增加10%空间
       
       // 使用映射获取正确的显示名称
@@ -589,12 +638,14 @@ const updateBoxplotChart = async () => {
           },
           formatter: function (params: any) {
             const itemData = boxplotData[params.dataIndex]
-            return `${itemData.level}<br>
-                   最小值: ${itemData.min_price}元<br>
-                   下四分位: ${itemData.q1_price}元<br>
-                   中位数: ${itemData.median_price}元<br>
-                   上四分位: ${itemData.q3_price}元<br>
-                   最大值: ${itemData.max_price}元`
+            const dataItem = data[params.dataIndex]
+            return `${itemData.level === '景区' ? 'A级景区' : itemData.level}<br>
+                   最小值: ${dataItem[0].toFixed(2)}元<br>
+                   下四分位: ${dataItem[1].toFixed(2)}元<br>
+                   中位数: ${dataItem[2].toFixed(2)}元<br>
+                   上四分位: ${dataItem[3].toFixed(2)}元<br>
+                   最大值: ${dataItem[4].toFixed(2)}元<br>
+                   样本数: ${itemData.count || '未知'}`
           }
         },
         grid: {

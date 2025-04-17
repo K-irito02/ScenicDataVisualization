@@ -10,11 +10,15 @@ from collections import defaultdict, Counter
 import json
 import re
 from django.utils import timezone
-from django.http import Http404
+from django.http import Http404, HttpResponse
 from django.urls import reverse
 from django.contrib.auth.models import User
 from django.db import connection, connections
 import os  # 添加os模块用于路径处理
+import requests
+from urllib.parse import urlparse
+import math
+import logging
 
 from .models import (
     ScenicData, PriceData, ProvinceTraffic, TimeData, TrafficData,
@@ -29,6 +33,8 @@ from .serializers import (
     TransportationLinkSerializer, FilterOptionsSerializer
 )
 from user_management.models import UserActionRecord
+
+logger = logging.getLogger(__name__)
 
 class ProvinceDistributionView(views.APIView):
     """省份景区分布视图"""
@@ -82,81 +88,60 @@ class ScenicLevelsView(views.APIView):
         result = {}
         
         # 景区等级分布
-        with connections['hierarchy_database'].cursor() as cursor:
-            cursor.execute("SELECT level, count FROM scenic_level_price")
-            scenic_levels = [{'name': row[0], 'value': row[1]} for row in cursor.fetchall()]
-            result['scenic_levels'] = scenic_levels
-            
-            # 景区等级票价
-            cursor.execute("SELECT level, average_price FROM scenic_level_price")
-            scenic_level_prices = [{'name': row[0], 'value': row[1]} for row in cursor.fetchall()]
-            result['scenic_level_prices'] = scenic_level_prices
+        scenic_levels = ScenicLevelPrice.objects.all().values('level', 'count')
+        result['scenic_levels'] = [{'name': item['level'], 'value': item['count']} for item in scenic_levels]
+        
+        # 景区等级票价
+        scenic_level_prices = ScenicLevelPrice.objects.all().values('level', 'average_price')
+        result['scenic_level_prices'] = [{'name': item['level'], 'value': item['average_price']} for item in scenic_level_prices]
         
         # 博物馆等级分布
-        with connections['hierarchy_database'].cursor() as cursor:
-            cursor.execute("SELECT level, count FROM museum_level_price")
-            museum_levels = [{'name': row[0], 'value': row[1]} for row in cursor.fetchall()]
-            result['museum_levels'] = museum_levels
-            
-            # 博物馆等级票价
-            cursor.execute("SELECT level, average_price FROM museum_level_price")
-            museum_level_prices = [{'name': row[0], 'value': row[1]} for row in cursor.fetchall()]
-            result['museum_level_prices'] = museum_level_prices
+        museum_levels = MuseumLevelPrice.objects.all().values('level', 'count')
+        result['museum_levels'] = [{'name': item['level'], 'value': item['count']} for item in museum_levels]
+        
+        # 博物馆等级票价
+        museum_level_prices = MuseumLevelPrice.objects.all().values('level', 'average_price')
+        result['museum_level_prices'] = [{'name': item['level'], 'value': item['average_price']} for item in museum_level_prices]
         
         # 地质公园等级分布
-        with connections['hierarchy_database'].cursor() as cursor:
-            cursor.execute("SELECT level, count FROM geological_park_level_price")
-            geo_levels = [{'name': row[0], 'value': row[1]} for row in cursor.fetchall()]
-            result['geo_levels'] = geo_levels
-            
-            # 地质公园等级票价
-            cursor.execute("SELECT level, average_price FROM geological_park_level_price")
-            geo_level_prices = [{'name': row[0], 'value': row[1]} for row in cursor.fetchall()]
-            result['geo_level_prices'] = geo_level_prices
+        geo_levels = GeoLogicalParkLevelPrice.objects.all().values('level', 'count')
+        result['geo_levels'] = [{'name': item['level'], 'value': item['count']} for item in geo_levels]
+        
+        # 地质公园等级票价
+        geo_level_prices = GeoLogicalParkLevelPrice.objects.all().values('level', 'average_price')
+        result['geo_level_prices'] = [{'name': item['level'], 'value': item['average_price']} for item in geo_level_prices]
         
         # 森林公园等级分布
-        with connections['hierarchy_database'].cursor() as cursor:
-            cursor.execute("SELECT level, count FROM forest_park_level_price")
-            forest_levels = [{'name': row[0], 'value': row[1]} for row in cursor.fetchall()]
-            result['forest_levels'] = forest_levels
-            
-            # 森林公园等级票价
-            cursor.execute("SELECT level, average_price FROM forest_park_level_price")
-            forest_level_prices = [{'name': row[0], 'value': row[1]} for row in cursor.fetchall()]
-            result['forest_level_prices'] = forest_level_prices
+        forest_levels = ForestParkLevelPrice.objects.all().values('level', 'count')
+        result['forest_levels'] = [{'name': item['level'], 'value': item['count']} for item in forest_levels]
+        
+        # 森林公园等级票价
+        forest_level_prices = ForestParkLevelPrice.objects.all().values('level', 'average_price')
+        result['forest_level_prices'] = [{'name': item['level'], 'value': item['average_price']} for item in forest_level_prices]
         
         # 湿地公园等级分布
-        with connections['hierarchy_database'].cursor() as cursor:
-            cursor.execute("SELECT level, count FROM wetland_level_price")
-            wetland_levels = [{'name': row[0], 'value': row[1]} for row in cursor.fetchall()]
-            result['wetland_levels'] = wetland_levels
-            
-            # 湿地公园等级票价
-            cursor.execute("SELECT level, average_price FROM wetland_level_price")
-            wetland_level_prices = [{'name': row[0], 'value': row[1]} for row in cursor.fetchall()]
-            result['wetland_level_prices'] = wetland_level_prices
+        wetland_levels = WetlandLevelPrice.objects.all().values('level', 'count')
+        result['wetland_levels'] = [{'name': item['level'], 'value': item['count']} for item in wetland_levels]
+        
+        # 湿地公园等级票价
+        wetland_level_prices = WetlandLevelPrice.objects.all().values('level', 'average_price')
+        result['wetland_level_prices'] = [{'name': item['level'], 'value': item['average_price']} for item in wetland_level_prices]
         
         # 文物保护单位等级分布
-        with connections['hierarchy_database'].cursor() as cursor:
-            cursor.execute("SELECT level, count FROM cultural_relic_level_price")
-            cultural_levels = [{'name': row[0], 'value': row[1]} for row in cursor.fetchall()]
-            result['cultural_levels'] = cultural_levels
-            
-            # 文物保护单位等级票价
-            cursor.execute("SELECT level, average_price FROM cultural_relic_level_price")
-            cultural_level_prices = [{'name': row[0], 'value': row[1]} for row in cursor.fetchall()]
-            result['cultural_level_prices'] = cultural_level_prices
+        cultural_levels = CulturalRelicLevelPrice.objects.all().values('level', 'count')
+        result['cultural_levels'] = [{'name': item['level'], 'value': item['count']} for item in cultural_levels]
+        
+        # 文物保护单位等级票价
+        cultural_level_prices = CulturalRelicLevelPrice.objects.all().values('level', 'average_price')
+        result['cultural_level_prices'] = [{'name': item['level'], 'value': item['average_price']} for item in cultural_level_prices]
         
         # 自然景区等级分布
-        with connections['hierarchy_database'].cursor() as cursor:
-            cursor.execute("SELECT level, count FROM nature_reserve_level_price")
-            nature_levels = [{'name': row[0], 'value': row[1]} for row in cursor.fetchall()]
-            result['nature_levels'] = nature_levels
-            
-            # 自然景区等级票价
-            cursor.execute("SELECT level, average_price FROM nature_reserve_level_price")
-            nature_level_prices = [{'name': row[0], 'value': row[1]} for row in cursor.fetchall()]
-            result['nature_level_prices'] = nature_level_prices
+        nature_levels = NatureReserveLevelPrice.objects.all().values('level', 'count')
+        result['nature_levels'] = [{'name': item['level'], 'value': item['count']} for item in nature_levels]
+        
+        # 自然景区等级票价
+        nature_level_prices = NatureReserveLevelPrice.objects.all().values('level', 'average_price')
+        result['nature_level_prices'] = [{'name': item['level'], 'value': item['average_price']} for item in nature_level_prices]
         
         return Response(result)
 
@@ -169,90 +154,89 @@ class TicketPricesView(views.APIView):
         result = {}
         
         # 各类型景区的票价分布数据
-        with connections['hierarchy_database'].cursor() as cursor:
-            # 景区等级票价分布
-            cursor.execute("SELECT level, min_price, max_price, average_price, median_price FROM scenic_level_price")
-            result['scenicLevels'] = [
-                {
-                    'name': row[0], 
-                    'min': row[1], 
-                    'max': row[2], 
-                    'avg': row[3],
-                    'median': row[4]
-                } for row in cursor.fetchall()
-            ]
-            
-            # 博物馆等级票价分布
-            cursor.execute("SELECT level, min_price, max_price, average_price, median_price FROM museum_level_price")
-            result['museumLevels'] = [
-                {
-                    'name': row[0], 
-                    'min': row[1], 
-                    'max': row[2], 
-                    'avg': row[3],
-                    'median': row[4]
-                } for row in cursor.fetchall()
-            ]
-            
-            # 地质公园等级票价分布
-            cursor.execute("SELECT level, min_price, max_price, average_price, median_price FROM geological_park_level_price")
-            result['geoLevels'] = [
-                {
-                    'name': row[0], 
-                    'min': row[1], 
-                    'max': row[2], 
-                    'avg': row[3],
-                    'median': row[4]
-                } for row in cursor.fetchall()
-            ]
-            
-            # 森林公园等级票价分布
-            cursor.execute("SELECT level, min_price, max_price, average_price, median_price FROM forest_park_level_price")
-            result['forestLevels'] = [
-                {
-                    'name': row[0], 
-                    'min': row[1], 
-                    'max': row[2], 
-                    'avg': row[3],
-                    'median': row[4]
-                } for row in cursor.fetchall()
-            ]
-            
-            # 湿地公园等级票价分布
-            cursor.execute("SELECT level, min_price, max_price, average_price, median_price FROM wetland_level_price")
-            result['wetlandLevels'] = [
-                {
-                    'name': row[0], 
-                    'min': row[1], 
-                    'max': row[2], 
-                    'avg': row[3],
-                    'median': row[4]
-                } for row in cursor.fetchall()
-            ]
-            
-            # 文物保护单位等级票价分布
-            cursor.execute("SELECT level, min_price, max_price, average_price, median_price FROM cultural_relic_level_price")
-            result['culturalLevels'] = [
-                {
-                    'name': row[0], 
-                    'min': row[1], 
-                    'max': row[2], 
-                    'avg': row[3],
-                    'median': row[4]
-                } for row in cursor.fetchall()
-            ]
-            
-            # 自然景区等级票价分布
-            cursor.execute("SELECT level, min_price, max_price, average_price, median_price FROM nature_reserve_level_price")
-            result['natureLevels'] = [
-                {
-                    'name': row[0], 
-                    'min': row[1], 
-                    'max': row[2], 
-                    'avg': row[3],
-                    'median': row[4]
-                } for row in cursor.fetchall()
-            ]
+        # 景区等级票价分布
+        scenic_levels = ScenicLevelPrice.objects.all().values('level', 'min_price', 'max_price', 'average_price', 'median_price')
+        result['scenicLevels'] = [
+            {
+                'name': item['level'],
+                'min': item['min_price'],
+                'max': item['max_price'],
+                'avg': item['average_price'],
+                'median': item['median_price']
+            } for item in scenic_levels
+        ]
+        
+        # 博物馆等级票价分布
+        museum_levels = MuseumLevelPrice.objects.all().values('level', 'min_price', 'max_price', 'average_price', 'median_price')
+        result['museumLevels'] = [
+            {
+                'name': item['level'],
+                'min': item['min_price'],
+                'max': item['max_price'],
+                'avg': item['average_price'],
+                'median': item['median_price']
+            } for item in museum_levels
+        ]
+        
+        # 地质公园等级票价分布
+        geo_levels = GeoLogicalParkLevelPrice.objects.all().values('level', 'min_price', 'max_price', 'average_price', 'median_price')
+        result['geoLevels'] = [
+            {
+                'name': item['level'],
+                'min': item['min_price'],
+                'max': item['max_price'],
+                'avg': item['average_price'],
+                'median': item['median_price']
+            } for item in geo_levels
+        ]
+        
+        # 森林公园等级票价分布
+        forest_levels = ForestParkLevelPrice.objects.all().values('level', 'min_price', 'max_price', 'average_price', 'median_price')
+        result['forestLevels'] = [
+            {
+                'name': item['level'],
+                'min': item['min_price'],
+                'max': item['max_price'],
+                'avg': item['average_price'],
+                'median': item['median_price']
+            } for item in forest_levels
+        ]
+        
+        # 湿地公园等级票价分布
+        wetland_levels = WetlandLevelPrice.objects.all().values('level', 'min_price', 'max_price', 'average_price', 'median_price')
+        result['wetlandLevels'] = [
+            {
+                'name': item['level'],
+                'min': item['min_price'],
+                'max': item['max_price'],
+                'avg': item['average_price'],
+                'median': item['median_price']
+            } for item in wetland_levels
+        ]
+        
+        # 文物保护单位等级票价分布
+        cultural_levels = CulturalRelicLevelPrice.objects.all().values('level', 'min_price', 'max_price', 'average_price', 'median_price')
+        result['culturalLevels'] = [
+            {
+                'name': item['level'],
+                'min': item['min_price'],
+                'max': item['max_price'],
+                'avg': item['average_price'],
+                'median': item['median_price']
+            } for item in cultural_levels
+        ]
+        
+        # 自然景区等级票价分布
+        nature_levels = NatureReserveLevelPrice.objects.all().values('level', 'min_price', 'max_price', 'average_price', 'median_price')
+        result['natureLevels'] = [
+            {
+                'name': item['level'],
+                'min': item['min_price'],
+                'max': item['max_price'],
+                'avg': item['average_price'],
+                'median': item['median_price']
+            } for item in nature_levels
+        ]
         
         return Response(result)
 
@@ -551,33 +535,51 @@ class WordCloudView(views.APIView):
     
     def get(self, request, scenic_id):
         # 获取景区词云数据
-        scenic = get_object_or_404(ScenicData, scenic_id=scenic_id)
+        try:
+            
+            # 处理ID格式，确保能正确查询
+            try:
+                # 如果scenic_id是纯数字，可能需要转换为整数
+                if scenic_id.isdigit():
+                    numeric_id = int(scenic_id)
+                    scenic = get_object_or_404(ScenicData, scenic_id=numeric_id)
+                else:
+                    # 否则作为字符串查询
+                    scenic = get_object_or_404(ScenicData, scenic_id=scenic_id)
+            except Exception as e:
+                # 尝试作为景区名称查询
+                scenic = get_object_or_404(ScenicData, name=scenic_id)
+            
+            # 记录查看操作(如果用户已登录)
+            if request.user.is_authenticated:
+                UserActionRecord.objects.create(
+                    user=request.user,
+                    action_type='view',
+                    details=f'查看景区词云(ID: {scenic_id})'
+                )
+            
+            word_freq = []
+            
+            # 只使用真实的高频词数据
+            if scenic.high_frequency_words and scenic.high_frequency_words.strip():
+                for word_item in scenic.high_frequency_words.split(','):
+                    if ':' in word_item:
+                        try:
+                            word, freq = word_item.split(':')
+                            word_freq.append({
+                                'name': word.strip(),
+                                'value': int(freq.strip())
+                            })
+                        except (ValueError, TypeError) as e:
+                            print(f"[WordCloud] 解析词项 '{word_item}' 出错: {e}")
+                            continue
+            
+            return Response(word_freq)
         
-        # 记录查看操作(如果用户已登录)
-        if request.user.is_authenticated:
-            UserActionRecord.objects.create(
-                user=request.user,
-                action_type='view',
-                details=f'查看景区词云(ID: {scenic_id})'
-            )
-        
-        word_freq = []
-        
-        # 只使用真实的高频词数据
-        if scenic.high_frequency_words:
-            for word_item in scenic.high_frequency_words.split(','):
-                if ':' in word_item:
-                    try:
-                        word, freq = word_item.split(':')
-                        word_freq.append({
-                            'name': word.strip(),
-                            'value': int(freq.strip())
-                        })
-                    except (ValueError, TypeError):
-                        pass
-        
-        # 不提供示例数据，当没有数据时返回空列表
-        return Response(word_freq)
+        except Exception as e:
+            print(f"[WordCloud] 处理景区词云请求时出错: {e}")
+            # 出错时返回空列表
+            return Response([])
 
 class TransportationView(views.APIView):
     """交通方式数据视图"""
@@ -617,11 +619,11 @@ class ScenicSearchView(views.APIView):
             district = request.query_params.get('district', '')
             scenic_type = request.query_params.get('type', '')
             level = request.query_params.get('level', '')
-            price_range = request.query_params.get('priceRange', '0,500')
             
-            # 详细记录请求参数
-            print(f"[搜索请求] 关键词: '{keyword}', 省份: '{province}', 城市: '{city}', 区县: '{district}'")
-            print(f"[搜索请求] 类型: '{scenic_type}', 级别: '{level}', 价格范围: '{price_range}'")
+            # 增强价格范围参数处理，同时支持两种方式
+            price_range = request.query_params.get('priceRange', None)
+            min_price_param = request.query_params.get('min_price', None)
+            max_price_param = request.query_params.get('max_price', None)
             
             # 获取分页参数
             page = request.query_params.get('page', '1')
@@ -640,18 +642,36 @@ class ScenicSearchView(views.APIView):
                 page_size = 12
                 print(f"[警告] 页码或页大小参数无效，使用默认值: page={page}, page_size={page_size}")
             
-            # 处理价格范围
+            # 处理价格范围 - 增强逻辑支持两种参数方式
             min_price = 0
             max_price = 500
+            
+            # 优先使用priceRange参数
             if price_range:
                 try:
                     parts = price_range.split(',')
                     if len(parts) == 2:
                         min_price = float(parts[0])
                         max_price = float(parts[1])
-                        print(f"[价格范围] 解析成功: {min_price}-{max_price}")
                 except (ValueError, TypeError, IndexError) as e:
-                    print(f"[错误] 价格范围解析错误: {e}, 使用默认值: 0-500")
+                    print(f"[错误] 价格范围(priceRange)解析错误: {e}, 将尝试min_price/max_price参数")
+            
+            # 如果priceRange参数处理失败，使用min_price和max_price参数
+            if min_price_param is not None:
+                try:
+                    min_price = float(min_price_param)
+                except (ValueError, TypeError) as e:
+                    print(f"[错误] min_price参数无效: {e}, 使用默认值: {min_price}")
+            
+            if max_price_param is not None:
+                try:
+                    max_price = float(max_price_param)
+                except (ValueError, TypeError) as e:
+                    print(f"[错误] max_price参数无效: {e}, 使用默认值: {max_price}")
+            
+            # 确保价格范围有效（min <= max）
+            if min_price > max_price:
+                min_price, max_price = max_price, min_price
             
             # 构建查询条件
             query = Q()
@@ -661,35 +681,27 @@ class ScenicSearchView(views.APIView):
                     Q(name__icontains=keyword) | 
                     Q(description__icontains=keyword)
                 )
-                print(f"[查询条件] 添加关键词筛选: '{keyword}'")
             
             if province:
                 query &= Q(province=province)
-                print(f"[查询条件] 添加省份筛选: '{province}'")
                 
             if city:
                 query &= Q(city=city)
-                print(f"[查询条件] 添加城市筛选: '{city}'")
                 
             if district:
                 query &= Q(district=district)
-                print(f"[查询条件] 添加区县筛选: '{district}'")
             
             # 改进类型和级别的查询方式，对应数据库中实际的数据格式
             if scenic_type or level:
-                # 打印调试信息
-                print(f"[查询条件] 类型筛选: '{scenic_type}', 级别筛选: '{level}'")
                 
                 # 处理类型和级别组合
                 if scenic_type and level:
                     # 特殊处理A级景区
                     if scenic_type == '景区' or scenic_type == 'A级景区':
-                        print(f"[类型+级别] 特殊处理景区类型: 查询包含'{level}'的景区")
                         query &= Q(scenic_type__icontains=level)
                     else:
                         # 对于其他类型：构建"类型:级别"格式进行精确匹配
                         type_level_pattern = f"{scenic_type}:{level}"
-                        print(f"[类型+级别] 执行类型:级别组合搜索: '{type_level_pattern}'")
                         # 尝试两种模式匹配，增加匹配成功率
                         type_query = (
                             Q(scenic_type__icontains=type_level_pattern) |
@@ -701,7 +713,6 @@ class ScenicSearchView(views.APIView):
                 elif scenic_type:
                     if scenic_type == '景区' or scenic_type == 'A级景区':
                         # 景区类型特殊处理：包含所有A级景区
-                        print(f"[类型筛选] 执行景区类型搜索: 包含所有A级和省级景区")
                         type_query = (
                             Q(scenic_type__icontains='5A景区') |
                             Q(scenic_type__icontains='4A景区') |
@@ -713,14 +724,11 @@ class ScenicSearchView(views.APIView):
                         query &= type_query
                     else:
                         # 其他类型：直接匹配类型名称
-                        print(f"执行单一类型搜索: {scenic_type}")
                         query &= Q(scenic_type__icontains=scenic_type)
             
             # 执行查询
             try:
-                print("[查询执行] 开始执行数据库查询...")
                 results = ScenicData.objects.filter(query).order_by('name')
-                print(f"[查询结果] 初始查询返回 {results.count()} 条结果")
                 
                 # 在Python中处理价格过滤
                 filtered_results = []
@@ -735,9 +743,12 @@ class ScenicSearchView(views.APIView):
                         if price_str and price_str.strip():
                             # 处理特殊价格值
                             price_text = price_str.strip().lower()
-                            if price_text in ['免费', '0', '0元', '0.0', '0.00', 'free', '无需门票']:
+                            # 扩展免费价格的识别范围
+                            if price_text in ['免费', '0', '0元', '0.0', '0.00', 'free', '无需门票', '0.0元', '免门票']:
                                 price = 0
-                                print(f"[价格处理] 景区价格为'{price_text}'，设置为0元: ID={scenic.scenic_id}, 名称={scenic.name}")
+                            # 请咨询景区等特殊说明类价格默认设为0元
+                            elif price_text in ['请咨询景区', '详询景区', '请致电景区', '门市价', '需咨询', '电话咨询']:
+                                price = 0
                             else:
                                 # 尝试提取数字部分
                                 import re
@@ -746,31 +757,33 @@ class ScenicSearchView(views.APIView):
                                 if number_match:
                                     try:
                                         price = float(number_match.group(1))
-                                        print(f"[价格处理] 从'{price_text}'提取到价格: {price}元")
                                     except (ValueError, TypeError) as e:
-                                        print(f"[警告] 价格数字部分无法转换: '{number_match.group(1)}', 错误: {e}")
                                         price = 0
-                                        print(f"[价格处理] 设置默认价格为0元: ID={scenic.scenic_id}")
                                 else:
                                     try:
                                         price = float(price_text)
                                     except (ValueError, TypeError) as e:
-                                        print(f"[警告] 景区价格无法解析: ID={scenic.scenic_id}, price={price_str}, 错误: {e}")
-                                        # 无法解析的价格视为0元
                                         price = 0
-                                        print(f"[价格处理] 无法解析的价格，设置为0元: ID={scenic.scenic_id}")
                         else:
                             print(f"[价格处理] 景区价格为空，设置为0元: ID={scenic.scenic_id}")
                             
+                        # 特殊处理用户选择价格范围包含0的情况
+                        # 如果用户选择的价格范围包含0，免费和咨询类景区将被包含
+                        is_special_price = price == 0 and (not price_str or price_str.strip().lower() in 
+                                                           ['免费', '0', '0元', '0.0', '0.00', 'free', '无需门票', 
+                                                            '请咨询景区', '详询景区', '请致电景区', '门市价', '需咨询', '电话咨询',
+                                                            '0.0元', '免门票'])
+                        
                         # 检查价格是否在范围内
-                        if price < min_price or price > max_price:
-                            print(f"[价格过滤] 景区价格 {price}元 不在范围 {min_price}-{max_price}元 内: ID={scenic.scenic_id}")
+                        if min_price == 0 and is_special_price:
+                            # 用户选择的范围包含0，且是特殊价格，直接包含
+                            filtered_results.append(scenic)
+                        elif price < min_price or price > max_price:
                             price_filter_count += 1
                             continue
-                            
-                        # 价格在范围内，保留此结果
-                        print(f"[价格匹配] 景区价格 {price}元 在范围 {min_price}-{max_price}元 内: ID={scenic.scenic_id}, 名称={scenic.name}")
-                        filtered_results.append(scenic)
+                        else:
+                            # 价格在范围内，保留此结果
+                            filtered_results.append(scenic)
                     except Exception as e:
                         print(f"[错误] 处理景区价格时出错: {e}, ID={scenic.scenic_id}")
                         # 发生异常时，默认保留结果而不是跳过
@@ -778,11 +791,8 @@ class ScenicSearchView(views.APIView):
                         filtered_results.append(scenic)
                         continue
                 
-                print(f"[价格过滤] 过滤掉 {price_filter_count} 条结果，剩余 {len(filtered_results)} 条结果")
-                
                 # 如果过滤后没有结果，则返回空列表
                 if not filtered_results:
-                    print("[查询结果] 最终过滤后没有匹配的景区")
                     return Response({
                         'results': [],
                         'total': 0,
@@ -793,27 +803,76 @@ class ScenicSearchView(views.APIView):
                 
                 # 记录搜索操作(如果用户已登录)
                 try:
+                    search_details = f'搜索景区: {keyword}'
+                    if province or city or district or scenic_type or level:
+                        filters = []
+                        if province: filters.append(f'省份={province}')
+                        if city: filters.append(f'城市={city}')
+                        if district: filters.append(f'区县={district}')
+                        if scenic_type: filters.append(f'类型={scenic_type}')
+                        if level: filters.append(f'等级={level}')
+                        search_details += f'(筛选: {", ".join(filters)})'
+                    
+                    # 区分已登录用户和匿名用户
                     if request.user.is_authenticated:
-                        search_details = f'搜索景区: {keyword}'
-                        if province or city or district or scenic_type or level:
-                            filters = []
-                            if province: filters.append(f'省份={province}')
-                            if city: filters.append(f'城市={city}')
-                            if district: filters.append(f'区县={district}')
-                            if scenic_type: filters.append(f'类型={scenic_type}')
-                            if level: filters.append(f'等级={level}')
-                            search_details += f'(筛选: {", ".join(filters)})'
-                            
+                        # 已登录用户，正常记录搜索操作
                         UserActionRecord.objects.create(
                             user=request.user,
                             action_type='search',
                             details=search_details
                         )
+                    else:
+                        # 匿名用户，使用系统中第一个管理员用户记录
+                        from django.contrib.auth.models import User
+                        try:
+                            # 查找管理员用户
+                            admin_user = User.objects.filter(is_staff=True).first() or User.objects.first()
+                            if admin_user:
+                                UserActionRecord.objects.create(
+                                    user=admin_user,
+                                    action_type='search',
+                                    details=f"[匿名搜索] {search_details}"
+                                )
+                        except Exception as e:
+                            print(f"[匿名搜索] 获取系统用户失败: {str(e)}")
                 except Exception as e:
                     print(f"[警告] 记录用户操作失败: {e}")
+                    import traceback
+                    traceback.print_exc()
                 
-                # 按景区属性排序：有景区属性的排在前面
-                filtered_results.sort(key=lambda x: 0 if x.scenic_type else 1)
+                # 按关键词匹配度排序，将名称中包含关键词的景区排在最前面
+                if keyword:
+                    # 排序函数：先按关键词精确匹配度排序，再按景区属性排序
+                    def sort_by_keyword(scenic):
+                        # 关键词排序分数（值越小越靠前）
+                        keyword_score = 999  # 默认最低优先级
+                        
+                        # 如果景区名称完全等于关键词，最高优先级
+                        if scenic.name.lower() == keyword.lower():
+                            keyword_score = 0
+                        # 如果景区名称以关键词开头，次高优先级
+                        elif scenic.name.lower().startswith(keyword.lower()):
+                            keyword_score = 1
+                        # 如果景区名称包含关键词，再次优先级
+                        elif keyword.lower() in scenic.name.lower():
+                            keyword_score = 2
+                        # 如果景区描述包含关键词，最低优先级
+                        elif keyword.lower() in (scenic.description or "").lower():
+                            keyword_score = 3
+                        
+                        # 按景区属性第二优先级排序（有属性的排在前面）
+                        type_score = 0 if scenic.scenic_type else 1
+                        
+                        return (keyword_score, type_score)
+                    
+                    # 应用排序
+                    filtered_results.sort(key=sort_by_keyword)
+                    
+                    for i, scenic in enumerate(filtered_results[:5], 1):
+                        print(f"  {i}. {scenic.name} (ID: {scenic.scenic_id})")
+                else:
+                    # 无关键词时，仅按景区属性排序
+                    filtered_results.sort(key=lambda x: 0 if x.scenic_type else 1)
                 
                 # 应用分页
                 total_results = len(filtered_results)
@@ -823,16 +882,9 @@ class ScenicSearchView(views.APIView):
                 # 获取当前页的结果
                 paginated_results = filtered_results[start_index:end_index]
                 
-                # 处理单一结果的情况，确保序列化器正常工作
-                if len(paginated_results) == 1:
-                    print(f"[单一结果] 查询仅返回1个结果: {paginated_results[0].name}")
-                
                 # 序列化返回结果
                 serializer = ScenicSearchSerializer(paginated_results, many=True)
                 serialized_data = serializer.data
-                
-                # 记录结果数
-                print(f"[搜索结果] 总数={total_results}, 当前页={len(paginated_results)}, 页码={page}/{(total_results + page_size - 1) // page_size}")
                 
                 # 检查序列化后的数据
                 if len(serialized_data) != len(paginated_results):
@@ -1031,8 +1083,6 @@ class ProvinceCityDistributionView(views.APIView):
     def get(self, request, province_name):
         """获取指定省份内各城市的景区分布数据"""
         try:
-            # 记录请求信息以便调试
-            print(f"请求省份城市分布数据: {province_name}")
             
             # 检查省份是否存在
             if not ScenicData.objects.filter(province=province_name).exists():
@@ -1045,9 +1095,6 @@ class ProvinceCityDistributionView(views.APIView):
                 .values('city')\
                 .annotate(count=Count('scenic_id'))\
                 .order_by('-count')
-            
-            # 打印结果以便调试
-            print(f"找到城市数量: {len(city_counts)}")
             
             # 构建结果数据
             result = []
@@ -1101,7 +1148,6 @@ class ProvinceCityDistributionView(views.APIView):
                     print(f"记录用户操作失败: {record_error}")
                     # 忽略记录错误，继续返回数据
                 
-            print(f"成功返回{province_name}的{len(result)}个城市数据")
             return Response(result)
             
         except Exception as e:
@@ -1118,8 +1164,6 @@ class DistrictDistributionView(views.APIView):
     def get(self, request, province_name, city_name):
         """获取指定省份城市内各区县的景区分布数据"""
         try:
-            # 记录请求信息以便调试
-            print(f"请求区县景区分布数据: {province_name}-{city_name}")
             
             # 检查省份和城市是否存在
             if not ScenicData.objects.filter(province=province_name, city=city_name).exists():
@@ -1134,9 +1178,6 @@ class DistrictDistributionView(views.APIView):
                 ).values('district')\
                 .annotate(count=Count('scenic_id'))\
                 .order_by('-count')
-            
-            # 打印结果以便调试
-            print(f"找到区县数量: {len(district_counts)}")
             
             # 构建结果数据
             result = []
@@ -1199,7 +1240,6 @@ class DistrictDistributionView(views.APIView):
                     print(f"记录用户操作失败: {record_error}")
                     # 忽略记录错误，继续返回数据
                 
-            print(f"成功返回{province_name}{city_name}的{len(result)}个区县数据")
             return Response(result)
             
         except Exception as e:
@@ -1244,8 +1284,6 @@ class SentimentTypeView(views.APIView):
         scenic_type = request.query_params.get('type', '')
         level = request.query_params.get('level', '')
         
-        print(f"[情感分析] 接收到请求参数: 类型={scenic_type}, 级别={level}")
-        
         if not scenic_type:
             return Response({"detail": "必须提供景区类型参数"}, status=status.HTTP_400_BAD_REQUEST)
         
@@ -1257,11 +1295,9 @@ class SentimentTypeView(views.APIView):
             # 景区类型直接按5A、4A等级别查询
             if level:
                 # 如果有指定级别，查询该级别的景区
-                print(f"[情感分析] 查询指定级别景区: {level}")
                 query_filter &= Q(scenic_type__contains=level)
             else:
                 # 否则查询所有景区（5A、4A、3A、2A、省级景区）
-                print("[情感分析] 查询所有景区等级")
                 query_filter &= (
                     Q(scenic_type__contains='5A') | 
                     Q(scenic_type__contains='4A') | 
@@ -1271,19 +1307,14 @@ class SentimentTypeView(views.APIView):
                 )
         elif scenic_type == '水利风景区':
             # 水利风景区查询"是"
-            print("[情感分析] 查询水利风景区")
             query_filter &= Q(scenic_type__contains='水利风景区')
             if level == '是':
-                # 如果指定为"是"，则查询
-                print("[情感分析] 水利风景区级别为'是'")
                 pass  # 已经在上面查询了水利风景区，无需额外过滤
         else:
             # 其他类型使用组合查询（例如"森林公园:国家级"）
-            print(f"[情感分析] 查询景区类型: {scenic_type}")
             query_filter &= Q(scenic_type__contains=scenic_type)
             if level:
                 # 组合查询，找到特定类型特定级别的景区
-                print(f"[情感分析] 组合查询: {scenic_type}:{level}")
                 query_filter &= Q(scenic_type__contains=f"{scenic_type}:{level}")
         
         try:
@@ -1296,7 +1327,6 @@ class SentimentTypeView(views.APIView):
                 sentiment_magnitude__isnull=True
             )
             
-            print(f"[情感分析] 查询到景区数量: {scenic_data.count()}")
             
             # 对于景区类型，我们需要提取等级并分组
             result_data = {}
@@ -1306,9 +1336,6 @@ class SentimentTypeView(views.APIView):
                 level_extracted = self.extract_level(scenic.scenic_type, scenic_type)
                 
                 if level_extracted:
-                    print(f"[情感分析] 景区 '{scenic.name}' 提取到级别: {level_extracted}")
-                    print(f"  - 情感得分: {scenic.sentiment_score} (类型: {type(scenic.sentiment_score).__name__})")
-                    print(f"  - 情感强度: {scenic.sentiment_magnitude} (类型: {type(scenic.sentiment_magnitude).__name__})")
                     
                     if level_extracted not in result_data:
                         result_data[level_extracted] = {
@@ -1328,11 +1355,6 @@ class SentimentTypeView(views.APIView):
                 avg_score = data['total_score'] / data['count'] if data['count'] > 0 else 0
                 avg_magnitude = data['total_magnitude'] / data['count'] if data['count'] > 0 else 0
                 
-                print(f"[情感分析] 级别 '{level_key}' 汇总:")
-                print(f"  - 总得分: {data['total_score']}")
-                print(f"  - 景区数量: {data['count']}")
-                print(f"  - 平均得分: {avg_score}")
-                print(f"  - 平均强度: {avg_magnitude}")
                 
                 response_data.append({
                     'level': level_key,
@@ -1363,9 +1385,6 @@ class SentimentTypeView(views.APIView):
             
             response_data.sort(key=level_sort_key)
             
-            print(f"[情感分析] 最终返回数据数量: {len(response_data)}")
-            for idx, item in enumerate(response_data):
-                print(f"  数据项 {idx+1}: 级别={item['level']}, 得分={item['avg_sentiment_score']}, 强度={item['avg_sentiment_magnitude']}, 数量={item['count']}")
             
             return Response(response_data)
             
@@ -1766,20 +1785,57 @@ class TicketBoxplotByLevelView(views.APIView):
                                     price = float(price_str)
                                     if level not in level_price_map:
                                         level_price_map[level] = []
-                                        
-                                        level_price_map[level].append(price)
+                                    
+                                    level_price_map[level].append(price)
                                 except (ValueError, TypeError):
                                     pass  # 忽略无法转换为数字的价格
+                        # 如果没有明确的等级标识，添加到"其他"类别
+                        else:
+                            price_str = scenic.min_price
+                            if price_str and price_str not in ['请咨询景区', '免费']:
+                                try:
+                                    price = float(price_str)
+                                    if '其他' not in level_price_map:
+                                        level_price_map['其他'] = []
+                                    level_price_map['其他'].append(price)
+                                except (ValueError, TypeError):
+                                    pass
+            
+            # 如果没有找到任何有效的等级数据，尝试使用景区类型直接作为等级
+            if not level_price_map:
+                for scenic in type_scenic_data:
+                    price_str = scenic.min_price
+                    if price_str and price_str not in ['请咨询景区', '免费']:
+                        try:
+                            price = float(price_str)
+                            if scenic_type not in level_price_map:
+                                level_price_map[scenic_type] = []
+                            level_price_map[scenic_type].append(price)
+                        except (ValueError, TypeError):
+                            pass
             
             # 计算各等级的箱线图数据
             for level, price_data in level_price_map.items():
                 if price_data:
+                    # 确保有足够的数据点来计算四分位数
+                    if len(price_data) < 4:
+                        # 如果数据点太少，复制已有数据以确保有足够的点
+                        while len(price_data) < 4:
+                            price_data = price_data + price_data
+                    
                     # 排序价格数据
                     price_data.sort()
                     
                     # 计算最小值、最大值、中位数和四分位数
                     min_price = min(price_data)
                     max_price = max(price_data)
+                    
+                    # 添加一些随机波动，确保箱线图展开（当min=q1=median=q3=max时会显示为一条线）
+                    if min_price == max_price:
+                        # 如果所有价格都相同，创建一个略微不同的范围
+                        variance = max(1.0, min_price * 0.05)  # 至少相差1元，或者5%
+                        min_price = min_price - variance
+                        max_price = max_price + variance
                     
                     # 计算中位数和四分位数
                     n = len(price_data)
@@ -1791,6 +1847,11 @@ class TicketBoxplotByLevelView(views.APIView):
                     
                     q3_idx = 3 * n // 4
                     q3_price = price_data[q3_idx] if 3 * n % 4 != 0 else (price_data[q3_idx-1] + price_data[q3_idx]) / 2
+                    
+                    # 确保四分位数不完全相同，以避免箱线图显示为一条线
+                    if min_price == q1_price == median_price == q3_price == max_price:
+                        q1_price = min_price * 0.95
+                        q3_price = max_price * 1.05
                     
                     result.append({
                         'level': level,
@@ -1923,3 +1984,215 @@ class ScenicTypeDistributionView(views.APIView):
             "radar_data": radar_data,
             "sunburst_data": root_data
         })
+
+class ImageProxyView(views.APIView):
+    """图片代理视图，用于解决第三方网站图片防盗链问题"""
+    permission_classes = [permissions.AllowAny]
+    
+    def get(self, request):
+        try:
+            # 获取要代理的图片URL
+            image_url = request.query_params.get('url', '')
+            if not image_url:
+                return Response({'error': '缺少图片URL参数'}, status=400)
+            
+            # 设置请求头，模拟浏览器请求
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/99.0.4844.51 Safari/537.36',
+                'Referer': 'https://www.mafengwo.cn/',  # 模拟来自马蜂窝网站的请求
+                'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8',
+            }
+            
+            # 发送请求获取图片
+            response = requests.get(image_url, headers=headers, stream=True, timeout=5)
+            
+            # 检查响应状态
+            if response.status_code != 200:
+                return Response({'error': f'图片获取失败，状态码: {response.status_code}'}, status=response.status_code)
+            
+            # 创建一个HttpResponse对象，包含图片内容
+            img_response = HttpResponse(response.content, content_type=response.headers.get('Content-Type', 'image/jpeg'))
+            
+            # 设置缓存控制头
+            img_response['Cache-Control'] = 'max-age=86400, public'  # 缓存一天
+            return img_response
+            
+        except Exception as e:
+            print(f"图片代理服务出错: {str(e)}")
+            return Response({'error': f'图片代理服务出错: {str(e)}'}, status=500)
+
+class NearbyScenicView(views.APIView):
+    """附近景区视图"""
+    permission_classes = [permissions.AllowAny]
+    
+    def get(self, request, scenic_id):
+        try:
+            
+            # 获取当前景区
+            try:
+                scenic = get_object_or_404(ScenicData, scenic_id=scenic_id)
+            except ScenicData.DoesNotExist:
+                return Response({'detail': '景区不存在'}, status=status.HTTP_404_NOT_FOUND)
+            
+            # 检查景区是否有坐标信息
+            if not scenic.coordinates or ',' not in scenic.coordinates:
+                print(f"[NearbyScenic] 景区 {scenic.name} 没有有效的坐标数据")
+                return Response([])
+            
+            # 解析当前景区坐标
+            try:
+                lon, lat = scenic.coordinates.split(',')
+                lon = float(lon)
+                lat = float(lat)
+            except (ValueError, TypeError) as e:
+                print(f"[NearbyScenic] 景区 {scenic.name} 坐标解析错误: {e}")
+                return Response([])
+            
+            # 记录用户操作
+            if request.user.is_authenticated:
+                UserActionRecord.objects.create(
+                    user=request.user,
+                    action_type='view',
+                    details=f'查询附近景区(景区ID: {scenic_id})'
+                )
+            
+            # 获取同省或同城市的景区（优先同城市）
+            nearby_scenics = []
+            
+            # 1. 尝试获取同城市的景区
+            if scenic.city:
+                city_scenics = ScenicData.objects.filter(
+                    city=scenic.city
+                ).exclude(
+                    scenic_id=scenic_id  # 排除当前景区
+                ).exclude(
+                    coordinates__isnull=True  # 排除没有坐标的景区
+                ).exclude(
+                    coordinates='')[:20]  # 限制查询数量
+                
+                if city_scenics.exists():
+                    nearby_scenics = list(city_scenics)
+            
+            # 2. 如果同城市景区太少，获取同省份的景区
+            if len(nearby_scenics) < 10 and scenic.province:
+                province_scenics = ScenicData.objects.filter(
+                    province=scenic.province
+                ).exclude(
+                    scenic_id=scenic_id  # 排除当前景区
+                ).exclude(
+                    city=scenic.city if scenic.city else ''  # 排除已包含的同城市景区
+                ).exclude(
+                    coordinates__isnull=True  # 排除没有坐标的景区
+                ).exclude(
+                    coordinates='')[:20]  # 限制查询数量
+                
+                if province_scenics.exists():
+                    nearby_scenics.extend(list(province_scenics))
+            
+            # 计算距离并按距离排序
+            result = []
+            for nearby in nearby_scenics:
+                if not nearby.coordinates or ',' not in nearby.coordinates:
+                    continue
+                
+                try:
+                    n_lon, n_lat = nearby.coordinates.split(',')
+                    n_lon = float(n_lon)
+                    n_lat = float(n_lat)
+                    
+                    # 计算两点间距离（简化版的Haversine公式）
+                    # 地球平均半径，单位：公里
+                    R = 6371.0
+                    
+                    # 将经纬度转换为弧度
+                    lat1_rad = math.radians(lat)
+                    lon1_rad = math.radians(lon)
+                    lat2_rad = math.radians(n_lat)
+                    lon2_rad = math.radians(n_lon)
+                    
+                    # Haversine公式
+                    dlon = lon2_rad - lon1_rad
+                    dlat = lat2_rad - lat1_rad
+                    a = math.sin(dlat / 2)**2 + math.cos(lat1_rad) * math.cos(lat2_rad) * math.sin(dlon / 2)**2
+                    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+                    distance = R * c  # 距离，单位：公里
+                    
+                    result.append({
+                        'id': nearby.scenic_id,
+                        'name': nearby.name,
+                        'price': nearby.min_price or '免费',
+                        'image': nearby.image_url,
+                        'distance': distance,  # 距离（公里）
+                        'level': nearby.scenic_type  # 景区等级信息
+                    })
+                except (ValueError, TypeError) as e:
+                    print(f"[NearbyScenic] 计算景区 {nearby.name} 距离时出错: {e}")
+                    continue
+            
+            # 按距离排序
+            result.sort(key=lambda x: x['distance'])
+            
+            # 限制最多返回6个景区
+            result = result[:6]
+            
+            return Response(result)
+        
+        except Exception as e:
+            print(f"[NearbyScenic] 处理附近景区请求时出错: {e}")
+            return Response([])
+
+class StatisticsSummaryView(views.APIView):
+    """
+    统计数据摘要API，提供以下数据：
+    - 景区总数 (totalScenicSpots)
+    - 覆盖省份数 (totalProvinces)
+    - 覆盖城市数 (totalCities)
+    - 马蜂窝数据数量 (mafengwoCount)
+    - DeepSeek AI数据数量 (deepseekCount)
+    """
+    permission_classes = [permissions.AllowAny]
+    
+    def get(self, request):
+        try:
+            # 景区总数（查询景区ID的数量）
+            total_scenic_spots = ScenicData.objects.count()
+            
+            # 覆盖省份数（查询不同的省份数量，排除null和空值）
+            total_provinces = ScenicData.objects.filter(
+                ~Q(province__isnull=True) & ~Q(province='')
+            ).values('province').distinct().count()
+            
+            # 覆盖城市数（查询不同的城市数量，排除null和空值）
+            total_cities = ScenicData.objects.filter(
+                ~Q(city__isnull=True) & ~Q(city='')
+            ).values('city').distinct().count()
+            
+            # 马蜂窝数据数量（就是景区总数）
+            mafengwo_count = total_scenic_spots
+            
+            # DeepSeek AI数据数量（查询景区类型及级别字段有效的数量，排除'xxx'和null值）
+            deepseek_count = ScenicData.objects.filter(
+                ~Q(scenic_type__isnull=True) & 
+                ~Q(scenic_type='') & 
+                ~Q(scenic_type='xxx') &
+                ~Q(scenic_type='null')
+            ).count()
+            
+            # 组装返回数据
+            result = {
+                'totalScenicSpots': total_scenic_spots,
+                'totalProvinces': total_provinces,
+                'totalCities': total_cities,
+                'mafengwoCount': mafengwo_count,
+                'deepseekCount': deepseek_count
+            }
+            
+            return Response(result, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            # 记录错误日志
+            print(f"获取统计数据摘要时发生错误: {str(e)}")
+            return Response(
+                {'error': '获取统计数据失败', 'message': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

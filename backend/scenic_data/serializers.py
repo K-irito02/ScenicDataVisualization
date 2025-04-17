@@ -57,8 +57,6 @@ class ScenicSearchSerializer(serializers.ModelSerializer):
         """获取景区等级"""
         try:
             if obj.scenic_type:
-                # 记录原始类型字段，帮助调试
-                print(f"[序列化] 处理景区级别 (ID={obj.scenic_id}, Name={obj.name}): 原始类型={obj.scenic_type}")
                 
                 # 从类型字段中提取等级信息
                 levels = []
@@ -72,12 +70,10 @@ class ScenicSearchSerializer(serializers.ModelSerializer):
                     # 处理A级景区等级
                     if 'A景区' in item or '5A' in item or '4A' in item or '3A' in item or '2A' in item or '1A' in item:
                         levels.append(item.strip())
-                        print(f"[序列化] 提取到A级景区级别: {item.strip()}")
                     
                     # 处理省级景区
                     elif '省级景区' in item:
                         levels.append('省级景区')
-                        print(f"[序列化] 提取到省级景区级别: 省级景区")
                     
                     # 处理类型:级别格式
                     elif ':' in item:
@@ -86,17 +82,14 @@ class ScenicSearchSerializer(serializers.ModelSerializer):
                             level = level.strip()
                             if level:
                                 levels.append(level)
-                                print(f"[序列化] 从'{item}'提取到级别: {level}")
                         except Exception as e:
                             print(f"[警告] 解析类型:级别格式错误: {item}, 错误: {e}")
                 
                 # 返回处理结果
                 if levels:
                     result = ', '.join(levels)
-                    print(f"[序列化] 最终级别结果: {result}")
                     return result
                 else:
-                    print(f"[序列化] 未找到级别信息")
                     return '无等级'
             return '无等级'
         except Exception as e:
@@ -107,7 +100,6 @@ class ScenicSearchSerializer(serializers.ModelSerializer):
         """获取景区类型"""
         try:
             if obj.scenic_type:
-                print(f"[序列化] 处理景区类型 (ID={obj.scenic_id}, Name={obj.name})")
                 
                 # 从类型字段中提取类型信息
                 types = []
@@ -121,7 +113,6 @@ class ScenicSearchSerializer(serializers.ModelSerializer):
                 # 如果是A级景区，先添加"景区"类型
                 if is_a_level_scenic:
                     types.append('景区')
-                    print(f"[序列化] 添加景区类型: 景区 (A级景区)")
                     
                 # 处理其他类型
                 for item in obj.scenic_type.split(','):
@@ -139,27 +130,22 @@ class ScenicSearchSerializer(serializers.ModelSerializer):
                             type_name = type_name.strip()
                             if type_name and type_name not in types:
                                 types.append(type_name)
-                                print(f"[序列化] 从'{item}'提取到类型: {type_name}")
                         except Exception as e:
                             print(f"[警告] 解析类型部分错误: {item}, 错误: {e}")
                     else:
                         # 处理没有冒号的类型，但跳过单独的"景区"（因为A级景区已经处理）
                         if item and item != '景区' and item not in types:
                             types.append(item)
-                            print(f"[序列化] 添加其他类型: {item}")
                 
                 # 如果没有找到任何类型，但原始字符串中包含"景区"，添加"景区"类型
                 if not types and '景区' in obj.scenic_type:
                     types.append('景区')
-                    print(f"[序列化] 添加默认景区类型 (未找到其他类型)")
                 
                 # 返回处理结果
                 if types:
                     result = ', '.join(types)
-                    print(f"[序列化] 最终类型结果: {result}")
                     return result
                 else:
-                    print(f"[序列化] 未找到类型信息")
                     return '未分类'
             return '未分类'
         except Exception as e:
@@ -172,9 +158,12 @@ class ScenicSearchSerializer(serializers.ModelSerializer):
             if obj.min_price:
                 price_text = obj.min_price.strip().lower()
                 
-                # 处理特殊价格值
-                if price_text in ['免费', '0', '0元', '0.0', '0.00', 'free', '无需门票']:
-                    print(f"[序列化] 景区价格为'{price_text}'，序列化为0元: ID={obj.scenic_id}")
+                # 处理特殊价格值 - 扩展免费价格识别范围
+                if price_text in ['免费', '0', '0元', '0.0', '0.00', 'free', '无需门票', '0.0元', '免门票']:
+                    return 0
+                
+                # 处理咨询类价格
+                if price_text in ['请咨询景区', '详询景区', '请致电景区', '门市价', '需咨询', '电话咨询']:
                     return 0
                 
                 # 尝试提取数字部分
@@ -183,7 +172,6 @@ class ScenicSearchSerializer(serializers.ModelSerializer):
                     number_match = re.search(r'(\d+(\.\d+)?)', price_text)
                     if number_match:
                         price = float(number_match.group(1))
-                        print(f"[序列化] 从'{price_text}'提取到价格: {price}元")
                         return price
                     
                     # 尝试直接转换
@@ -193,10 +181,9 @@ class ScenicSearchSerializer(serializers.ModelSerializer):
                     print(f"[序列化警告] 景区价格转换错误: ID={obj.scenic_id}, price={obj.min_price}, 错误: {e}")
                     return 0
             
-            print(f"[序列化] 景区价格为空，序列化为0元: ID={obj.scenic_id}")
             return 0
         except Exception as e:
-            print(f"[序列化错误] 获取景区价格时出错: {e}, ID={obj.scenic_id}")
+            print(f"[错误] 获取景区价格时出错: {e}, ID={obj.scenic_id}")
             return 0
     
     def get_image(self, obj):
@@ -222,11 +209,9 @@ class ScenicSearchSerializer(serializers.ModelSerializer):
         try:
             # 获取原始类型
             original_type = self.get_type(obj)
-            print(f"[序列化] 前端类型映射: 原始类型={original_type}")
             
             # 将"景区"映射为"A级景区"
             if original_type == '景区':
-                print(f"[序列化] 前端类型映射: 将'景区'映射为'A级景区'")
                 return 'A级景区'
             
             # 其他类型保持不变

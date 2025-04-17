@@ -49,6 +49,11 @@ const menuItems = [
     title: '用户记录',
     icon: 'List',
     path: '/admin-dashboard/user-records'
+  },
+  {
+    title: '系统错误日志',
+    icon: 'Warning',
+    path: '/admin-dashboard/error-logs'
   }
 ]
 </script>
@@ -58,8 +63,9 @@ const menuItems = [
     <el-container class="layout-container">
       <el-aside :width="isCollapse ? '64px' : '220px'" class="layout-aside">
         <div class="logo-container">
-          <div class="logo-text" v-if="!isCollapse">管理系统</div>
-          <div class="logo-small-text" v-else>管</div>
+          <img v-if="!isCollapse" src="/logo.png" alt="景区数据可视化平台" class="logo-image" />
+          <img v-else src="/logo.png" alt="景区数据可视化平台" class="logo-image-small" />
+          <span v-if="!isCollapse" class="admin-badge">管理系统</span>
         </div>
         <el-menu
           :default-active="activeMenu"
@@ -136,18 +142,33 @@ const menuItems = [
   justify-content: center;
   align-items: center;
   margin: 10px 0;
+  padding: 0 10px;
+  overflow: hidden;
+  position: relative;
 }
 
-.logo-text {
-  font-size: 20px;
-  font-weight: 600;
-  color: #ffffff;
+.logo-image {
+  max-width: 100%;
+  max-height: 50px;
+  object-fit: contain;
 }
 
-.logo-small-text {
-  font-size: 20px;
-  font-weight: 600;
+.logo-image-small {
+  max-width: 40px;
+  max-height: 40px;
+  object-fit: contain;
+}
+
+.admin-badge {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 12px;
   color: #ffffff;
+  background-color: rgba(0, 0, 0, 0.5);
+  padding: 2px 0;
 }
 
 .menu-container {

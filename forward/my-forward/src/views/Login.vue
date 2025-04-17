@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, reactive, onMounted } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
@@ -14,6 +14,7 @@ interface LoginResponse {
 }
 
 const router = useRouter()
+const route = useRoute()
 const userStore = useUserStore()
 
 const loginForm = reactive({
@@ -34,12 +35,74 @@ const rules = reactive<FormRules>({
   ]
 })
 
+// 添加登录尝试次数限制和防抖功能
+const loginAttempts = ref(0);
+const maxLoginAttempts = 3; // 登录尝试最大次数
+const debounceTimeout = ref<number | null>(null);
+
+// 处理防抖登录提交
+const debounceLogin = (formEl: FormInstance | undefined) => {
+  // 清除之前的计时器
+  if (debounceTimeout.value) {
+    clearTimeout(debounceTimeout.value);
+  }
+  
+  // 设置新的防抖计时器
+  debounceTimeout.value = window.setTimeout(() => {
+    handleLogin(formEl);
+  }, 300);  // 300毫秒的防抖时间
+};
+
+// 在组件加载时检查URL参数
+onMounted(() => {
+  // 检查URL中的参数，显示相应的消息
+  if (route.query.disabled === 'true') {
+    ElMessage.error({
+      message: '您的账号已被管理员禁用，请联系管理员',
+      duration: 5000
+    })
+  } else if (route.query.unauthorized === 'true') {
+    ElMessage.warning({
+      message: '您的登录已过期，请重新登录',
+      duration: 5000
+    })
+  } else if (route.query.expired === 'true') {
+    ElMessage.warning({
+      message: '登录信息已过期，请重新登录',
+      duration: 5000
+    })
+  } else if (route.query.logout === 'true') {
+    ElMessage.success({
+      message: '您已成功退出登录',
+      duration: 3000
+    })
+  }
+  
+  // 清除可能存在的token和用户数据
+  userStore.logout({ redirectToLogin: false, reason: '' })
+})
+
 const handleLogin = async (formEl: FormInstance | undefined) => {
-  if (!formEl) return
+  // 已经在加载状态，不重复提交
+  if (loading.value) return;
+  
+  // 登录尝试次数限制，防止无限循环
+  if (loginAttempts.value >= maxLoginAttempts) {
+    ElMessage.error('尝试登录次数过多，请稍后再试');
+    // 重置登录尝试次数，但添加一个恢复延迟
+    setTimeout(() => {
+      loginAttempts.value = 0;
+    }, 5000);  // 5秒后重置
+    return;
+  }
+  
+  if (!formEl) return;
   
   await formEl.validate(async (valid) => {
     if (valid) {
-      loading.value = true
+      loading.value = true;
+      loginAttempts.value++;  // 增加登录尝试次数
+      
       try {
         // 开发环境下的模拟登录（临时方案）
         if (loginForm.username === 'user' && loginForm.password === 'user123') {
@@ -111,10 +174,50 @@ const handleLogin = async (formEl: FormInstance | undefined) => {
           router.push('/dashboard')
         }, 500)
       } catch (error: any) {
-        console.error('登录失败:', error)
-        ElMessage.error(error.response?.data?.message || '登录失败，请检查用户名和密码')
+        console.error('登录失败:', error);
+        
+        // 改进错误处理逻辑，特别处理禁用用户情况
+        if (error.response) {
+          // 禁用用户可能返回403或400状态码，需要分别处理
+          if (error.response.status === 403 && error.response.data && error.response.data.detail === '用户已被禁用') {
+            // 403 Forbidden - 禁用用户情况
+            ElMessage.error({
+              message: '您的账号已被管理员禁用，请联系管理员',
+              duration: 5000
+            });
+            
+            // 确保清理会话存储，但不进行重定向
+            userStore.logout({ redirectToLogin: false, reason: '' });
+            
+            // 登录尝试次数加倍，快速达到限制
+            loginAttempts.value = maxLoginAttempts;
+          } else if (error.response.status === 400 && 
+                    error.response.data && 
+                    ((error.response.data.detail && error.response.data.detail.includes('已被禁用')) || 
+                     (error.response.data.non_field_errors && error.response.data.non_field_errors.some((e: string) => e.includes('已被禁用'))) ||
+                     (error.response.data.errors && error.response.data.errors.non_field_errors && 
+                      error.response.data.errors.non_field_errors.some((e: string) => e.includes('已被禁用'))))) {
+            // 400 Bad Request，但包含禁用用户信息 - 旧错误格式兼容
+            ElMessage.error({
+              message: '您的账号已被管理员禁用，请联系管理员',
+              duration: 5000
+            });
+            
+            // 确保清理会话存储，但不进行重定向
+            userStore.logout({ redirectToLogin: false, reason: '' });
+          } else if (error.response.status === 400) {
+            // 其他400错误通常是验证错误
+            ElMessage.error(error.response.data.detail || error.response.data.message || '用户名或密码错误');
+          } else {
+            // 其他HTTP错误
+            ElMessage.error(error.response.data.detail || error.response.data.message || '登录失败，请稍后再试');
+          }
+        } else {
+          // 非HTTP错误(如网络问题)
+          ElMessage.error('登录失败，无法连接到服务器');
+        }
       } finally {
-        loading.value = false
+        loading.value = false;
       }
     }
   })
@@ -125,8 +228,7 @@ const goToRegister = () => {
 }
 
 const goToForgotPassword = () => {
-  // 暂时未实现忘记密码功能
-  ElMessage.info('忘记密码功能暂未实现，请联系管理员')
+  router.push('/forgot-password')
 }
 
 const goToAdminLogin = () => {
@@ -138,8 +240,8 @@ const goToAdminLogin = () => {
   <div class="login-container">
     <div class="login-box">
       <div class="logo-container">
-        <el-icon :size="60"><Picture /></el-icon>
-        <h2 class="system-title">全国景区的数据分析及可视化系统</h2>
+        <img src="/logo.png" alt="景区数据可视化平台" class="logo-image" />
+        <h2 class="system-title">全国景区数据分析及可视化系统</h2>
       </div>
       
       <h3 class="login-title">用户登录</h3>
@@ -185,7 +287,7 @@ const goToAdminLogin = () => {
           type="primary" 
           :loading="loading" 
           class="login-button" 
-          @click="handleLogin(loginFormRef)"
+          @click="debounceLogin(loginFormRef)"
         >
           登录
         </el-button>
@@ -229,6 +331,12 @@ const goToAdminLogin = () => {
   flex-direction: column;
   align-items: center;
   margin-bottom: 30px;
+}
+
+.logo-image {
+  width: 100px;
+  height: 100px;
+  margin-bottom: 10px;
 }
 
 .system-title {

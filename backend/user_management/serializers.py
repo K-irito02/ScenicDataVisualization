@@ -22,24 +22,37 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
 class LoginSerializer(serializers.Serializer):
     """登录序列化器"""
-    username = serializers.CharField()
+    username_or_email = serializers.CharField()
     password = serializers.CharField(style={'input_type': 'password'}, write_only=True)
     
     def validate(self, data):
-        username = data.get('username')
+        username_or_email = data.get('username_or_email')
         password = data.get('password')
         
-        if username and password:
-            user = authenticate(username=username, password=password)
-            if user:
-                if not user.is_active:
-                    raise serializers.ValidationError("用户已被禁用")
-                data['user'] = user
-            else:
-                raise serializers.ValidationError("用户名或密码错误")
-        else:
-            raise serializers.ValidationError("必须同时提供用户名和密码")
+        if not username_or_email or not password:
+            raise serializers.ValidationError("必须同时提供用户名/邮箱和密码")
         
+        # 先尝试以用户名查找用户
+        try:
+            user = User.objects.get(username=username_or_email)
+        except User.DoesNotExist:
+            # 如果按用户名找不到，尝试按邮箱查找
+            try:
+                user = User.objects.get(email=username_or_email)
+            except User.DoesNotExist:
+                # 既不是有效的用户名也不是有效的邮箱
+                raise serializers.ValidationError("用户名/邮箱或密码错误")
+        
+        # 先检查用户是否被禁用
+        if not user.is_active:
+            raise serializers.ValidationError("用户已被禁用")
+        
+        # 再验证密码
+        if not user.check_password(password):
+            raise serializers.ValidationError("用户名/邮箱或密码错误")
+        
+        # 认证通过，将用户添加到验证数据中
+        data['user'] = user
         return data
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -71,9 +84,14 @@ class RegisterSerializer(serializers.ModelSerializer):
             }
         }
     
+    def validate_email(self, value):
+        """验证邮箱是否已存在"""
+        if User.objects.filter(email=value).exists():
+            raise serializers.ValidationError("该邮箱已被使用")
+        return value
+    
     def validate_code(self, value):
         email = self.initial_data.get('email')
-        print(f"验证码验证 - 邮箱: {email}, 输入的验证码: {value}")
         
         if not email:
             raise serializers.ValidationError("请先输入邮箱地址")
@@ -81,16 +99,12 @@ class RegisterSerializer(serializers.ModelSerializer):
         # 从Redis获取验证码
         redis_key = f'email_code:{email}'
         stored_code = redis_client.get(redis_key)
-        print(f"Redis中的验证码: {stored_code}")
         
         if not stored_code:
-            print(f"Redis中不存在该邮箱的验证码: {redis_key}")
             raise serializers.ValidationError("验证码已过期，请重新获取")
         
-        print(f"验证码比较: 输入={value}, 存储={stored_code}")
         
         if value != stored_code:
-            print(f"验证码不匹配: 输入={value}, 存储={stored_code}")
             raise serializers.ValidationError("验证码错误")
         
         # 不在此处删除验证码，而是在create方法成功后删除
@@ -99,7 +113,6 @@ class RegisterSerializer(serializers.ModelSerializer):
         return value
     
     def create(self, validated_data):
-        print(f"创建用户 - 数据: {validated_data}")
         try:
             # 移除验证码字段
             validated_data.pop('code')
@@ -112,12 +125,10 @@ class RegisterSerializer(serializers.ModelSerializer):
                 email=validated_data['email'],
                 password=validated_data['password']
             )
-            print(f"用户创建成功: {user.username}")
             
             # 创建用户资料
             try:
                 UserProfile.objects.create(user=user)
-                print(f"用户资料创建成功: {user.username}")
             except Exception as e:
                 print(f"用户资料创建失败: {str(e)}")
                 # 如果创建资料失败，删除已创建的用户
@@ -128,7 +139,6 @@ class RegisterSerializer(serializers.ModelSerializer):
             try:
                 if hasattr(self, '_redis_key'):
                     redis_client.delete(self._redis_key)
-                    print(f"验证码验证成功，已从Redis中删除: {self._redis_key}")
             except Exception as e:
                 print(f"删除Redis验证码失败: {str(e)}")
                 # 验证码删除失败不阻止用户创建
@@ -157,14 +167,9 @@ class ProfileUpdateSerializer(serializers.ModelSerializer):
         """验证并处理avatar URL"""
         if not value:
             return value
-            
-        # 记录原始值，方便调试
-        original_value = value
-        print(f"验证avatar字段，原始值: '{original_value}'")
         
         # 如果是完整URL，直接返回
         if value.startswith('http://') or value.startswith('https://'):
-            print(f"接受完整URL avatar值: '{value}'")
             return value
         
         # 如果是相对路径，确保以/media/开头
@@ -174,7 +179,6 @@ class ProfileUpdateSerializer(serializers.ModelSerializer):
             elif not value.startswith('/'):
                 value = '/media/' + value
                 
-        print(f"标准化后的avatar值: '{value}'")
         return value
     
     def update(self, instance, validated_data):
@@ -191,7 +195,6 @@ class ProfileUpdateSerializer(serializers.ModelSerializer):
         # 更新UserProfile模型字段
         if 'avatar' in validated_data:
             instance.avatar = validated_data['avatar']
-            print(f"更新用户 {user.username} 的头像为: '{validated_data['avatar']}'")
         if 'location' in validated_data:
             instance.location = validated_data['location']
         instance.save()

@@ -26,7 +26,7 @@ SECRET_KEY = 'django-insecure-%gwrkhy80fdgsw1i2#er9v6&t3qnv94-5&@3qabkm&j$@4g^t2
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['*']
 
 
 # Application definition
@@ -57,6 +57,8 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'admin_management.middleware.ErrorLoggingMiddleware',  # 错误日志中间件
+    'user_management.middleware.InactiveUserMiddleware',  # 禁用用户处理中间件
 ]
 
 ROOT_URLCONF = 'urls'
@@ -87,14 +89,6 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
         'NAME': 'scenic_area',
-        'USER': 'root',
-        'PASSWORD': '3143285505',
-        'HOST': 'localhost',
-        'PORT': '3306',
-    },
-    'hierarchy_database': {
-        'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'hierarchy_ticketanalysis',
         'USER': 'root',
         'PASSWORD': '3143285505',
         'HOST': 'localhost',
@@ -148,11 +142,23 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # CORS 配置
 CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+    'x-anonymous-error-log',
+]
 
 # REST Framework 配置
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework.authentication.TokenAuthentication',
+        'user_management.authentication.ActiveUserTokenAuthentication',
         'rest_framework.authentication.SessionAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
@@ -165,9 +171,6 @@ REST_FRAMEWORK = {
 # 媒体文件配置
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
-
-# 数据库路由器配置
-DATABASE_ROUTERS = ['db_routers.DatabaseRouter']
 
 # Email settings
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'

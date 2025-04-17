@@ -2,8 +2,8 @@
   <div class="scenic-card" @click="navigateToDetail">
     <div class="scenic-card-image">
       <img 
-        v-if="!imageError && (scenic.image || defaultImage)" 
-        :src="scenic.image || defaultImage" 
+        v-if="!imageError && (processedImageUrl || defaultImage)" 
+        :src="processedImageUrl || defaultImage" 
         :alt="scenic.name || '景区'" 
         @error="handleImageError" 
       />
@@ -45,6 +45,7 @@ import { useRouter } from 'vue-router'
 import { Location, Star, StarFilled, Picture } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import { ElMessage } from 'element-plus'
+import { processImageUrl, DEFAULT_IMAGE } from '@/api/image-proxy'
 
 export default defineComponent({
   name: 'ScenicCard',
@@ -63,8 +64,19 @@ export default defineComponent({
   setup(props) {
     const router = useRouter()
     const userStore = useUserStore()
-    const defaultImage = '/images/default-scenic.jpg'
+    const defaultImage = DEFAULT_IMAGE
     const imageError = ref(false)
+    
+    // 处理图片URL，避免跨域和403错误
+    const processedImageUrl = computed(() => {
+      try {
+        if (!props.scenic.image) return defaultImage;
+        return processImageUrl(props.scenic.image, defaultImage);
+      } catch (error) {
+        console.error('[ScenicCard] 处理图片URL出错:', error);
+        return defaultImage;
+      }
+    });
     
     // 计算属性：获取适合显示的价格
     const displayPrice = computed(() => {
@@ -149,8 +161,11 @@ export default defineComponent({
           return
         }
         
-        await userStore.toggleFavorite(scenicId)
-        ElMessage.success(isFavorite.value ? '已取消收藏' : '收藏成功')
+        const response = await userStore.toggleFavorite(scenicId)
+        // 使用类型断言避免TypeScript错误
+        const responseData = (response as any).data
+        // 根据API响应的is_favorite字段决定提示内容，而不是基于旧的isFavorite值
+        ElMessage.success(responseData?.is_favorite ? '已收藏' : '已取消收藏')
       } catch (error) {
         console.error('[ScenicCard] 切换收藏状态出错:', error);
         ElMessage.error('操作失败，请重试')
@@ -171,7 +186,8 @@ export default defineComponent({
       navigateToDetail,
       toggleFavorite,
       getDisplayType,
-      displayPrice
+      displayPrice,
+      processedImageUrl
     }
   }
 })

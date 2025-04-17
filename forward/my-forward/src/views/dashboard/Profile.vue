@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted, computed, watch } from 'vue'
 import { useUserStore } from '@/stores/user'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
@@ -351,11 +351,25 @@ onMounted(() => {
   }
 })
 
+// 监听路由参数变化，处理从景区详情页返回的情况
+watch(() => route.query.tab, (newVal) => {
+  if (newVal === 'favorites') {
+    activeTab.value = 'favorites'
+    // 如果收藏列表为空，重新加载
+    if (favorites.value.length === 0) {
+      getFavorites()
+    }
+  }
+}, { immediate: true })
+
 // 切换标签页时加载数据
 const handleTabClick = (tab: any) => {
   if (tab.props.name === 'favorites' && favorites.value.length === 0) {
     getFavorites()
   }
+  
+  // 更新URL，便于刷新页面时保持在同一个标签页
+  router.push({ query: { tab: tab.props.name } })
 }
 
 // 用户信息
@@ -589,7 +603,7 @@ const handleDeleteAccount = async () => {
                   <el-button 
                     type="primary" 
                     size="small" 
-                    @click="$router.push(`/dashboard/scenic/${item.id}`)"
+                    @click="$router.push(`/dashboard/scenic/${item.id}?from=favorites`)"
                   >
                     查看详情
                   </el-button>

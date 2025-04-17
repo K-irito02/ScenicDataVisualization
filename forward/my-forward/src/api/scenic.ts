@@ -4,11 +4,6 @@ import request from './axios';
  * 获取省份景区分布数据
  */
 export function getProvinceDistribution() {
-  // // 返回空数据，不使用模拟数据
-  // return Promise.resolve({
-  //   data: []
-  // });
-  
   // 真实API调用（暂时注释）
   return request({
     url: '/api/data/province-distribution/',
@@ -61,8 +56,37 @@ export function getCommentAnalysis() {
  * @param scenicId 景区ID
  */
 export function getWordCloud(scenicId: string) {
+  console.log(`请求词云数据，景区ID: ${scenicId}`);
+  // 确保ID格式正确，如果ID以'S'开头，则取S后面的数字部分
+  let requestId = scenicId;
+  if (typeof requestId === 'string' && requestId.startsWith('S') && !isNaN(parseInt(requestId.substring(1)))) {
+    // 获取S后面的数字部分作为ID
+    requestId = requestId.substring(1);
+    console.log('调整词云请求ID:', requestId);
+  }
+  
   return request({
-    url: `/api/data/word-cloud/${scenicId}/`,
+    url: `/api/data/word-cloud/${requestId}/`,
+    method: 'get'
+  });
+}
+
+/**
+ * 获取附近景区
+ * @param scenicId 景区ID
+ */
+export function getNearbyScenics(scenicId: string) {
+  console.log(`请求附近景区数据，景区ID: ${scenicId}`);
+  // 确保ID格式正确，如果ID以'S'开头，则取S后面的数字部分
+  let requestId = scenicId;
+  if (typeof requestId === 'string' && requestId.startsWith('S') && !isNaN(parseInt(requestId.substring(1)))) {
+    // 获取S后面的数字部分作为ID
+    requestId = requestId.substring(1);
+    console.log('调整附近景区请求ID:', requestId);
+  }
+  
+  return request({
+    url: `/api/scenic/nearby/${requestId}/`,
     method: 'get'
   });
 }
@@ -176,7 +200,7 @@ export function getTicketBoxplotByLevel(scenicType: string) {
 }
 
 /**
- * 获取景区类型分布数据（用于雷达图和旭日图）
+ * 获取景区类型分布数据（用于雷达图和柱状图图）
  */
 export function getScenicTypeDistribution() {
   return request({

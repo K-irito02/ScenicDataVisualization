@@ -1,45 +1,55 @@
 <template>
   <div class="scenic-detail-container">
-    <div v-if="loading" class="loading-wrapper">
-      <el-skeleton animated :rows="10" />
+    <div v-if="loading" class="loading-container">
+      <el-skeleton style="width: 100%" animated>
+        <template #template>
+          <el-skeleton-item variant="image" style="width: 100%; height: 400px" />
+          <div style="padding: 20px;">
+            <el-skeleton-item variant="h3" style="width: 50%" />
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 20px">
+              <el-skeleton-item variant="text" style="width: 30%" />
+              <el-skeleton-item variant="text" style="width: 30%" />
+            </div>
+            <el-skeleton-item variant="text" style="width: 100%; margin-top: 20px" />
+            <el-skeleton-item variant="text" style="width: 100%; margin-top: 10px" />
+            <el-skeleton-item variant="text" style="width: 100%; margin-top: 10px" />
+          </div>
+        </template>
+      </el-skeleton>
     </div>
     
-    <template v-else>
-      <div class="scenic-header">
-        <div class="scenic-title">
-          <h1>{{ scenic.name }}</h1>
-          <div class="scenic-level" v-if="scenic.level">{{ scenic.level }}</div>
-          <el-button 
-            :type="isFavorite ? 'warning' : 'default'" 
-            :icon="isFavorite ? 'Star' : 'StarFilled'" 
-            circle
-            size="small"
-            @click="toggleFavorite"
-            class="favorite-btn"
-          />
-        </div>
-        <div class="scenic-location">
-          <el-icon><Location /></el-icon>
-          <span>{{ scenic.address }}</span>
-        </div>
-        <div class="back-button">
-          <el-button type="primary" size="small" @click="goBackToSearch" style="margin-right: 10px;">
-            <el-icon><Back /></el-icon>
-            返回筛选页面
-          </el-button>
-          <el-button type="success" size="small" @click="goBackToFavorites">
-            <el-icon><Back /></el-icon>
-            返回我的收藏
-          </el-button>
-        </div>
+    <div v-else class="scenic-detail-content">
+      <div class="header-actions">
+        <el-button type="primary" size="large" @click="handleBackToSearch" v-if="!fromFavorites">
+          <el-icon><Back /></el-icon>
+          <span>返回搜索</span>
+        </el-button>
+        <el-button type="primary" size="large" @click="handleBackToFavorites" v-else>
+          <el-icon><Back /></el-icon>
+          <span>返回我的收藏</span>
+        </el-button>
+        
+        <el-button 
+          type="primary"
+          size="large"
+          :icon="isFavorite ? 'StarFilled' : 'Star'" 
+          @click="toggleFavorite"
+          :class="{ 'is-favorite': isFavorite }"
+        >
+          {{ isFavorite ? '已收藏' : '收藏' }}
+        </el-button>
       </div>
+      
+      <h2 class="scenic-title">
+        {{ scenic.name }}
+      </h2>
       
       <el-row>
         <el-col :span="24">
           <card-container class="scenic-card">
             <el-carousel trigger="click" height="400px" indicator-position="outside">
-              <el-carousel-item v-for="(img, index) in scenic.images" :key="index">
-                <img :src="img" :alt="scenic.name" class="carousel-image">
+              <el-carousel-item v-for="(img, index) in processedScenicImages" :key="index">
+                <img :src="img" :alt="scenic.name" class="carousel-image" @error="handleCarouselImageError($event, index)">
               </el-carousel-item>
             </el-carousel>
             
@@ -49,10 +59,10 @@
                   <span class="price">{{ scenic.price ? `¥${scenic.price}` : '暂无数据' }}</span>
                 </el-descriptions-item>
                 <el-descriptions-item label="景区类型">
-                  {{ scenic.type || '暂无数据' }}
+                  <el-tag effect="plain" type="danger">{{ scenic.level || '暂无数据' }}</el-tag>
                 </el-descriptions-item>
-                <el-descriptions-item label="推荐游玩时长">
-                  {{ scenic.suggestedDuration || '暂无数据' }}
+                <el-descriptions-item label="位置信息">
+                  {{ formatAddress(scenic) || '暂无数据' }}
                 </el-descriptions-item>
                 <el-descriptions-item label="开放时间" :span="3">
                   {{ scenic.openingHours || '暂无数据' }}
@@ -70,7 +80,7 @@
                 <div class="traffic-info">
                   <div v-if="trafficContent" class="traffic-item">
                     <div class="traffic-detail">
-                      <pre>{{ trafficContent }}</pre>
+                      <pre class="traffic-content">{{ trafficContent }}</pre>
                     </div>
                   </div>
                   <div v-else class="no-data-tip">
@@ -81,25 +91,28 @@
               
               <!-- 推荐景点部分 -->
               <div class="recommendation-section">
-                <h3>推荐景点</h3>
+                <h3>附近景区</h3>
                 <div class="recommended-list">
-                  <div v-if="scenic.recommendations && scenic.recommendations.length > 0">
+                  <div v-if="nearbyScenics.length > 0">
                     <el-row :gutter="20">
-                      <el-col :xs="24" :sm="12" :md="8" v-for="(item, index) in scenic.recommendations" :key="index">
+                      <el-col :xs="24" :sm="12" :md="8" v-for="(item, index) in nearbyScenics" :key="index">
                         <div class="recommended-item" @click="navigateToScenic(item.id)">
                           <div class="recommended-image">
-                            <img :src="item.image" :alt="item.name">
+                            <img :src="handleImageUrl(item.image)" :alt="item.name">
                           </div>
                           <div class="recommended-info">
                             <div class="recommended-name">{{ item.name }}</div>
-                            <div class="recommended-price">¥{{ item.price }}</div>
+                            <div class="recommended-meta">
+                              <span class="recommended-price">¥{{ item.price }}</span>
+                              <span class="recommended-distance">{{ formatDistance(item.distance) }}</span>
+                            </div>
                           </div>
                         </div>
                       </el-col>
                     </el-row>
                   </div>
                   <div v-else class="no-data-tip">
-                    暂无数据
+                    暂无景区
                   </div>
                 </div>
               </div>
@@ -142,7 +155,7 @@
                 <el-skeleton animated :rows="3" />
               </div>
               <div class="cloud-wrapper" v-else-if="hasWordCloudData">
-                <base-chart :options="wordCloudOptions" height="300px" />
+                <base-chart :options="wordCloudOptions" height="300px" @rendered="() => console.log('词云图渲染完成')" />
               </div>
               <div v-else class="no-data-tip">
                 暂无数据
@@ -150,12 +163,12 @@
             </div>
             
             <div class="comment-list">
-              <h3>最新评论</h3>
+              <h3>评论数据</h3>
               <el-timeline v-if="scenic.comments && scenic.comments.length > 0">
                 <el-timeline-item
                   v-for="(comment, index) in paginatedComments"
                   :key="index"
-                  :type="getCommentType(comment.sentiment)"
+                  :type="getCommentType(comment.sentiment).type"
                   :timestamp="comment.date"
                 >
                   <div class="comment-content">
@@ -184,12 +197,12 @@
           </card-container>
         </el-col>
       </el-row>
-    </template>
+    </div>
   </div>
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, onMounted, computed } from 'vue'
+import { defineComponent, ref, onMounted, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import CardContainer from '@/components/common/CardContainer.vue'
 import BaseChart from '@/components/charts/BaseChart.vue'
@@ -197,8 +210,7 @@ import { useScenicStore } from '@/stores/scenic'
 import { useUserStore } from '@/stores/user'
 import { ElMessage } from 'element-plus'
 import type { EChartsOption } from 'echarts'
-import * as echarts from 'echarts'
-import 'echarts-wordcloud'
+import { processImageUrl as processImage, DEFAULT_IMAGE } from '@/api/image-proxy'
 import { 
   Location, 
   Star, 
@@ -213,7 +225,7 @@ import {
   OfficeBuilding,
   Back
 } from '@element-plus/icons-vue'
-import { getScenicDetail, getWordCloud } from '@/api/scenic'
+import { getScenicDetail, getWordCloud, getNearbyScenics } from '@/api/scenic'
 
 export default defineComponent({
   name: 'ScenicDetail',
@@ -241,6 +253,9 @@ export default defineComponent({
     const loading = ref(true)
     const wordCloudLoading = ref(false)
     const wordCloudData = ref<any[]>([])
+    const defaultImage = DEFAULT_IMAGE
+    const imageErrors = ref<Record<number, boolean>>({})
+    
     const scenic = ref<any>({
       sentimentScore: 0,
       sentimentIntensity: 0,
@@ -277,11 +292,23 @@ export default defineComponent({
     const currentPage = ref(1)
     const pageSize = ref(5)
     
+    // 判断用户来源是否为收藏页面
+    const fromFavorites = computed(() => {
+      // 从route.query中获取来源信息
+      return route.query.from === 'favorites'
+    })
+    
     // 返回搜索筛选页面
-    const goBackToSearch = () => {
+    const handleBackToSearch = () => {
       // 使用路由器导航到搜索页面，但我们确保不会导致状态丢失
       // 不再使用router.go(-1)，因为它在某些情况下不可靠
       router.push('/dashboard/search')
+    }
+    
+    // 返回收藏页面
+    const handleBackToFavorites = () => {
+      // 导航到个人中心的收藏标签页
+      router.push('/dashboard/profile?tab=favorites')
     }
     
     // 计算属性：交通信息内容
@@ -321,6 +348,28 @@ export default defineComponent({
       
       return '';
     });
+    
+    // 计算处理后的景区图片数组
+    const processedScenicImages = computed(() => {
+      if (!scenic.value.images || !Array.isArray(scenic.value.images) || scenic.value.images.length === 0) {
+        return [defaultImage];
+      }
+      
+      return scenic.value.images.map((img: string) => {
+        return processImage(img, defaultImage);
+      });
+    });
+    
+    // 处理轮播图图片加载错误
+    const handleCarouselImageError = (event: Event, index: number) => {
+      console.log(`[ScenicDetail] 轮播图第${index+1}张图片加载失败`);
+      imageErrors.value[index] = true;
+      
+      // 替换为默认图片
+      if (event.target) {
+        (event.target as HTMLImageElement).src = defaultImage;
+      }
+    };
     
     // 获取景区详情
     const fetchScenicDetail = async () => {
@@ -374,7 +423,7 @@ export default defineComponent({
           province: data.province || '',
           city: data.city || '',
           district: data.district || '',
-          address: [data.province, data.city, data.district, data.street].filter(Boolean).join(' '),
+          street: data.street || '',
           
           // 价格信息
           price: data.min_price || '免费',
@@ -386,12 +435,9 @@ export default defineComponent({
           // 开放时间
           openingHours: data.opening_hours || '暂无开放时间信息',
           
-          // 不再使用模拟数据
-          suggestedDuration: '建议游玩时间暂无',
-          
           // 图片
-          image: data.image_url || '/images/default-scenic.jpg',
-          images: data.image_url ? [data.image_url] : ['/images/default-scenic.jpg'],
+          image: data.image_url ? processImage(data.image_url, defaultImage) : defaultImage,
+          images: data.image_url ? [processImage(data.image_url, defaultImage)] : [defaultImage],
           
           // 评论相关
           comments: data.comments || [],
@@ -410,18 +456,14 @@ export default defineComponent({
           recommendations: []
         };
         
-        // 获取词云数据
-        fetchWordCloudData(data.scenic_id);
-        
-        // 打印处理后的交通数据
-        console.log('前端处理后的交通数据:', {
-          transportation: scenic.value.transportation,
-          traffic_info: scenic.value.traffic_info,
-          trafficInfo: scenic.value.trafficInfo,
-          trafficContent: trafficContent.value
-        });
-        
         loading.value = false;
+        
+        // 获取词云数据 - 确保在景区详情加载完成后获取
+        // 使用data.scenic_id或requestId作为参数
+        fetchWordCloudData(data.scenic_id || requestId);
+        
+        // 获取附近景区数据
+        fetchNearbyScenics(data.scenic_id || requestId);
       } catch (error: any) {
         console.error('获取景区详情失败:', error)
         
@@ -468,9 +510,27 @@ export default defineComponent({
       
       wordCloudLoading.value = true;
       try {
+        console.log('开始获取词云数据，景区ID:', scenicId);
         const response = await getWordCloud(scenicId);
-        wordCloudData.value = response.data;
-        console.log('词云数据:', wordCloudData.value);
+        console.log('词云数据API响应:', response);
+        
+        // 检查响应数据结构
+        if (!response || !response.data) {
+          console.error('词云数据响应格式错误:', response);
+          wordCloudData.value = [];
+          return;
+        }
+        
+        // 检查返回的数据是否为空
+        if (Array.isArray(response.data) && response.data.length > 0) {
+          console.log('成功获取词云数据，数据项数:', response.data.length);
+          wordCloudData.value = response.data;
+        } else {
+          console.warn('词云数据为空数组，不使用模拟数据');
+          wordCloudData.value = [];
+        }
+        
+        console.log('处理后的词云数据:', wordCloudData.value);
       } catch (error) {
         console.error('获取词云数据失败:', error);
         wordCloudData.value = [];
@@ -498,53 +558,72 @@ export default defineComponent({
       return scenic.value.comments.slice(startIndex, endIndex);
     });
     
-    // 词云图配置
-    const wordCloudOptions = computed(() => ({
-      tooltip: {
-        show: true,
-        formatter: function(params: any) {
-          return params.name + ': ' + params.value;
-        }
-      },
-      series: [{
-        type: 'wordCloud',
-        shape: 'circle',
-        left: 'center',
-        top: 'center',
-        width: '90%',
-        height: '90%',
-        right: null,
-        bottom: null,
-        sizeRange: [12, 50],
-        rotationRange: [-45, 45],
-        rotationStep: 10,
-        gridSize: 8,
-        drawOutOfBound: false,
-        textStyle: {
-          fontFamily: 'sans-serif',
-          fontWeight: 'bold',
-          color: function() {
-            return 'rgb(' + [
-              Math.round(Math.random() * 160),
-              Math.round(Math.random() * 160),
-              Math.round(Math.random() * 160)
-            ].join(',') + ')'
-          }
-        },
-        emphasis: {
-          textStyle: {
-            shadowBlur: 10,
-            shadowColor: '#333'
-          }
-        },
-        data: wordCloudData.value
-      }]
-    }) as EChartsOption)
-    
-    // 计算是否有词云数据
+    // 判断是否有词云数据
     const hasWordCloudData = computed(() => {
       return wordCloudData.value && wordCloudData.value.length > 0;
     });
+    
+    // 词云图配置
+    const wordCloudOptions = computed(() => {
+      console.log('构建词云图配置，数据项数:', wordCloudData.value.length);
+      
+      return {
+        tooltip: {
+          show: true,
+          formatter: function(params: any) {
+            return params.name + ': ' + params.value;
+          }
+        },
+        series: [{
+          type: 'wordCloud',
+          shape: 'circle',
+          left: 'center',
+          top: 'center',
+          width: '90%',
+          height: '90%',
+          right: null,
+          bottom: null,
+          sizeRange: [12, 60],
+          rotationRange: [-45, 45],
+          rotationStep: 10,
+          gridSize: 8,
+          drawOutOfBound: false,
+          layoutAnimation: true,
+          textStyle: {
+            fontFamily: 'sans-serif',
+            fontWeight: 'bold',
+            color: function() {
+              return 'rgb(' + [
+                Math.round(Math.random() * 160),
+                Math.round(Math.random() * 160),
+                Math.round(Math.random() * 160)
+              ].join(',') + ')'
+            }
+          },
+          emphasis: {
+            textStyle: {
+              shadowBlur: 10,
+              shadowColor: '#333'
+            }
+          },
+          data: wordCloudData.value
+        }]
+      } as EChartsOption;
+    });
+    
+    // 获取评论类型样式和文本
+    const getCommentType = (score: number) => {
+      if (score >= 0.5) return { type: 'success', text: '正面评价' };
+      if (score >= 0) return { type: 'warning', text: '中性评价' };
+      return { type: 'danger', text: '负面评价' };
+    };
+    
+    // 获取情感强度描述
+    const getSentimentIntensity = (magnitude: number) => {
+      if (magnitude >= 0.8) return '强烈';
+      if (magnitude >= 0.5) return '中等';
+      return '轻微';
+    };
     
     // 切换收藏状态
     const toggleFavorite = async () => {
@@ -562,61 +641,85 @@ export default defineComponent({
       }
     }
     
-    // 导航到其他景区
-    const navigateToScenic = (id: string) => {
-      if (!id) {
-        ElMessage.warning('景区ID不存在')
-        return
+    // 导航到推荐景区
+    const navigateToScenic = (scenicId: string) => {
+      if (!scenicId) {
+        ElMessage.warning('景区ID不存在');
+        return;
       }
-      router.push(`/dashboard/scenic/${id}`)
+      router.push(`/dashboard/scenic/${scenicId}`);
     }
     
-    // 获取评论类型（用于timeline组件的图标颜色）
-    const getCommentType = (sentiment: number) => {
-      if (sentiment >= 0.7) return 'success'
-      if (sentiment >= 0.4) return 'warning'
-      return 'info'
-    }
+    // 格式化地址，避免重复
+    const formatAddress = (scenic: any) => {
+      if (!scenic) return '';
+      
+      // 检查数据完整性
+      const parts = [];
+      
+      if (scenic.province) parts.push(scenic.province);
+      
+      // 仅当城市名称与省份不同时才添加
+      if (scenic.city && scenic.city !== scenic.province) parts.push(scenic.city);
+      
+      // 仅当区县名称与城市名不同时才添加
+      if (scenic.district && scenic.district !== scenic.city) parts.push(scenic.district);
+      
+      // 添加街道
+      if (scenic.street) parts.push(scenic.street);
+      
+      return parts.join(' ');
+    };
     
-    // 获取情感强度描述
-    const getSentimentIntensity = (intensity: number) => {
-      if (intensity >= 0.8) return '非常强烈'
-      if (intensity >= 0.6) return '强烈'
-      if (intensity >= 0.4) return '中等'
-      return '一般'
-    }
+    // 获取附近景区数据
+    const nearbyScenics = ref<any[]>([])
+    const nearbyLoading = ref(false)
     
-    // 获取交通图标
-    const getTrafficIcon = (type: string) => {
-      const iconMap: Record<string, string> = {
-        'subway': 'OfficeBuilding',
-        'bus': 'Van',
-        'car': 'Van',
-        'ship': 'Ship',
-        'bicycle': 'Bicycle'
+    const fetchNearbyScenics = async (scenicId: string) => {
+      if (!scenicId) return
+      
+      nearbyLoading.value = true
+      try {
+        console.log('开始获取附近景区数据，景区ID:', scenicId)
+        const response = await getNearbyScenics(scenicId)
+        console.log('附近景区API响应:', response)
+        
+        if (!response || !response.data) {
+          console.error('附近景区响应格式错误:', response)
+          nearbyScenics.value = []
+          return
+        }
+        
+        if (Array.isArray(response.data) && response.data.length > 0) {
+          console.log('成功获取附近景区数据，数量:', response.data.length)
+          nearbyScenics.value = response.data
+        } else {
+          console.warn('附近景区数据为空数组')
+          nearbyScenics.value = []
+        }
+      } catch (error) {
+        console.error('获取附近景区失败:', error)
+        nearbyScenics.value = []
+      } finally {
+        nearbyLoading.value = false
       }
-      return iconMap[type] || 'Location'
     }
     
-    // 获取设施图标
-    const getFacilityIcon = (type: string) => {
-      const iconMap: Record<string, string> = {
-        'toilet': 'House',
-        'rest': 'House',
-        'store': 'ShoppingCart',
-        'food': 'Dessert',
-        'museum': 'School',
-        'guide': 'Location'
+    // 格式化距离的函数
+    const formatDistance = (distance: number) => {
+      if (distance === undefined || distance === null) return ''
+      
+      if (distance < 1) {
+        return `${(distance * 1000).toFixed(0)}米`
+      } else {
+        return `${distance.toFixed(1)}公里`
       }
-      return iconMap[type] || 'Location'
     }
     
-    // 返回我的收藏页面
-    const goBackToFavorites = () => {
-      router.push({ 
-        path: '/dashboard/profile',
-        query: { tab: 'favorites' }
-      })
+    // 处理图片URL
+    const handleImageUrl = (url: string) => {
+      if (!url) return defaultImage
+      return processImage(url, defaultImage)
     }
     
     onMounted(() => {
@@ -624,28 +727,35 @@ export default defineComponent({
     })
     
     return {
-      loading,
-      wordCloudLoading,
       scenic,
-      scenicId,
+      loading,
+      handleBackToSearch,
+      handleBackToFavorites,
+      fromFavorites,
       isFavorite,
-      isLoggedIn,
+      toggleFavorite,
       wordCloudOptions,
-      hasWordCloudData,
+      wordCloudLoading,
+      trafficContent,
       currentPage,
       pageSize,
       paginatedComments,
       handleSizeChange,
       handleCurrentChange,
-      toggleFavorite,
-      navigateToScenic,
+      processedScenicImages,
+      handleCarouselImageError,
+      defaultImage,
+      scenicId,
+      isLoggedIn,
+      hasWordCloudData,
       getCommentType,
       getSentimentIntensity,
-      getTrafficIcon,
-      getFacilityIcon,
-      goBackToSearch,
-      goBackToFavorites,
-      trafficContent
+      navigateToScenic,
+      formatAddress,
+      nearbyScenics,
+      nearbyLoading,
+      formatDistance,
+      handleImageUrl
     }
   }
 })
@@ -656,64 +766,34 @@ export default defineComponent({
   padding: 20px;
 }
 
-.loading-wrapper {
+.loading-container {
   padding: 40px;
 }
 
-.scenic-header {
+.scenic-detail-content {
+  margin-top: 20px;
+}
+
+.header-actions {
+  display: flex;
+  justify-content: space-between;
   margin-bottom: 20px;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
 }
 
-.scenic-title {
-  display: flex;
-  align-items: center;
-  margin-bottom: 10px;
-  flex: 2;
-}
-
-.scenic-title h1 {
-  margin: 0;
-  font-size: 24px;
-  font-weight: 700;
-  color: #303133;
+.header-actions .el-button {
   margin-right: 15px;
-}
-
-.scenic-level {
-  background-color: #f56c6c;
-  color: white;
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-size: 14px;
-  font-weight: bold;
-  margin-right: 15px;
-}
-
-.favorite-btn {
-  margin-left: 15px;
-}
-
-.scenic-location {
-  display: flex;
-  align-items: center;
-  font-size: 14px;
-  color: #606266;
-  flex: 3;
-  margin-bottom: 10px;
-  padding-left: 10px;
-}
-
-.scenic-location .el-icon {
-  margin-right: 8px;
-  color: #409EFF;
   font-size: 16px;
 }
 
-.back-button {
-  margin-left: auto;
+.header-actions .el-button:last-child {
+  margin-right: 0;
+}
+
+.scenic-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: #303133;
+  margin-bottom: 10px;
 }
 
 .scenic-card {
@@ -769,9 +849,16 @@ export default defineComponent({
   margin-bottom: 15px;
 }
 
-.traffic-detail {
-  color: #606266;
-  line-height: 1.5;
+.traffic-detail pre.traffic-content {
+  font-family: 'PingFang SC', 'Helvetica Neue', Helvetica, 'Microsoft YaHei', '微软雅黑', Arial, sans-serif;
+  white-space: pre-wrap;
+  font-size: 15px;
+  line-height: 1.8;
+  color: #333;
+  background-color: #f9f9f9;
+  padding: 12px;
+  border-radius: 4px;
+  border-left: 3px solid #409EFF;
 }
 
 .sentiment-overview {
@@ -841,6 +928,11 @@ export default defineComponent({
 .cloud-wrapper {
   height: 300px;
   margin-bottom: 20px;
+  border: 1px solid #f0f0f0;
+  border-radius: 4px;
+  padding: 10px;
+  background-color: #f9f9f9;
+  overflow: hidden;
 }
 
 .comment-content {
@@ -901,9 +993,20 @@ export default defineComponent({
   margin-bottom: 5px;
 }
 
+.recommended-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
 .recommended-price {
   color: #f56c6c;
   font-size: 14px;
+}
+
+.recommended-distance {
+  color: #909399;
+  font-size: 13px;
 }
 
 .no-data-tip {

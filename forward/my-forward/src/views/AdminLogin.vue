@@ -106,8 +106,8 @@ const goToUserLogin = () => {
   <div class="admin-login-container">
     <div class="login-box">
       <div class="logo-container">
-        <div class="logo-text">管理系统</div>
-        <h2 class="system-title">全国景区的数据分析及可视化系统</h2>
+        <img src="/logo.png" alt="景区数据可视化平台" class="logo-image" />
+        <h2 class="system-title">全国景区的数据分析及可视化系统 - 管理后台</h2>
       </div>
       
       <h3 class="login-title">管理员登录</h3>
@@ -180,10 +180,9 @@ const goToUserLogin = () => {
   margin-bottom: 30px;
 }
 
-.logo-text {
-  font-size: 28px;
-  font-weight: bold;
-  color: #001529;
+.logo-image {
+  width: 100px;
+  height: 100px;
   margin-bottom: 10px;
 }
 

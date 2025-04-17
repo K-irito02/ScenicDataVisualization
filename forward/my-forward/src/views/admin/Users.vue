@@ -218,7 +218,7 @@ import { User, UserFilled, Edit, View, Plus, CircleClose, CircleCheck } from '@e
 import { ElMessage } from 'element-plus'
 import ElMessageBox from 'element-plus/es/components/message-box/index'
 import type { FormInstance } from 'element-plus'
-import axios from 'axios'
+import { getUsers, toggleUserStatus, updateUser } from '@/api/admin'
 
 export default defineComponent({
   name: 'Users',
@@ -291,16 +291,13 @@ export default defineComponent({
       
       try {
         // 从API获取用户数据
-        const response = await axios.get('/api/admin/users', {
-          params: {
-            page: currentPage.value,
-            pageSize: pageSize.value,
-            username: searchQuery.value || undefined
-          }
+        const response = await getUsers({
+          page: currentPage.value,
+          pageSize: pageSize.value
         });
         
         // 更新用户数据和总数
-        users.value = response.data.users;
+        users.value = response.data.data;
         totalUsers.value = response.data.total;
         
         // 更新统计数据
@@ -318,22 +315,6 @@ export default defineComponent({
         ElMessage.error('获取用户数据失败');
       } finally {
         loading.value = false;
-      }
-    };
-    
-    // 获取用户统计数据
-    const fetchStats = async () => {
-      try {
-        const response = await axios.get('/api/admin/user-stats');
-        const stats = response.data;
-        
-        // 更新统计数据
-        statistics.totalUsers = stats.totalUsers || 0;
-        statistics.activeUsers = stats.activeUsers || 0;
-        statistics.disabledUsers = stats.disabledUsers || 0;
-        statistics.newUsers = stats.newUsers || 0;
-      } catch (error) {
-        console.error('获取用户统计数据失败:', error);
       }
     };
     
@@ -377,23 +358,32 @@ export default defineComponent({
           }
         )
         
-        // 实际项目中应该调用API
-        // 这里直接修改前端数据
-        const targetUser = users.value.find(u => u.id === user.id)
-        if (targetUser) {
-          targetUser.status = targetUser.status === 'active' ? 'disabled' : 'active'
+        try {
+          // 调用API切换用户状态
+          const response = await toggleUserStatus(user.id)
           
-          // 如果是从对话框操作，也更新当前查看的用户
-          if (fromDialog) {
-            currentUser.value.status = targetUser.status
+          // 更新本地数据
+          const updatedUser = response.data.user
+          const targetUser = users.value.find(u => u.id === user.id)
+          if (targetUser) {
+            targetUser.status = updatedUser.status
+            
+            // 如果是从对话框操作，也更新当前查看的用户
+            if (fromDialog) {
+              currentUser.value.status = updatedUser.status
+            }
+            
+            // 更新统计数据
+            statistics.activeUsers = users.value.filter(u => u.status === 'active').length
+            statistics.disabledUsers = users.value.filter(u => u.status === 'disabled').length
           }
           
-          // 更新统计数据
-          statistics.activeUsers = users.value.filter(u => u.status === 'active').length
-          statistics.disabledUsers = users.value.filter(u => u.status === 'disabled').length
+          ElMessage.success(response.data.message || `${action}用户成功`)
+        } catch (error: any) {
+          // 处理API错误
+          console.error('切换用户状态失败:', error)
+          ElMessage.error(error.response?.data?.error || `${action}用户失败`)
         }
-        
-        ElMessage.success(`${action}用户成功`)
       } catch (error) {
         // 用户取消操作，不做处理
       }
@@ -416,27 +406,41 @@ export default defineComponent({
       
       await editFormRef.value.validate(async (valid) => {
         if (valid) {
-          // 实际项目中应该调用API
-          // 这里直接修改前端数据
-          const targetUser = users.value.find(u => u.id === editForm.id)
-          if (targetUser) {
-            targetUser.username = editForm.username
-            targetUser.email = editForm.email
-            targetUser.location = editForm.location
-            targetUser.status = editForm.status
+          try {
+            // 调用API更新用户信息
+            const response = await updateUser(Number(editForm.id), {
+              username: editForm.username,
+              email: editForm.email,
+              location: editForm.location,
+              status: editForm.status as 'active' | 'disabled'
+            })
             
-            // 如果当前正在查看这个用户，也更新查看视图
-            if (currentUser.value.id === editForm.id) {
-              currentUser.value = { ...targetUser }
+            // 更新本地数据
+            const updatedUser = response.data.user
+            const targetUser = users.value.find(u => u.id === editForm.id)
+            if (targetUser) {
+              targetUser.username = updatedUser.username
+              targetUser.email = updatedUser.email
+              targetUser.location = updatedUser.location
+              targetUser.status = updatedUser.status
+              
+              // 如果当前正在查看这个用户，也更新查看视图
+              if (currentUser.value.id === editForm.id) {
+                currentUser.value = { ...targetUser }
+              }
+              
+              // 更新统计数据
+              statistics.activeUsers = users.value.filter(u => u.status === 'active').length
+              statistics.disabledUsers = users.value.filter(u => u.status === 'disabled').length
             }
             
-            // 更新统计数据
-            statistics.activeUsers = users.value.filter(u => u.status === 'active').length
-            statistics.disabledUsers = users.value.filter(u => u.status === 'disabled').length
+            editDialogVisible.value = false
+            ElMessage.success(response.data.message || '更新用户信息成功')
+          } catch (error: any) {
+            console.error('更新用户信息失败:', error)
+            ElMessage.error(error.response?.data?.error || '更新用户信息失败')
+            return false
           }
-          
-          editDialogVisible.value = false
-          ElMessage.success('更新用户信息成功')
         } else {
           ElMessage.error('表单验证失败，请检查输入')
           return false

@@ -8,11 +8,6 @@ from user_management.views import UploadAvatarView, ProfileUpdateView
 """
 
 urlpatterns = [
-    # 示例：用户登录
-    # path('login/', views.login_view, name='login'),
-
-    # 示例：用户注册
-    # path('register/', views.register_view, name='register'),
 
     # 用户个人资料
     path('profile/', ProfileUpdateView.as_view(), name='profile'),
@@ -20,5 +15,4 @@ urlpatterns = [
     # 上传头像
     path('upload-avatar/', UploadAvatarView.as_view(), name='upload-avatar'),
 
-    # 更多用户相关的URL可以根据需要添加
 ] 

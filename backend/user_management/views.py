@@ -23,52 +23,93 @@ class LoginView(APIView):
     
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
-        if serializer.is_valid():
-            user = serializer.validated_data['user']
+        try:
+            if serializer.is_valid():
+                user = serializer.validated_data['user']
+                
+                # 检查用户是否被禁用
+                if not user.is_active:
+                    # 明确返回禁用用户错误状态
+                    return Response(
+                        {'detail': '用户已被禁用', 'message': '您的账号已被管理员禁用，请联系管理员'}, 
+                        status=status.HTTP_403_FORBIDDEN
+                    )
+                
+                # 更新最后登录时间
+                profile, created = UserProfile.objects.get_or_create(user=user)
+                profile.last_login = timezone.now()
+                profile.save()
+                
+                # 记录登录操作
+                UserActionRecord.objects.create(
+                    user=user,
+                    action_type='login',
+                    details='用户登录'
+                )
+                
+                # 获取或创建令牌
+                token, created = Token.objects.get_or_create(user=user)
+                
+                # 准备响应数据
+                response_data = {
+                    'token': token.key,
+                    'user_id': user.id,
+                    'username': user.username,
+                    'email': user.email,
+                    'avatar': profile.avatar,
+                    'location': profile.location,
+                    'is_admin': user.is_staff
+                }
+                
+                return Response(response_data)
             
-            # 更新最后登录时间
-            profile, created = UserProfile.objects.get_or_create(user=user)
-            profile.last_login = timezone.now()
-            profile.save()
+            # 序列化器验证失败的情况
+            # 提取错误信息，检查是否包含"用户已被禁用"
+            error_message = ''
+            if serializer.errors.get('non_field_errors'):
+                for error in serializer.errors['non_field_errors']:
+                    if '用户已被禁用' in str(error):
+                        # 对于禁用用户，返回明确的403错误
+                        return Response(
+                            {'detail': '用户已被禁用', 'message': '您的账号已被管理员禁用，请联系管理员'}, 
+                            status=status.HTTP_403_FORBIDDEN
+                        )
+                    error_message = error
             
-            # 记录登录操作
-            UserActionRecord.objects.create(
-                user=user,
-                action_type='login',
-                details='用户登录'
+            # 其他登录错误
+            return Response(
+                {'detail': error_message or '登录失败', 'errors': serializer.errors}, 
+                status=status.HTTP_400_BAD_REQUEST
             )
             
-            # 获取或创建令牌
-            token, created = Token.objects.get_or_create(user=user)
+        except Exception as e:
+            import traceback
+            error_detail = traceback.format_exc()
+            print(f"登录过程发生异常: {str(e)}\n{error_detail}")
             
-            # 准备响应数据
-            response_data = {
-                'token': token.key,
-                'user_id': user.id,
-                'username': user.username,
-                'email': user.email,
-                'avatar': profile.avatar,
-                'location': profile.location,
-                'is_admin': user.is_staff
-            }
+            # 特别检查是否是由用户禁用状态导致的错误
+            if 'is_active' in str(e).lower() or '已被禁用' in str(e):
+                return Response(
+                    {'detail': '用户已被禁用', 'message': '您的账号已被管理员禁用，请联系管理员'}, 
+                    status=status.HTTP_403_FORBIDDEN
+                )
             
-            return Response(response_data)
-        
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            # 通用的服务器错误
+            return Response(
+                {'detail': '登录失败', 'message': f'服务器处理请求时出错: {str(e)}'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 class RegisterView(APIView):
     """用户注册视图"""
     permission_classes = [permissions.AllowAny]
     
     def post(self, request):
-        print(f"收到注册请求，数据: {request.data}")
         serializer = RegisterSerializer(data=request.data)
         
         try:
             if serializer.is_valid():
-                print("数据验证通过，开始创建用户")
                 user = serializer.save()
-                print(f"用户创建成功: {user.username}")
                 
                 # 记录注册操作
                 UserActionRecord.objects.create(
@@ -76,7 +117,6 @@ class RegisterView(APIView):
                     action_type='register',
                     details='用户注册'
                 )
-                print("注册操作记录已创建")
                 
                 return Response({
                     'success': True,
@@ -103,17 +143,9 @@ class ProfileUpdateView(APIView):
     
     def put(self, request):
         try:
-            print(f"收到用户资料更新请求: 用户:{request.user.username}, 数据:{request.data}")
             
             # 使用更可靠的方法获取或创建profile
             profile, created = UserProfile.objects.get_or_create(user=request.user)
-            
-            if created:
-                print(f"为用户 {request.user.username} 创建了新的资料记录")
-            
-            # 打印请求中的avatar字段值
-            if 'avatar' in request.data:
-                print(f"请求中的avatar值: '{request.data['avatar']}'")
             
             serializer = ProfileUpdateSerializer(profile, data=request.data, partial=True)
             
@@ -123,7 +155,7 @@ class ProfileUpdateView(APIView):
                 # 记录更新操作
                 UserActionRecord.objects.create(
                     user=request.user,
-                    action_type='update_profile',
+                    action_type='profile_update',
                     details='更新个人资料'
                 )
                 
@@ -222,7 +254,6 @@ class UploadAvatarView(APIView):
     
     def post(self, request):
         try:
-            print(f"收到头像上传请求，FILES: {request.FILES}, DATA: {request.data}")
             
             avatar_file = request.FILES.get('avatar')
             
@@ -232,8 +263,6 @@ class UploadAvatarView(APIView):
                     'success': False,
                     'message': '未提供头像文件'
                 }, status=status.HTTP_400_BAD_REQUEST)
-            
-            print(f"收到文件: {avatar_file.name}, 大小: {avatar_file.size}, 类型: {avatar_file.content_type}")
             
             # 文件大小限制(5MB)
             if avatar_file.size > 5 * 1024 * 1024:
@@ -255,19 +284,12 @@ class UploadAvatarView(APIView):
             import uuid
             from django.conf import settings
             
-            # 输出媒体目录信息
-            print(f"媒体根目录设置: {settings.MEDIA_ROOT}")
-            print(f"媒体根目录是否存在: {os.path.exists(settings.MEDIA_ROOT)}")
-            
             # 确保媒体根目录存在
             os.makedirs(settings.MEDIA_ROOT, exist_ok=True)
-            print(f"确保媒体根目录创建完成")
             
             # 创建用户媒体目录
             user_media_dir = os.path.join(settings.MEDIA_ROOT, f'avatars/user_{request.user.id}')
             os.makedirs(user_media_dir, exist_ok=True)
-            print(f"用户媒体目录: {user_media_dir}")
-            print(f"用户媒体目录是否存在: {os.path.exists(user_media_dir)}")
             
             # 删除用户之前的头像文件（可选）
             try:
@@ -284,9 +306,7 @@ class UploadAvatarView(APIView):
                         old_path = None
                     
                     if old_path and os.path.exists(old_path):
-                        print(f"删除旧头像文件: {old_path}")
                         os.remove(old_path)
-                        print(f"旧头像文件已删除")
             except Exception as e:
                 print(f"删除旧头像文件失败: {str(e)}")
                 # 继续处理，不中断上传流程
@@ -298,15 +318,11 @@ class UploadAvatarView(APIView):
             file_ext = avatar_file.name.split('.')[-1]
             file_name = f"avatar_{timestamp}_{random_uuid}.{file_ext}"
             file_path = os.path.join(user_media_dir, file_name)
-            print(f"保存文件路径: {file_path}")
             
             # 保存文件
             with open(file_path, 'wb+') as destination:
                 for chunk in avatar_file.chunks():
                     destination.write(chunk)
-            
-            # 检查文件是否成功保存
-            print(f"文件是否成功保存: {os.path.exists(file_path)}, 大小: {os.path.getsize(file_path) if os.path.exists(file_path) else '未知'}")
             
             # 更新用户头像URL
             avatar_url = f"/media/avatars/user_{request.user.id}/{file_name}"
@@ -323,13 +339,10 @@ class UploadAvatarView(APIView):
             # 记录上传操作
             UserActionRecord.objects.create(
                 user=request.user,
-                action_type='update_profile',
+                action_type='profile_update',
                 details='上传头像'
             )
             
-            print(f"头像上传成功，URL: {avatar_url}")
-            # 打印服务器域名信息，帮助调试
-            print(f"请求域名信息: {request.build_absolute_uri('/')}")
             
             return Response({
                 'success': True,
@@ -361,6 +374,16 @@ class SendEmailCodeView(APIView):
                 'message': '请提供邮箱地址'
             }, status=status.HTTP_400_BAD_REQUEST)
         
+        # 检查邮箱是否已被注册
+        try:
+            if User.objects.filter(email=email).exists():
+                return Response({
+                    'success': False,
+                    'message': '该邮箱已被使用'
+                }, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            logger.error(f"检查邮箱是否已存在时出错: {str(e)}")
+        
         # 生成6位随机验证码
         code = ''.join(random.choices('0123456789', k=6))
         
@@ -379,9 +402,6 @@ class SendEmailCodeView(APIView):
                     'message': '验证码生成失败，请稍后重试'
                 }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             
-            # 在开发模式下输出验证码，方便测试
-            if settings.DEBUG:
-                print(f"[DEBUG] 邮箱 {email} 的验证码: {code}")
             
             # 在单独的try-except块中处理邮件发送
             try:
@@ -484,4 +504,187 @@ class DeleteAccountView(APIView):
             return Response({
                 'success': False,
                 'message': f'删除账户时出错: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class ForgotPasswordView(APIView):
+    """忘记密码视图 - 发送重置密码验证码"""
+    permission_classes = [permissions.AllowAny]
+    
+    def post(self, request):
+        
+        email = request.data.get('email')
+        if not email:
+            return Response({
+                'success': False,
+                'message': '请提供邮箱地址'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        
+        # 检查邮箱是否存在
+        try:
+            user = User.objects.get(email=email)
+            print(f"找到用户: {user.username}")
+        except User.DoesNotExist:
+            print(f"用户不存在: {email}")
+            # 为了安全起见，我们不告诉用户邮箱不存在
+            
+            return Response({
+                'success': True,
+                'message': '如果该邮箱已注册，我们已发送重置密码的验证码'
+            })
+        except User.MultipleObjectsReturned:
+            return Response({
+                'success': False,
+                'message': '该邮箱已被多个账户使用，请联系管理员处理'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # 生成6位随机验证码
+        code = ''.join(random.choices('0123456789', k=6))
+        
+        try:
+            # 首先尝试保存验证码到Redis，使用不同的前缀区分注册和重置密码
+            redis_key = f'reset_password_code:{email}'
+            try:
+                
+                # 设置30分钟有效期
+                redis_client.setex(redis_key, 1800, code)
+            except Exception as redis_error:
+                print(f"Redis操作失败: {str(redis_error)}")
+                import traceback
+                print(f"Redis错误详情: {traceback.format_exc()}")
+                return Response({
+                    'success': False,
+                    'message': '验证码生成失败，请检查Redis服务是否正常运行'
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+            # 在单独的try-except块中处理邮件发送
+            try:
+                from django.core.mail import EmailMessage
+                email_message = EmailMessage(
+                    subject='景区数据分析系统 - 重置密码验证码',
+                    body=f'您的重置密码验证码是：{code}，有效期为30分钟。请勿将验证码泄露给他人。如果这不是您的操作，请忽略此邮件。',
+                    from_email=settings.EMAIL_HOST_USER,
+                    to=[email]
+                )
+                email_message.send(fail_silently=False)
+            except Exception as email_error:
+                print(f"邮件发送失败: {str(email_error)}")
+                import traceback
+                print(f"邮件发送错误详情: {traceback.format_exc()}")
+                # 尽管邮件发送失败，但验证码已保存到Redis
+                if settings.DEBUG:
+                    return Response({
+                        'success': True,
+                        'message': '验证码已生成但邮件发送失败，请查看服务器日志获取验证码',
+                        'debug_code': code if settings.DEBUG else None
+                    })
+                else:
+                    return Response({
+                        'success': False,
+                        'message': '邮件发送失败，请稍后重试'
+                    }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+            # 记录重置密码尝试
+            try:
+                UserActionRecord.objects.create(
+                    user=user,
+                    action_type='reset_password_request',
+                    details='请求重置密码验证码'
+                )
+            except Exception as e:
+                print(f"记录重置密码操作失败: {str(e)}")
+                # 忽略记录失败，继续流程
+            
+            # 邮件发送成功，返回成功响应
+            return Response({
+                'success': True,
+                'message': '验证码已发送，请查收邮件'
+            })
+            
+        except Exception as e:
+            print(f"处理过程中发生未捕获异常: {str(e)}")
+            import traceback
+            error_details = traceback.format_exc()
+            print(f"异常详情: {error_details}")
+            
+            return Response({
+                'success': False,
+                'message': '验证码发送失败，请稍后重试'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class ResetPasswordView(APIView):
+    """重置密码视图 - 验证验证码并重置密码"""
+    permission_classes = [permissions.AllowAny]
+    
+    def post(self, request):
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        email = request.data.get('email')
+        code = request.data.get('code')
+        new_password = request.data.get('password')
+        
+        if not all([email, code, new_password]):
+            return Response({
+                'success': False,
+                'message': '请提供邮箱、验证码和新密码'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # 检查密码长度
+        if len(new_password) < 6:
+            return Response({
+                'success': False,
+                'message': '密码长度不能少于6个字符'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # 验证验证码
+        redis_key = f'reset_password_code:{email}'
+        stored_code = redis_client.get(redis_key)
+        
+        logger.info(f"验证重置密码验证码 - 邮箱: {email}, 输入的验证码: {code}, 存储的验证码: {stored_code}")
+        
+        if not stored_code or stored_code != code:
+            return Response({
+                'success': False,
+                'message': '验证码错误或已过期，请重新获取'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # 查找用户
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            return Response({
+                'success': False,
+                'message': '邮箱不存在'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        except User.MultipleObjectsReturned:
+            return Response({
+                'success': False,
+                'message': '该邮箱已被多个账户使用，请联系管理员处理'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # 重置密码
+        try:
+            user.set_password(new_password)
+            user.save()
+            
+            # 删除验证码
+            redis_client.delete(redis_key)
+            
+            # 记录密码重置操作
+            UserActionRecord.objects.create(
+                user=user,
+                action_type='reset_password',
+                details='密码重置成功'
+            )
+            
+            return Response({
+                'success': True,
+                'message': '密码重置成功，请使用新密码登录'
+            })
+        except Exception as e:
+            logger.error(f"重置密码失败: {str(e)}")
+            return Response({
+                'success': False,
+                'message': '密码重置失败，请稍后重试'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

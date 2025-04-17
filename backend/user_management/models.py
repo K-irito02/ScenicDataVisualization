@@ -34,9 +34,12 @@ class UserActionRecord(models.Model):
     """用户行为记录模型"""
     ACTION_CHOICES = (
         ('login', '登录'),
+        ('register', '注册'),
         ('search', '搜索'),
         ('view', '查看'),
         ('favorite', '收藏'),
+        ('admin', '管理员操作'),
+        ('profile_update', '修改个人信息'),
     )
     
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='actions', verbose_name='用户')

@@ -98,7 +98,6 @@ class TrafficData(models.Model):
         verbose_name_plural = '交通数据'
         db_table = 'traffic_add'  # 直接使用已有数据表
 
-# 景区等级与门票价格关系模型 (hierarchy_TicketAnalysis 数据库)
 class HierarchyTicketBase(models.Model):
     """层级票价基础模型（抽象类）"""
     level = models.CharField(max_length=50, verbose_name='等级名称')
@@ -117,7 +116,6 @@ class ScenicLevelPrice(HierarchyTicketBase):
         verbose_name = '景区等级票价'
         verbose_name_plural = '景区等级票价'
         db_table = 'scenic_level_price'
-        managed = False  # 不由Django管理表结构
 
 class MuseumLevelPrice(HierarchyTicketBase):
     """博物馆等级与门票价格关系"""
@@ -125,7 +123,6 @@ class MuseumLevelPrice(HierarchyTicketBase):
         verbose_name = '博物馆等级票价'
         verbose_name_plural = '博物馆等级票价'
         db_table = 'museum_level_price'
-        managed = False
 
 class GeoLogicalParkLevelPrice(HierarchyTicketBase):
     """地质公园等级与门票价格关系"""
@@ -133,7 +130,6 @@ class GeoLogicalParkLevelPrice(HierarchyTicketBase):
         verbose_name = '地质公园等级票价'
         verbose_name_plural = '地质公园等级票价'
         db_table = 'geological_park_level_price'
-        managed = False
 
 class ForestParkLevelPrice(HierarchyTicketBase):
     """森林公园等级与门票价格关系"""
@@ -141,7 +137,6 @@ class ForestParkLevelPrice(HierarchyTicketBase):
         verbose_name = '森林公园等级票价'
         verbose_name_plural = '森林公园等级票价'
         db_table = 'forest_park_level_price'
-        managed = False
 
 class WetlandLevelPrice(HierarchyTicketBase):
     """湿地公园等级与门票价格关系"""
@@ -149,7 +144,6 @@ class WetlandLevelPrice(HierarchyTicketBase):
         verbose_name = '湿地公园等级票价'
         verbose_name_plural = '湿地公园等级票价'
         db_table = 'wetland_level_price'
-        managed = False
 
 class CulturalRelicLevelPrice(HierarchyTicketBase):
     """文物保护单位等级与门票价格关系"""
@@ -157,7 +151,6 @@ class CulturalRelicLevelPrice(HierarchyTicketBase):
         verbose_name = '文物保护单位等级票价'
         verbose_name_plural = '文物保护单位等级票价'
         db_table = 'cultural_relic_level_price'
-        managed = False
 
 class NatureReserveLevelPrice(HierarchyTicketBase):
     """自然景区等级与门票价格关系"""
@@ -165,4 +158,3 @@ class NatureReserveLevelPrice(HierarchyTicketBase):
         verbose_name = '自然景区等级票价'
         verbose_name_plural = '自然景区等级票价'
         db_table = 'nature_reserve_level_price'
-        managed = False

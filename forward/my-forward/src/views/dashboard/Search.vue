@@ -114,6 +114,7 @@
                   :max="500" 
                   :step="10"
                   :marks="{0: '0', 100: '100', 200: '200', 300: '300', 400: '400', 500: '500'}"
+                  @change="handlePriceRangeChange"
                 />
               </el-form-item>
             </el-col>
@@ -199,7 +200,7 @@ import { useScenicStore } from '@/stores/scenic'
 import { ElMessage } from 'element-plus'
 import typeAndLevelData from '@/assets/search/type_level_data.json'
 import locationData from '@/assets/search/location_data.json'
-import axios from 'axios'
+import { request } from '@/api'
 
 // 设置API基础URL
 const API_BASE_URL = 'http://localhost:8000/api'
@@ -209,11 +210,11 @@ const apiService = {
   // 获取景区搜索结果
   searchScenic: async (keyword = '', params = {}, timeout = 10000) => {
     try {
-      console.log('请求URL:', `${API_BASE_URL}/scenic/search/`);
+      console.log('请求URL:', `${API_BASE_URL}/api/scenic/search/`);
       console.log('请求参数:', { keyword, ...params });
       
-      // 添加超时和错误处理
-      const response = await axios.get(`${API_BASE_URL}/scenic/search/`, {
+      // 使用request实例，确保在用户登录时能正确传递token
+      const response = await request.get(`/api/scenic/search/`, {
         params: {
           keyword,
           ...params
@@ -554,8 +555,8 @@ export default defineComponent({
     }
     
     // 处理搜索
-    const handleSearch = async (resetPage = false) => {
-      console.log('[搜索] 开始搜索，重置页码?', resetPage);
+    const handleSearch = async (resetPage = false, skipSaveState = false) => {
+      console.log('[搜索] 开始搜索，重置页码?', resetPage, '跳过记录?', skipSaveState);
       
       if (resetPage) {
         console.log(`[分页] 重置页码: 从 ${pageConfig.currentPage} 到 1`);
@@ -594,11 +595,10 @@ export default defineComponent({
         if (searchForm.district) params.district = searchForm.district;
         if (searchForm.type) params.type = searchForm.type;
         if (searchForm.level) params.level = searchForm.level;
-        if (searchForm.priceRange[0] != (defaultPriceRange?.value?.[0] ?? 0) || 
-            searchForm.priceRange[1] != (defaultPriceRange?.value?.[1] ?? 500)) {
-          params.min_price = searchForm.priceRange[0];
-          params.max_price = searchForm.priceRange[1];
-        }
+        
+        // 始终发送价格范围参数，无论是否是默认值
+        params.priceRange = `${searchForm.priceRange[0]},${searchForm.priceRange[1]}`;
+        console.log(`[价格筛选] 设置价格范围: ${params.priceRange}`);
         
         console.log('[搜索] 发送API请求:', params);
         
@@ -609,19 +609,21 @@ export default defineComponent({
         // 标记已经初始化过搜索
         hasInitialized.value = true;
         
-        // 保存搜索状态
-        console.log('[搜索] 保存搜索状态:', {
-          searchForm,
-          currentPage: pageConfig.currentPage,
-          sortType: sortType.value
-        });
-        
-        // 修复：确保使用正确的三个参数
-        scenicStore.saveSearchState(
-          { ...searchForm },
-          pageConfig.currentPage,
-          sortType.value
-        );
+        // 只有当不是跳过记录状态时，才保存搜索状态
+        if (!skipSaveState) {
+          console.log('[搜索] 保存搜索状态:', {
+            searchForm,
+            currentPage: pageConfig.currentPage,
+            sortType: sortType.value
+          });
+          
+          // 保存搜索状态
+          scenicStore.saveSearchState(
+            { ...searchForm },
+            pageConfig.currentPage,
+            sortType.value
+          );
+        }
         
         // 处理搜索结果 - 使用新的规范化响应格式
         if (data && data.results) {
@@ -798,14 +800,22 @@ export default defineComponent({
       console.log('可用级别选项:', availableLevels.value)
     }
     
-    // 监听状态变化，避免路由导航后状态丢失
+    // 添加价格范围变化的处理函数
+    const handlePriceRangeChange = (value: [number, number]) => {
+      console.log(`[价格筛选] 价格范围变更: ${value[0]}-${value[1]}`);
+      // 当用户手动调整价格范围时，我们要确保这个变更被记录
+      // 这里不需要额外处理，因为已经在watch中监听searchForm变化
+    }
+    
+    // 修改watch监听，确保深度监听searchForm对象的所有属性
     watch([
-      () => ({ ...searchForm }), 
+      () => JSON.stringify(searchForm), // 使用JSON.stringify确保监听到深层变化 
       () => pageConfig.currentPage, 
       () => sortType.value
     ], () => {
       if (hasInitialized.value) {
-        saveCurrentState()
+        console.log('[状态变化] 检测到搜索参数变化，保存状态:', searchForm);
+        saveCurrentState();
       }
     }, { deep: true })
     
@@ -818,10 +828,11 @@ export default defineComponent({
           // 确保页码为1
           pageConfig.currentPage = 1;
           console.log('[分页] 初始化页码为1');
-          // 否则执行初始搜索
-          handleSearch()
+          // 执行初始搜索，但不记录
+          handleSearch(false, true) // 添加第二个参数表示不记录此次搜索
         }
         
+        // 初始化完成后才开始监听状态变化
         hasInitialized.value = true
       })
     })
@@ -844,6 +855,7 @@ export default defineComponent({
       handleProvinceChange,
       handleCityChange,
       handleTypeChange,
+      handlePriceRangeChange,
       isWaterScenic,
       levelPlaceholder,
       totalPages,

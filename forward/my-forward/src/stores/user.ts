@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { login as apiLogin, register as apiRegister, updateProfile as apiUpdateProfile, toggleFavorite as apiToggleFavorite, getFavorites as apiGetFavorites, deleteAccount as apiDeleteAccount } from '../api'
+import { login as apiLogin, register as apiRegister, updateProfile as apiUpdateProfile, toggleFavorite as apiToggleFavorite, getFavorites as apiGetFavorites, deleteAccount as apiDeleteAccount, forgotPassword as apiForgotPassword, resetPassword as apiResetPassword } from '../api'
 
 interface UserState {
   token: string
@@ -77,11 +77,11 @@ export const useUserStore = defineStore('user', {
   },
   
   actions: {
-    login(username: string, password: string) {
-      console.log('用户store: 开始登录流程', { username });
+    login(username_or_email: string, password: string) {
+      console.log('用户store: 开始登录流程', { username_or_email });
       
       return new Promise((resolve, reject) => {
-        apiLogin(username, password)
+        apiLogin(username_or_email, password)
           .then(response => {
             console.log('用户store: 登录API返回成功', { status: response.status });
             
@@ -110,6 +110,8 @@ export const useUserStore = defineStore('user', {
           })
           .catch(error => {
             console.error('用户store: 登录API返回错误', error);
+            
+            // 确保错误信息正确传递给调用者
             reject(error);
           });
       });
@@ -127,9 +129,15 @@ export const useUserStore = defineStore('user', {
       })
     },
     
-    logout() {
-      console.log('用户store: 执行注销操作');
+    logout(options: { redirectToLogin?: boolean, reason?: string } = { redirectToLogin: true, reason: '' }) {
+      console.log('用户store: 开始注销用户');
       
+      // 解析当前URL，检查是否已在登录页面
+      const isAlreadyOnLoginPage = window.location.pathname.includes('/login') || 
+                                   window.location.pathname === '/admin' || 
+                                   window.location.pathname === '/register';
+      
+      // 清除store中的信息
       this.token = '';
       this.tokenExpiry = 0;
       this.userId = '';
@@ -140,7 +148,7 @@ export const useUserStore = defineStore('user', {
       this.isAdmin = false;
       this.favorites = [];
       
-      // 清除sessionStorage中的所有用户数据
+      // 清除sessionStorage中的信息
       sessionStorage.removeItem('token');
       sessionStorage.removeItem('tokenExpiry');
       sessionStorage.removeItem('userId');
@@ -151,7 +159,19 @@ export const useUserStore = defineStore('user', {
       sessionStorage.removeItem('isAdmin');
       sessionStorage.removeItem('favorites');
       
-      console.log('用户store: 注销完成，清除了所有用户数据');
+      console.log('用户store: 已清除用户信息');
+      
+      // 避免重复重定向到登录页
+      if (options.redirectToLogin && !isAlreadyOnLoginPage) {
+        const redirectUrl = options.reason 
+          ? `/login?${options.reason}=true` 
+          : '/login';
+          
+        console.log(`用户store: 准备重定向到 ${redirectUrl}`);
+        setTimeout(() => {
+          window.location.href = redirectUrl;
+        }, 100);
+      }
     },
     
     updateProfile(profileData: Partial<UserState>) {
@@ -194,6 +214,7 @@ export const useUserStore = defineStore('user', {
             }
             
             setStorageItem('favorites', JSON.stringify(this.favorites))
+            // 直接返回响应对象
             resolve(response)
           })
           .catch(error => {
@@ -305,6 +326,30 @@ export const useUserStore = defineStore('user', {
           .then(response => {
             // 删除成功后，清除用户信息并登出
             this.logout();
+            resolve(response);
+          })
+          .catch(error => {
+            reject(error);
+          });
+      });
+    },
+    
+    forgotPassword(email: string) {
+      return new Promise((resolve, reject) => {
+        apiForgotPassword(email)
+          .then(response => {
+            resolve(response);
+          })
+          .catch(error => {
+            reject(error);
+          });
+      });
+    },
+    
+    resetPassword(email: string, code: string, password: string) {
+      return new Promise((resolve, reject) => {
+        apiResetPassword(email, code, password)
+          .then(response => {
             resolve(response);
           })
           .catch(error => {
