@@ -40,47 +40,8 @@ const handleLogin = async (formEl: FormInstance | undefined) => {
   await formEl.validate(async (valid) => {
     if (valid) {
       loading.value = true
-      try {
-        // 开发环境下的模拟登录（临时方案）
-        if (loginForm.username === 'admin' && loginForm.password === 'admin123') {
-          // 模拟管理员登录
-          const mockResponse = {
-            data: {
-              token: 'mock-admin-token',
-              user_id: 'admin-001',
-              username: 'admin',
-              email: 'admin@example.com',
-              avatar: '',
-              location: '',
-              is_admin: true
-            }
-          }
-          
-          userStore.setUserInfo({
-            token: mockResponse.data.token,
-            userId: mockResponse.data.user_id,
-            username: mockResponse.data.username,
-            email: mockResponse.data.email,
-            avatar: mockResponse.data.avatar,
-            location: mockResponse.data.location,
-            isAdmin: mockResponse.data.is_admin
-          })
-          
-          ElMessage.success('登录成功，正在跳转...')
-          
-          // 确保isAdmin设置正确
-          console.log('登录成功，用户状态:', userStore.getUserInfo())
-          console.log('isAdmin值:', localStorage.getItem('isAdmin'))
-          
-          // 使用setTimeout确保状态已更新后再跳转
-          setTimeout(() => {
-            console.log('尝试跳转到管理员仪表板')
-            router.push('/admin-dashboard')
-          }, 500)
-          return
-        }
-        
-        // 原有的API调用登录逻辑
+      try {        
+        // API调用登录逻辑
         const response = await userStore.login(loginForm.username, loginForm.password) as LoginResponse
         if (response.data.is_admin) {
           router.push('/admin-dashboard')

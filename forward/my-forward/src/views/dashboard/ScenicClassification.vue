@@ -175,7 +175,13 @@ const initRadarChart = () => {
         }
       },
       // 增加间距，减少点的重叠
-      nameGap: 25  // 增加间距，使名称更远离雷达图
+      nameGap: 25,  // 增加间距，使名称更远离雷达图
+      // 添加轴标签格式化，将数字取整
+      axisLabel: {
+        formatter: function(value: number) {
+          return Math.round(value);
+        }
+      }
     },
     series: [
       {

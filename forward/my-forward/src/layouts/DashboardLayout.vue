@@ -140,7 +140,7 @@ const menuItems = [
 <template>
   <div class="common-layout">
     <el-container class="layout-container">
-      <el-aside :width="isCollapse ? '64px' : '250px'" class="layout-aside">
+      <el-aside :width="isCollapse ? '54px' : '200px'" class="layout-aside">
         <div class="logo-container">
           <img v-if="!isCollapse" src="/logo.png" alt="景区数据可视化平台" class="logo-image" />
           <img v-else src="/logo.png" alt="景区数据可视化平台" class="logo-image-small" />
@@ -232,8 +232,10 @@ const menuItems = [
   background-color: #001529;
   transition: width 0.3s;
   overflow: hidden;
-  position: relative;
+  position: fixed;
   box-shadow: 2px 0 8px rgba(0, 0, 0, 0.15);
+  height: 100vh;
+  z-index: 1000;
 }
 
 .logo-container {
@@ -242,7 +244,7 @@ const menuItems = [
   justify-content: center;
   align-items: center;
   margin: 16px 0;
-  padding: 0 16px;
+  padding: 0 10px;
   overflow: hidden;
 }
 
@@ -259,8 +261,8 @@ const menuItems = [
 }
 
 .system-title {
-  margin: 0 0 0 12px;
-  font-size: 18px;
+  margin: 0 0 0 8px;
+  font-size: 16px;
   font-weight: 600;
   color: #ffffff;
   white-space: nowrap;
@@ -268,9 +270,10 @@ const menuItems = [
 
 .menu-wrapper {
   margin-top: 20px;
-  height: calc(100% - 120px);
+  height: calc(100vh - 140px);
   overflow-y: auto;
   overflow-x: hidden;
+  padding-bottom: 60px;
 }
 
 .menu-wrapper::-webkit-scrollbar {
@@ -291,12 +294,12 @@ const menuItems = [
 }
 
 .menu-group-title {
-  padding: 12px 20px 5px;
+  padding: 12px 16px 5px;
   color: rgba(255, 255, 255, 0.45);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 500;
   text-transform: uppercase;
-  letter-spacing: 1px;
+  letter-spacing: 0.5px;
 }
 
 .menu-divider {
@@ -308,17 +311,17 @@ const menuItems = [
 .menu-item {
   margin: 4px 0;
   border-radius: 0 22px 22px 0;
-  margin-right: 16px;
+  margin-right: 12px;
 }
 
 .menu-icon {
-  font-size: 18px;
-  margin-right: 10px;
+  font-size: 16px;
+  margin-right: 8px;
   transition: all 0.3s;
 }
 
 .menu-title {
-  font-size: 14px;
+  font-size: 13px;
   transition: all 0.3s;
 }
 
@@ -349,9 +352,9 @@ const menuItems = [
 }
 
 .collapse-button {
-  position: absolute;
+  position: fixed;
   bottom: 20px;
-  left: 50%;
+  left: v-bind('isCollapse ? "27px" : "100px"');
   transform: translateX(-50%);
   width: 32px;
   height: 32px;
@@ -362,7 +365,7 @@ const menuItems = [
   color: white;
   border-radius: 50%;
   cursor: pointer;
-  z-index: 999;
+  z-index: 1001;
   box-shadow: 0 2px 8px rgba(24, 144, 255, 0.5);
   transition: all 0.3s;
 }
@@ -429,5 +432,12 @@ const menuItems = [
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
+}
+
+/* 为主内容添加左侧边距，以适应固定的侧边栏 */
+.el-container:not(.layout-container) {
+  margin-left: v-bind('isCollapse ? "54px" : "200px"');
+  transition: margin-left 0.3s;
+  width: calc(100% - v-bind('isCollapse ? "54px" : "200px"'));
 }
 </style> 

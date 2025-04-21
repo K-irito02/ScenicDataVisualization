@@ -15,7 +15,7 @@ class ScenicDataSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = ScenicData
-        fields = '__all__'
+        exclude = ['transport_mode']
     
     def get_longitude(self, obj):
         """获取经度"""
@@ -230,7 +230,7 @@ class ScenicDetailSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = ScenicData
-        exclude = ('high_frequency_words',)
+        exclude = ('high_frequency_words', 'transport_mode')
     
     def get_level(self, obj):
         return ScenicSearchSerializer().get_level(obj)
