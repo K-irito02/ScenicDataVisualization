@@ -546,8 +546,8 @@ class ForgotPasswordView(APIView):
             redis_key = f'reset_password_code:{email}'
             try:
                 
-                # 设置30分钟有效期
-                redis_client.setex(redis_key, 1800, code)
+                # 设置5分钟有效期
+                redis_client.setex(redis_key, 300, code)
             except Exception as redis_error:
                 print(f"Redis操作失败: {str(redis_error)}")
                 import traceback
@@ -562,7 +562,7 @@ class ForgotPasswordView(APIView):
                 from django.core.mail import EmailMessage
                 email_message = EmailMessage(
                     subject='景区数据分析系统 - 重置密码验证码',
-                    body=f'您的重置密码验证码是：{code}，有效期为30分钟。请勿将验证码泄露给他人。如果这不是您的操作，请忽略此邮件。',
+                    body=f'您的重置密码验证码是：{code}，有效期为5分钟。请勿将验证码泄露给他人。如果这不是您的操作，请忽略此邮件。',
                     from_email=settings.EMAIL_HOST_USER,
                     to=[email]
                 )

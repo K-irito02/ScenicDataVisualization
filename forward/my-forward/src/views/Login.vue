@@ -104,56 +104,6 @@ const handleLogin = async (formEl: FormInstance | undefined) => {
       loginAttempts.value++;  // 增加登录尝试次数
       
       try {
-        // 开发环境下的模拟登录（临时方案）
-        if (loginForm.username === 'user' && loginForm.password === 'user123') {
-          // 模拟普通用户登录
-          const mockResponse = {
-            data: {
-              token: 'mock-user-token-' + new Date().getTime(), // 添加时间戳避免使用旧token
-              user_id: 'user-001',
-              username: 'user',
-              email: 'user@example.com',
-              avatar: '',
-              location: '北京',
-              is_admin: false
-            }
-          }
-          
-          // 使用更安全的sessionStorage
-          const tokenExpiry = Date.now() + (24 * 60 * 60 * 1000); // 24小时后过期
-          
-          // 设置用户信息到Store
-          await userStore.setUserInfo({
-            token: mockResponse.data.token,
-            tokenExpiry,
-            userId: mockResponse.data.user_id,
-            username: mockResponse.data.username,
-            email: mockResponse.data.email,
-            avatar: mockResponse.data.avatar,
-            location: mockResponse.data.location,
-            isAdmin: mockResponse.data.is_admin,
-            favorites: []
-          });
-          
-          ElMessage.success('登录成功，正在跳转...')
-          
-          // 检查登录状态
-          const userInfo = userStore.getUserInfo()
-          console.log('登录后用户状态:', {
-            isLoggedIn: !!userInfo.token,
-            token: userInfo.token ? `${userInfo.token.substring(0, 10)}...` : 'null',
-            username: userInfo.username,
-            tokenExpiry: new Date(userInfo.tokenExpiry).toLocaleString()
-          });
-          
-          // 使用延时确保状态更新
-          setTimeout(() => {
-            console.log('准备跳转到dashboard页面...')
-            router.push('/dashboard')
-          }, 500)
-          return
-        }
-        
         // 正常API调用登录逻辑
         console.log('开始调用登录API...')
         const loginResult = await userStore.login(loginForm.username, loginForm.password)
@@ -240,7 +190,7 @@ const goToAdminLogin = () => {
   <div class="login-container">
     <div class="login-box">
       <div class="logo-container">
-        <img src="/logo.png" alt="景区数据可视化平台" class="logo-image" />
+        <img src="/logo.png" alt="景区数据分析及可视化系统" class="logo-image" />
         <h2 class="system-title">全国景区数据分析及可视化系统</h2>
       </div>
       
@@ -315,15 +265,37 @@ const goToAdminLogin = () => {
   justify-content: center;
   align-items: center;
   height: 100vh;
-  background: linear-gradient(135deg, #1e88e5 0%, #1565c0 100%);
+  background: linear-gradient(120deg, #191549 0%, #072e83 100%);
+  position: relative;
+  overflow: hidden;
+}
+
+.login-container::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: radial-gradient(circle at 80% 20%, rgba(255, 255, 255, 0.1) 0%, transparent 40%);
+  z-index: 1;
 }
 
 .login-box {
   width: 400px;
   padding: 40px;
-  background-color: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+  background-color: rgba(255, 255, 255, 0.95);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(10px);
+  position: relative;
+  z-index: 2;
+  transition: all 0.3s ease;
+}
+
+.login-box:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
 }
 
 .logo-container {

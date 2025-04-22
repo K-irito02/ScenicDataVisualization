@@ -457,7 +457,7 @@ const initStackedBarChart = () => {
   // 设置柱状图选项
   const option = {
     title: {
-      text: '景区类型与等级分析',
+      text: '景区类型与等级分析柱状图',
       left: 'center',
       textStyle: {
         fontSize: 16,
@@ -666,16 +666,16 @@ onMounted(() => {
       
       <div class="analysis-content">
         <el-alert
-              title="景区类型分布分析结论"
+              title="景区类型与等级分布分析结论"
           type="info"
           :closable="false"
               :show-icon="true"
             >
-              <p>1. 景区类型中"A级景区"数量最多，覆盖范围最广；</p>
-              <p>2. "森林公园"和"文物保护单位"是第二、三大类型；</p>
-              <p>3. 国家级别的景区在各类型中占比最高；</p>
-              <p>4. 5A景区数量有限但影响力最大；</p>
-              <p>5. 地质公园中世界级占比较高，具有较高国际影响力。</p>
+              <p>1. 景区类型中"未分类景区"数量最多，覆盖范围最广；</p>
+              <p>2. "A级景区"和"文物保护单位"是第二、三大类型；</p>
+              <p>3. 国家级在各类型景区中占比比例均匀；</p>
+              <p>4. 4A景区数量在各等级景区中占比最高；</p>
+              <p>5. 湿地风景区中世界级占比较高，具有较高国际影响力。</p>
         </el-alert>
           </div>
           

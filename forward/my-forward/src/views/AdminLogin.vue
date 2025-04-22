@@ -68,7 +68,7 @@ const goToUserLogin = () => {
     <div class="login-box">
       <div class="logo-container">
         <img src="/logo.png" alt="景区数据可视化平台" class="logo-image" />
-        <h2 class="system-title">全国景区的数据分析及可视化系统 - 管理后台</h2>
+        <h2 class="system-title">全国景区数据分析及可视化系统 - 管理后台</h2>
       </div>
       
       <h3 class="login-title">管理员登录</h3>

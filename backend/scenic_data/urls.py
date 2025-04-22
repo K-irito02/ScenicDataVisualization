@@ -61,7 +61,4 @@ urlpatterns = [
     
     # 景区类型分布数据（用于雷达图和旭日图）
     path('data/scenic-type-distribution/', views.ScenicTypeDistributionView.as_view(), name='scenic-type-distribution'),
-    
-    # 图片代理路由
-    path('proxy/image/', views.ImageProxyView.as_view(), name='image_proxy'),
 ] 

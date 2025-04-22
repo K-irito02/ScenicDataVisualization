@@ -9,6 +9,7 @@ import './assets/main.css'
 import * as ElementPlusIconsVue from '@element-plus/icons-vue'
 import axios from 'axios'
 import { errorLogger } from './api'
+// 移除懒加载插件，使用浏览器原生懒加载和Element Plus的loading指令
 
 // 配置 axios
 axios.defaults.baseURL = import.meta.env.VITE_API_BASE_URL || '/'
@@ -48,6 +49,8 @@ for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
 
 // 添加到全局属性中，方便在组件中使用
 app.config.globalProperties.$echarts = echarts
+
+// 移除全局懒加载配置，使用更现代的方法
 
 app.use(createPinia())
 app.use(router)

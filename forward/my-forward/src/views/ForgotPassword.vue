@@ -58,7 +58,7 @@ const goToLogin = () => {
     <div class="forgot-password-box">
       <div class="logo-container">
         <img src="/logo.png" alt="Logo" class="logo">
-        <h2 class="system-title">全国景区的数据分析及可视化系统</h2>
+        <h2 class="system-title">全国景区数据分析及可视化系统</h2>
       </div>
       
       <h3 class="forgot-password-title">忘记密码</h3>
@@ -110,15 +110,37 @@ const goToLogin = () => {
   justify-content: center;
   align-items: center;
   height: 100vh;
-  background: linear-gradient(135deg, #1e88e5 0%, #1565c0 100%);
+  background: linear-gradient(120deg, #29205e 0%, #4e3abb 100%);
+  position: relative;
+  overflow: hidden;
+}
+
+.forgot-password-container::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: radial-gradient(circle at 80% 20%, rgba(255, 255, 255, 0.1) 0%, transparent 40%);
+  z-index: 1;
 }
 
 .forgot-password-box {
   width: 400px;
   padding: 40px;
-  background-color: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+  background-color: rgba(255, 255, 255, 0.95);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(10px);
+  position: relative;
+  z-index: 2;
+  transition: all 0.3s ease;
+}
+
+.forgot-password-box:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
 }
 
 .logo-container {

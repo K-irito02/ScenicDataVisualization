@@ -2,14 +2,13 @@
   <div class="scenic-card" @click="navigateToDetail">
     <div class="scenic-card-image">
       <img 
-        v-if="!imageError && (processedImageUrl || defaultImage)" 
-        :src="processedImageUrl || defaultImage" 
+        :src="processedImageUrl || defaultImage"
         :alt="scenic.name || '景区'" 
-        @error="handleImageError" 
+        @error="handleImageError"
+        class="lazy-image"
+        v-loading="imageLoading"
+        loading="lazy"
       />
-      <div v-else class="image-placeholder">
-        <el-icon><Picture /></el-icon>
-      </div>
       <div class="scenic-card-level" v-if="scenic.level">{{ scenic.level }}</div>
     </div>
     <div class="scenic-card-content">
@@ -40,7 +39,7 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, computed, ref } from 'vue'
+import { defineComponent, computed, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { Location, Star, StarFilled, Picture } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
@@ -66,16 +65,46 @@ export default defineComponent({
     const userStore = useUserStore()
     const defaultImage = DEFAULT_IMAGE
     const imageError = ref(false)
+    const imageLoading = ref(true)
     
-    // 处理图片URL，避免跨域和403错误
+    // 处理图片URL，避免跨域和403错误，使用缩略图模式
     const processedImageUrl = computed(() => {
       try {
-        if (!props.scenic.image) return defaultImage;
+        // 先检查图片是否存在
+        if (!props.scenic.image) {
+          console.log('[ScenicCard] 景区没有图片，使用默认图片');
+          return defaultImage;
+        }
+        
+        // 简化为直接处理图片URL
+        console.log('[ScenicCard] 处理图片URL:', props.scenic.image);
         return processImageUrl(props.scenic.image, defaultImage);
       } catch (error) {
         console.error('[ScenicCard] 处理图片URL出错:', error);
         return defaultImage;
       }
+    });
+    
+    // 预加载图片
+    const preloadImage = () => {
+      if (!processedImageUrl.value) return;
+      
+      const img = new Image();
+      img.onload = () => {
+        imageLoading.value = false;
+        console.log('[ScenicCard] 图片加载成功:', processedImageUrl.value);
+      };
+      img.onerror = () => {
+        imageLoading.value = false;
+        imageError.value = true;
+        console.error('[ScenicCard] 图片加载失败:', processedImageUrl.value);
+      };
+      img.src = processedImageUrl.value;
+    };
+    
+    onMounted(() => {
+      // 开始预加载
+      preloadImage();
     });
     
     // 计算属性：获取适合显示的价格
@@ -173,14 +202,18 @@ export default defineComponent({
     }
     
     // 处理图片加载错误
-    const handleImageError = () => {
-      console.log('图片加载失败，显示占位符')
-      imageError.value = true
+    const handleImageError = (event: Event) => {
+      console.log('[ScenicCard] 图片加载失败，使用默认图片');
+      // 替换为默认图片，而不仅仅是设置错误标志
+      if (event.target) {
+        (event.target as HTMLImageElement).src = defaultImage;
+      }
+      imageLoading.value = false;
     }
     
     return {
       defaultImage,
-      imageError,
+      imageLoading,
       handleImageError,
       isFavorite,
       navigateToDetail,
@@ -313,5 +346,45 @@ export default defineComponent({
   background-color: #f5f7fa;
   color: #909399;
   font-size: 36px;
+}
+
+/* 修改懒加载相关样式 */
+.lazy-image {
+  opacity: 1;
+  transition: opacity 0.5s ease, filter 0.5s ease;
+}
+
+.el-loading-mask {
+  background-color: #f5f7fa !important;
+  opacity: 0.8 !important;
+}
+
+/* 使用CSS变量使动画更流畅 */
+:root {
+  --loading-gradient: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  --loading-animation-duration: 1.5s;
+}
+
+/* 骨架屏背景 */
+.scenic-card-image {
+  background: var(--loading-gradient);
+  background-size: 200% 100%;
+  animation: loading var(--loading-animation-duration) infinite;
+}
+
+/* 修改图片加载时的背景动画 */
+@keyframes loading {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* 当图片加载完成后移除背景动画 */
+.lazy-image:not([v-loading]) ~ .scenic-card-image {
+  background: none;
+  animation: none;
 }
 </style> 

@@ -74,7 +74,7 @@ const moduleInfo = [
   {
     title: '景区等级与分类分析',
     icon: 'Medal', 
-    description: '根据景区等级（如5A、4A）和分类（如自然景观、文化遗址）进行统计分析。'
+    description: '根据景区等级（如5A、4A）和分类（如自然保护区、文物保护单位）进行统计分析。'
   },
   {
     title: '门票与开放时间分析',
@@ -89,7 +89,7 @@ const moduleInfo = [
   {
     title: '交通与可达性分析',
     icon: 'Van',
-    description: '分析景区交通可达性和方式，为游客出行规划提供建议。'
+    description: '分析景区交通可达性和方式，为游客出行规划提供参考。'
   },
   {
     title: '搜索与筛选',
@@ -182,10 +182,10 @@ onMounted(() => {
     <h2 class="section-title">数据采集与处理流程</h2>
     <el-card class="process-section">
       <el-steps :active="5" finish-status="success" align-center>
-        <el-step title="数据爬取" description="使用Scrapy-Redis分布式架构从马蜂窝网站爬取景区信息" />
+        <el-step title="数据爬取" description="使用Scrapy-Redis与Selenium结合的分布式架构" />
         <el-step title="数据预处理" description="数据清洗、标准化和结构化处理" />
         <el-step title="情感分析" description="对游客评论进行情感分析，提取关键词和情感倾向" />
-        <el-step title="数据存储" description="将处理后的数据存入MySQL和Redis数据库" />
+        <el-step title="数据存储" description="将处理后的数据存入MySQL" />
         <el-step title="数据可视化" description="通过前端界面展示多维度数据分析结果" />
       </el-steps>
     </el-card>
@@ -235,7 +235,7 @@ onMounted(() => {
         </div>
         <div class="feature">
           <h3><el-icon><connection /></el-icon> 分布式架构</h3>
-          <p>基于Scrapy-Redis的分布式爬虫，支持大规模数据采集</p>
+          <p>基于Scrapy-Redis与Selenium结合的分布式爬虫，支持大规模数据采集</p>
         </div>
       </div>
     </el-card>

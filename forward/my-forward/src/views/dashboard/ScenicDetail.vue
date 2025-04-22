@@ -59,7 +59,7 @@
                   <span class="price">{{ scenic.price ? `¥${scenic.price}` : '暂无数据' }}</span>
                 </el-descriptions-item>
                 <el-descriptions-item label="景区类型">
-                  <el-tag effect="plain" type="danger">{{ scenic.level || '暂无数据' }}</el-tag>
+                  <el-tag effect="plain" type="danger">{{ scenic.type ? (scenic.type.includes('景区') ? scenic.type.replace(/景区/g, 'A级景区') : scenic.type) : '暂无数据' }}</el-tag>
                 </el-descriptions-item>
                 <el-descriptions-item label="位置信息">
                   {{ formatAddress(scenic) || '暂无数据' }}
@@ -210,7 +210,7 @@ import { useScenicStore } from '@/stores/scenic'
 import { useUserStore } from '@/stores/user'
 import { ElMessage } from 'element-plus'
 import type { EChartsOption } from 'echarts'
-import { processImageUrl as processImage, DEFAULT_IMAGE } from '@/api/image-proxy'
+import { processImageUrl, DEFAULT_IMAGE } from '@/api/image-proxy'
 import { 
   Location, 
   Star, 
@@ -356,7 +356,7 @@ export default defineComponent({
       }
       
       return scenic.value.images.map((img: string) => {
-        return processImage(img, defaultImage);
+        return processImageUrl(img, defaultImage);
       });
     });
     
@@ -436,8 +436,8 @@ export default defineComponent({
           openingHours: data.opening_hours || '暂无开放时间信息',
           
           // 图片
-          image: data.image_url ? processImage(data.image_url, defaultImage) : defaultImage,
-          images: data.image_url ? [processImage(data.image_url, defaultImage)] : [defaultImage],
+          image: data.image_url ? processImageUrl(data.image_url, defaultImage) : defaultImage,
+          images: data.image_url ? [processImageUrl(data.image_url, defaultImage)] : [defaultImage],
           
           // 评论相关
           comments: data.comments || [],
@@ -719,7 +719,7 @@ export default defineComponent({
     // 处理图片URL
     const handleImageUrl = (url: string) => {
       if (!url) return defaultImage
-      return processImage(url, defaultImage)
+      return processImageUrl(url, defaultImage)
     }
     
     onMounted(() => {

@@ -145,9 +145,21 @@
         </template>
         
         <div v-if="loading" class="loading-container">
-          <el-skeleton :rows="3" animated />
-          <el-skeleton :rows="3" animated />
-          <el-skeleton :rows="3" animated />
+          <el-row :gutter="20">
+            <el-col :xs="24" :sm="12" :md="8" :lg="6" v-for="i in 8" :key="i">
+              <div class="scenic-card-skeleton">
+                <div class="image-skeleton"></div>
+                <div class="content-skeleton">
+                  <div class="title-skeleton"></div>
+                  <div class="location-skeleton"></div>
+                  <div class="info-skeleton">
+                    <div class="price-skeleton"></div>
+                    <div class="type-skeleton"></div>
+                  </div>
+                </div>
+              </div>
+            </el-col>
+          </el-row>
         </div>
         
         <div v-else-if="searchResult.length === 0" class="empty-result">
@@ -201,6 +213,7 @@ import { ElMessage } from 'element-plus'
 import typeAndLevelData from '@/assets/search/type_level_data.json'
 import locationData from '@/assets/search/location_data.json'
 import { request } from '@/api'
+import { processImageUrl, DEFAULT_IMAGE } from '@/api/image-proxy'
 
 // 设置API基础URL
 const API_BASE_URL = 'http://localhost:8000/api'
@@ -554,6 +567,88 @@ export default defineComponent({
       )
     }
     
+    // 图片预加载函数
+    const preloadImages = (results: any[]) => {
+      if (!results || results.length === 0) return;
+      
+      console.log('[预加载] 开始预加载图片，数量:', results.length);
+      
+      // 创建一个单一的批处理，延迟100ms开始批量预加载
+      setTimeout(() => {
+        // 批量加载 - 同时最多加载5张图片
+        let currentIndex = 0;
+        const batchSize = 5;
+        
+        const loadNextBatch = () => {
+          const batch = results.slice(currentIndex, currentIndex + batchSize);
+          currentIndex += batchSize;
+          
+          if (batch.length === 0) {
+            console.log('[预加载] 所有图片预加载完成');
+            return;
+          }
+          
+          console.log(`[预加载] 加载批次 ${Math.ceil(currentIndex / batchSize)}, 数量: ${batch.length}`);
+          
+          // 使用Promise.all并行加载一批图片
+          const preloadPromises = batch.map(item => {
+            return new Promise<void>((resolve) => {
+              if (!item.image) {
+                resolve();
+                return;
+              }
+              
+              // 使用预加载图片
+              try {
+                const imgUrl = processImageUrl(item.image, DEFAULT_IMAGE);
+                
+                console.log(`[预加载] 开始加载图片: ${imgUrl.substring(0, 100)}...`);
+                
+                // 创建图片对象并设置加载事件
+                const img = new Image();
+                
+                // 设置超时，避免图片加载太久
+                const timeout = setTimeout(() => {
+                  console.warn(`[预加载] 图片加载超时: ${imgUrl.substring(0, 50)}...`);
+                  resolve();
+                }, 5000);
+                
+                img.onload = () => {
+                  clearTimeout(timeout);
+                  console.log(`[预加载] 图片加载成功: ${imgUrl.substring(0, 50)}...`);
+                  resolve();
+                };
+                
+                img.onerror = () => {
+                  clearTimeout(timeout);
+                  console.error(`[预加载] 图片加载失败: ${imgUrl.substring(0, 50)}...`);
+                  resolve();
+                };
+                
+                // 开始加载
+                img.src = imgUrl;
+              } catch (error) {
+                console.error(`[预加载] 处理图片URL出错:`, error);
+                resolve();
+              }
+            });
+          });
+          
+          // 等待所有图片加载完成后，继续下一批
+          Promise.all(preloadPromises).then(() => {
+            if (currentIndex < results.length) {
+              setTimeout(loadNextBatch, 200); // 每批次间隔200ms
+            } else {
+              console.log('[预加载] 所有批次加载完成');
+            }
+          });
+        };
+        
+        // 开始加载第一批
+        loadNextBatch();
+      }, 100);
+    };
+    
     // 处理搜索
     const handleSearch = async (resetPage = false, skipSaveState = false) => {
       console.log('[搜索] 开始搜索，重置页码?', resetPage, '跳过记录?', skipSaveState);
@@ -630,6 +725,9 @@ export default defineComponent({
           console.log(`[搜索] 获取到${data.results.length}个结果，总共${data.total || data.results.length}个`);
           searchResult.value = data.results;
           pageConfig.totalCount = data.total || data.results.length;
+          
+          // 开始预加载图片 (在设置搜索结果后)
+          preloadImages(data.results);
           
           // 更新分页信息
           if (data.page) {
@@ -947,5 +1045,78 @@ export default defineComponent({
   margin-bottom: 5px;
   font-size: 14px;
   color: #606266;
+}
+
+/* 添加骨架屏样式 */
+.scenic-card-skeleton {
+  height: 320px;
+  background-color: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  margin-bottom: 20px;
+}
+
+.image-skeleton {
+  height: 180px;
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: loading 1.5s infinite;
+}
+
+.content-skeleton {
+  padding: 15px;
+}
+
+.title-skeleton {
+  height: 20px;
+  width: 80%;
+  margin-bottom: 15px;
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: loading 1.5s infinite;
+  border-radius: 4px;
+}
+
+.location-skeleton {
+  height: 16px;
+  width: 60%;
+  margin-bottom: 15px;
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: loading 1.5s infinite;
+  border-radius: 4px;
+}
+
+.info-skeleton {
+  display: flex;
+  justify-content: space-between;
+}
+
+.price-skeleton {
+  height: 18px;
+  width: 40%;
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: loading 1.5s infinite;
+  border-radius: 4px;
+}
+
+.type-skeleton {
+  height: 18px;
+  width: 30%;
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: loading 1.5s infinite;
+  border-radius: 4px;
+}
+
+@keyframes loading {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }
 </style> 

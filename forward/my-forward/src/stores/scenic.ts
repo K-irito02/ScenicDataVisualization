@@ -76,7 +76,7 @@ interface RadarDataItem {
   value: number
 }
 
-// 旭日图数据接口
+// 柱状图数据接口
 interface SunburstDataItem {
   name: string
   value: number

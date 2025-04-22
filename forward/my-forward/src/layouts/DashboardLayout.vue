@@ -142,9 +142,11 @@ const menuItems = [
     <el-container class="layout-container">
       <el-aside :width="isCollapse ? '54px' : '200px'" class="layout-aside">
         <div class="logo-container">
-          <img v-if="!isCollapse" src="/logo.png" alt="景区数据可视化平台" class="logo-image" />
-          <img v-else src="/logo.png" alt="景区数据可视化平台" class="logo-image-small" />
-          <h1 v-if="!isCollapse" class="system-title">景区数据平台</h1>
+          <div class="logo-content">
+            <img v-if="!isCollapse" src="/logo.png" alt="全国景区数据分析及可视化系统" class="logo-image" />
+            <div v-if="!isCollapse" class="system-name">全国景区数据分析及可视化系统</div>
+            <img v-else src="/logo.png" alt="全国景区数据分析及可视化系统" class="logo-image-small" />
+          </div>
         </div>
         
         <div class="menu-wrapper">
@@ -239,7 +241,7 @@ const menuItems = [
 }
 
 .logo-container {
-  height: 64px;
+  height: auto;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -248,23 +250,29 @@ const menuItems = [
   overflow: hidden;
 }
 
+.logo-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
 .logo-image {
-  max-width: 40px;
-  max-height: 40px;
+  max-width: 60px;
+  max-height: 60px;
   object-fit: contain;
 }
 
 .logo-image-small {
-  max-width: 40px;
-  max-height: 40px;
+  max-width: 45px;
+  max-height: 45px;
   object-fit: contain;
 }
 
-.system-title {
-  margin: 0 0 0 8px;
-  font-size: 16px;
-  font-weight: 600;
+.system-name {
+  font-size: 12px;
   color: #ffffff;
+  margin-top: 5px;
+  text-align: center;
   white-space: nowrap;
 }
 

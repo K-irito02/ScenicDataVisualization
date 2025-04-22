@@ -1985,42 +1985,6 @@ class ScenicTypeDistributionView(views.APIView):
             "sunburst_data": root_data
         })
 
-class ImageProxyView(views.APIView):
-    """图片代理视图，用于解决第三方网站图片防盗链问题"""
-    permission_classes = [permissions.AllowAny]
-    
-    def get(self, request):
-        try:
-            # 获取要代理的图片URL
-            image_url = request.query_params.get('url', '')
-            if not image_url:
-                return Response({'error': '缺少图片URL参数'}, status=400)
-            
-            # 设置请求头，模拟浏览器请求
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/99.0.4844.51 Safari/537.36',
-                'Referer': 'https://www.mafengwo.cn/',  # 模拟来自马蜂窝网站的请求
-                'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8',
-            }
-            
-            # 发送请求获取图片
-            response = requests.get(image_url, headers=headers, stream=True, timeout=5)
-            
-            # 检查响应状态
-            if response.status_code != 200:
-                return Response({'error': f'图片获取失败，状态码: {response.status_code}'}, status=response.status_code)
-            
-            # 创建一个HttpResponse对象，包含图片内容
-            img_response = HttpResponse(response.content, content_type=response.headers.get('Content-Type', 'image/jpeg'))
-            
-            # 设置缓存控制头
-            img_response['Cache-Control'] = 'max-age=86400, public'  # 缓存一天
-            return img_response
-            
-        except Exception as e:
-            print(f"图片代理服务出错: {str(e)}")
-            return Response({'error': f'图片代理服务出错: {str(e)}'}, status=500)
-
 class NearbyScenicView(views.APIView):
     """附近景区视图"""
     permission_classes = [permissions.AllowAny]
