@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed, nextTick, watch } from 'vue'
+import { ref, onMounted, onUnmounted, computed, nextTick } from 'vue'
 import { useScenicStore } from '@/stores/scenic'
 import * as echarts from 'echarts'
 import { ElMessage } from 'element-plus'
@@ -31,8 +31,6 @@ const barChartInstance = ref<ECharts | null>(null)
 const boxplotChartInstance = ref<ECharts | null>(null)
 const heatmapChartInstance = ref<ECharts | null>(null)
 const radarChartInstance = ref<ECharts | null>(null)
-const selectedTimeRange = ref('')
-const showTimeMap = ref(false)
 
 // 修改景区类型的标签显示
 const scenicTypeLabels: Record<string, string> = {
@@ -42,14 +40,6 @@ const scenicTypeLabels: Record<string, string> = {
 // 所有景区类型
 const scenicTypes = computed(() => {
   return typeLevelData.types || []
-})
-
-// 当前选择类型的等级列表
-const currentTypeLevels = computed(() => {
-  if (selectedScenicType.value) {
-    return (typeLevelData.typeLevels as Record<string, string[]>)[selectedScenicType.value] || []
-  }
-  return []
 })
 
 // 箱线图类型选项

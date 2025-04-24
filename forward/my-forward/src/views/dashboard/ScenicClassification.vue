@@ -78,9 +78,6 @@ const initRadarChart = () => {
     return item;
   });
   
-  // 计算所有景区的总数量
-  const totalCount = radarData.reduce((sum, item) => sum + (item.value || 0), 0);
-  
   // 准备雷达图的指示器数据
   const indicator = radarData.map(item => ({
     name: item.name,
@@ -116,8 +113,6 @@ const initRadarChart = () => {
     tooltip: {
       trigger: 'item',
       formatter: function(params: any) {
-        // 获取当前指针位置对应的数据
-        const index = params.dataIndex;
         // 如果是点击的是轴线上的点
         if (params.componentType === 'radar' && params.seriesType === 'radar') {
           // 获取雷达图的具体指标点
@@ -338,7 +333,7 @@ const initStackedBarChart = () => {
     });
     
     // 为每个等级创建一个系列
-    sortedLevelNames.forEach((levelName, index) => {
+    sortedLevelNames.forEach((levelName) => {
       const seriesData: any[] = [];
       
       // 为每个类型填充该等级的数据
@@ -452,7 +447,7 @@ const initStackedBarChart = () => {
     };
   };
   
-  const { typeNames, series, levelColorMap, typeTotalValues } = prepareBarData();
+  const { typeNames, series, typeTotalValues } = prepareBarData();
   
   // 设置柱状图选项
   const option = {

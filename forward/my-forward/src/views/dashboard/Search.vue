@@ -336,21 +336,6 @@ const apiService = {
   }
 }
 
-// 解决分页组件高亮问题：强制Element UI重新渲染
-const forceRerender = (component: any) => {
-  if (!component) return;
-  
-  // 移除并重新添加DOM元素
-  const parent = component.$el.parentNode;
-  if (parent) {
-    const next = component.$el.nextSibling;
-    parent.removeChild(component.$el);
-    setTimeout(() => {
-      parent.insertBefore(component.$el, next);
-    }, 0);
-  }
-};
-
 // 添加城市映射的类型声明
 type CitiesRecord = Record<string, string[]>
 
@@ -377,9 +362,6 @@ export default defineComponent({
   setup() {
     const scenicStore = useScenicStore()
     const loading = ref(false)
-    const totalCount = ref(0)
-    const currentPage = ref(1)
-    const pageSize = ref(12)
     const sortType = ref('popularity')
     const searchResult = ref<any[]>([])
     const hasInitialized = ref(false)
@@ -411,9 +393,6 @@ export default defineComponent({
       levels: [],
       districts: {}
     })
-    
-    // 在setup内部定义defaultPriceRange
-    const defaultPriceRange = ref([0, 1000]);
     
     // 计算属性：判断是否为水利风景区类型
     const isWaterScenic = computed(() => {

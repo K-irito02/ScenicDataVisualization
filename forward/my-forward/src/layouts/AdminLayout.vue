@@ -61,11 +61,11 @@ const menuItems = [
 <template>
   <div class="common-layout">
     <el-container class="layout-container">
-      <el-aside :width="isCollapse ? '64px' : '220px'" class="layout-aside">
+      <el-aside :width="isCollapse ? '60px' : '200px'" class="layout-aside">
         <div class="logo-container">
-          <img v-if="!isCollapse" src="/logo.png" alt="景区数据可视化平台" class="logo-image" />
-          <img v-else src="/logo.png" alt="景区数据可视化平台" class="logo-image-small" />
-          <span v-if="!isCollapse" class="admin-badge">管理系统</span>
+          <img v-if="!isCollapse" src="/logo.png" alt="全国景区数据分析及可视化系统" class="logo-image" />
+          <img v-else src="/logo.png" alt="全国景区数据分析及可视化系统" class="logo-image-small" />
+          <div v-if="!isCollapse" class="admin-badge">管理系统</div>
         </div>
         <el-menu
           :default-active="activeMenu"
@@ -86,10 +86,10 @@ const menuItems = [
         </div>
       </el-aside>
       
-      <el-container>
+      <el-container class="main-container" :style="{ marginLeft: isCollapse ? '60px' : '200px' }">
         <el-header class="layout-header">
           <div class="header-left">
-            <h2 class="page-title">{{ route.meta.title || '全国景区的数据分析及可视化系统 - 管理后台' }}</h2>
+            <h2 class="page-title">{{ route.meta.title || '全国景区数据分析及可视化系统 - 管理后台' }}</h2>
           </div>
           <div class="header-right">
             <el-dropdown>
@@ -127,52 +127,65 @@ const menuItems = [
 <style scoped>
 .layout-container {
   min-height: 100vh;
+  position: relative;
+}
+
+.main-container {
+  transition: margin-left 0.3s;
+  min-height: 100vh;
 }
 
 .layout-aside {
   background-color: #001529;
   transition: width 0.3s;
   overflow: hidden;
-  position: relative;
+  position: fixed;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  z-index: 10;
 }
 
 .logo-container {
-  height: 60px;
+  height: 80px;
   display: flex;
+  flex-direction: column;
   justify-content: center;
   align-items: center;
   margin: 10px 0;
   padding: 0 10px;
-  overflow: hidden;
+  overflow: visible;
   position: relative;
 }
 
 .logo-image {
-  max-width: 100%;
-  max-height: 50px;
+  max-width: 90%;
+  max-height: 55px;
   object-fit: contain;
 }
 
 .logo-image-small {
-  max-width: 40px;
-  max-height: 40px;
+  max-width: 45px;
+  max-height: 45px;
   object-fit: contain;
 }
 
 .admin-badge {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
+  margin-top: 8px;
   text-align: center;
-  font-size: 12px;
+  font-size: 13px;
   color: #ffffff;
-  background-color: rgba(0, 0, 0, 0.5);
   padding: 2px 0;
+  width: 100%;
+  overflow: visible;
+  white-space: nowrap;
 }
 
 .menu-container {
   border-right: none;
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .collapse-button {
@@ -180,8 +193,8 @@ const menuItems = [
   bottom: 20px;
   left: 50%;
   transform: translateX(-50%);
-  width: 30px;
-  height: 30px;
+  width: 36px;
+  height: 36px;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -190,6 +203,8 @@ const menuItems = [
   border-radius: 50%;
   cursor: pointer;
   z-index: 999;
+  margin-top: 0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
 .layout-header {
@@ -199,6 +214,9 @@ const menuItems = [
   justify-content: space-between;
   align-items: center;
   padding: 0 20px;
+  position: sticky;
+  top: 0;
+  z-index: 5;
 }
 
 .header-left {
@@ -249,5 +267,25 @@ const menuItems = [
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
+}
+
+/* 媒体查询以处理响应式布局 */
+@media (max-width: 768px) {
+  .layout-aside {
+    position: fixed;
+    z-index: 20;
+  }
+  
+  .main-container {
+    margin-left: 60px !important;
+  }
+  
+  .page-title {
+    font-size: 16px;
+  }
+  
+  .username {
+    display: none;
+  }
 }
 </style> 

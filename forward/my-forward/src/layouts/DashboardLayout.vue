@@ -92,49 +92,6 @@ const menuGroups = [
     ]
   }
 ]
-
-const menuItems = [
-  {
-    title: '首页',
-    icon: 'House',
-    path: '/dashboard/home'
-  },
-  {
-    title: '景区基础分布分析',
-    icon: 'Location',
-    path: '/dashboard/scenic-distribution'
-  },
-  {
-    title: '景区等级与分类分析',
-    icon: 'Medal',
-    path: '/dashboard/scenic-classification'
-  },
-  {
-    title: '门票与开放时间分析',
-    icon: 'Ticket',
-    path: '/dashboard/ticket-analysis'
-  },
-  {
-    title: '评论与情感分析',
-    icon: 'ChatDotRound',
-    path: '/dashboard/comment-analysis'
-  },
-  {
-    title: '交通与可达性分析',
-    icon: 'Van',
-    path: '/dashboard/transportation'
-  },
-  {
-    title: '搜索与筛选',
-    icon: 'Search',
-    path: '/dashboard/search'
-  },
-  {
-    title: '个人中心',
-    icon: 'User',
-    path: '/dashboard/profile'
-  }
-]
 </script>
 
 <template>

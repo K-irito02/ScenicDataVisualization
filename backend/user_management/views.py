@@ -3,6 +3,7 @@ from rest_framework import status, viewsets, permissions, generics
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.authtoken.models import Token
+from rest_framework.pagination import PageNumberPagination
 from django.utils import timezone
 from django.db import transaction
 from django.core.mail import send_mail
@@ -244,9 +245,11 @@ class UserFavoritesView(generics.ListAPIView):
     """用户收藏列表视图"""
     serializer_class = UserFavoriteSerializer
     permission_classes = [permissions.IsAuthenticated]
+    pagination_class = PageNumberPagination
     
     def get_queryset(self):
-        return UserFavorite.objects.filter(user=self.request.user)
+        # 添加排序，确保分页结果一致
+        return UserFavorite.objects.filter(user=self.request.user).order_by('-added_time')
 
 class UploadAvatarView(APIView):
     """用户头像上传视图"""

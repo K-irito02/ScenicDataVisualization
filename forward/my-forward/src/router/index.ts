@@ -166,7 +166,6 @@ router.beforeEach((to: RouteLocationNormalized, _from: RouteLocationNormalized, 
   
   // 1. 公开页面 - 允许任何人访问
   const publicPages = ['/login', '/register', '/admin', '/forgot-password', '/reset-password'];
-  const _isPublicPage = publicPages.includes(to.path) || to.path === '/';
   
   // 2. 用户仅页面 - 需要普通用户权限
   const userOnlyPages = to.path.startsWith('/dashboard')

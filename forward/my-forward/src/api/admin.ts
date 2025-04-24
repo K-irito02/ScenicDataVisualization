@@ -116,4 +116,15 @@ export function updateUser(userId: number, userData: {
     method: 'put',
     data: userData
   });
+}
+
+/**
+ * 获取用户统计信息
+ * @param userId 用户ID
+ */
+export function getUserStats(userId: number) {
+  return request({
+    url: `/api/admin/users/${userId}/stats/`,
+    method: 'get'
+  });
 } 

@@ -20,24 +20,28 @@
     
     <div v-else class="scenic-detail-content">
       <div class="header-actions">
-        <el-button type="primary" size="large" @click="handleBackToSearch" v-if="!fromFavorites">
-          <el-icon><Back /></el-icon>
-          <span>返回搜索</span>
-        </el-button>
-        <el-button type="primary" size="large" @click="handleBackToFavorites" v-else>
-          <el-icon><Back /></el-icon>
-          <span>返回我的收藏</span>
-        </el-button>
+        <div class="left-buttons">
+          <el-button type="primary" size="large" @click="handleBackToSearch">
+            <el-icon><Back /></el-icon>
+            <span>返回搜索</span>
+          </el-button>
+          <el-button type="primary" size="large" @click="handleBackToFavorites">
+            <el-icon><Back /></el-icon>
+            <span>返回我的收藏</span>
+          </el-button>
+        </div>
         
-        <el-button 
-          type="primary"
-          size="large"
-          :icon="isFavorite ? 'StarFilled' : 'Star'" 
-          @click="toggleFavorite"
-          :class="{ 'is-favorite': isFavorite }"
-        >
-          {{ isFavorite ? '已收藏' : '收藏' }}
-        </el-button>
+        <div class="right-buttons">
+          <el-button 
+            type="primary"
+            size="large"
+            :icon="isFavorite ? 'StarFilled' : 'Star'" 
+            @click="toggleFavorite"
+            :class="{ 'is-favorite': isFavorite }"
+          >
+            {{ isFavorite ? '已收藏' : '收藏' }}
+          </el-button>
+        </div>
       </div>
       
       <h2 class="scenic-title">
@@ -202,11 +206,10 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, onMounted, computed, watch } from 'vue'
+import { defineComponent, ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import CardContainer from '@/components/common/CardContainer.vue'
 import BaseChart from '@/components/charts/BaseChart.vue'
-import { useScenicStore } from '@/stores/scenic'
 import { useUserStore } from '@/stores/user'
 import { ElMessage } from 'element-plus'
 import type { EChartsOption } from 'echarts'
@@ -248,7 +251,6 @@ export default defineComponent({
   setup() {
     const route = useRoute()
     const router = useRouter()
-    const scenicStore = useScenicStore()
     const userStore = useUserStore()
     const loading = ref(true)
     const wordCloudLoading = ref(false)
@@ -780,13 +782,19 @@ export default defineComponent({
   margin-bottom: 20px;
 }
 
-.header-actions .el-button {
-  margin-right: 15px;
-  font-size: 16px;
+.left-buttons {
+  display: flex;
+  gap: 10px;
 }
 
-.header-actions .el-button:last-child {
+.right-buttons {
+  display: flex;
+  gap: 10px;
+}
+
+.header-actions .el-button {
   margin-right: 0;
+  font-size: 16px;
 }
 
 .scenic-title {
@@ -1031,5 +1039,26 @@ export default defineComponent({
   padding: 20px;
   background-color: #f8f9fa;
   border-radius: 4px;
+}
+
+/* 响应式布局调整 */
+@media (max-width: 768px) {
+  .header-actions {
+    flex-direction: column;
+    gap: 15px;
+  }
+  
+  .left-buttons {
+    width: 100%;
+    justify-content: space-between;
+  }
+  
+  .right-buttons {
+    width: 100%;
+  }
+  
+  .right-buttons .el-button {
+    width: 100%;
+  }
 }
 </style> 

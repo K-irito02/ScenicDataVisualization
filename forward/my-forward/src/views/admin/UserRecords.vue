@@ -1,6 +1,6 @@
 <template>
   <div class="user-records-container">
-    <card-container title="用户记录管理">
+    <card-container title="用户记录查看">
       <template #actions>
         <div class="filter-form">
           <el-form :inline="true" :model="filterForm" class="demo-form-inline">
@@ -8,7 +8,7 @@
               <el-input v-model="filterForm.userId" placeholder="输入用户ID" clearable />
             </el-form-item>
             <el-form-item label="记录类型">
-              <el-select v-model="filterForm.recordType" placeholder="选择记录类型" clearable>
+              <el-select v-model="filterForm.recordType" placeholder="选择记录类型" clearable style="min-width: 180px;">
                 <el-option label="搜索记录" value="search" />
                 <el-option label="收藏记录" value="favorite" />
                 <el-option label="登录记录" value="login" />

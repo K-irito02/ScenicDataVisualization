@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed, watch } from 'vue'
+import { ref, reactive, onMounted, watch } from 'vue'
 import { useUserStore } from '@/stores/user'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
@@ -135,84 +135,6 @@ const handleAvatarSuccess = (response: any) => {
   ElMessage.success('头像上传成功');
 }
 
-// 上传头像
-const handleAvatarUpload = (options: any) => {
-  uploading.value = true
-  
-  // 从el-upload的http-request选项获取文件
-  const file = options.file
-  
-  // 检查文件是否有效
-  if (!file) {
-    ElMessage.error('文件无效，请重新选择');
-    uploading.value = false;
-    return false;
-  }
-  
-  console.log('准备上传文件:', file.name, file.type, file.size);
-  
-  // 创建FormData对象上传文件
-  const formData = new FormData();
-  formData.append('avatar', file);
-  
-  // 上传到服务器
-  axios({
-    method: 'post',
-    url: '/api/users/upload-avatar/',
-    data: formData,
-    headers: {
-      'Content-Type': 'multipart/form-data',
-      'Authorization': `Token ${userStore.token}`
-    }
-  }).then(response => {
-    console.log('头像上传成功响应:', response.data);
-    
-    // 确保响应中包含头像URL
-    if (!response.data.avatar_url) {
-      throw new Error('服务器未返回头像URL');
-    }
-    
-    // 使用服务器返回的头像URL更新头像
-    let avatarUrl = response.data.avatar_url;
-    
-    // 确保URL格式正确（开头有/）
-    if (avatarUrl && !avatarUrl.startsWith('/') && !avatarUrl.startsWith('http')) {
-      avatarUrl = '/' + avatarUrl;
-    }
-    
-    console.log('处理后的头像URL:', avatarUrl);
-    
-    // 保存到表单中用于更新资料
-    profileForm.avatar = avatarUrl;
-    
-    // 更新用户存储中的头像
-    userStore.setUserInfo({ avatar: avatarUrl });
-    
-    // 强制刷新头像显示
-    refreshAvatar();
-    
-    ElMessage.success('头像上传成功');
-    
-    // 调用上传成功回调
-    if (options.onSuccess) {
-      options.onSuccess(response.data);
-    }
-  }).catch(error => {
-    console.error('头像上传完整错误:', error);
-    if (error.response) {
-      console.error('服务器响应:', error.response.data);
-    }
-    ElMessage.error(`头像上传失败: ${error.message || '未知错误'}`);
-    
-    // 调用上传失败回调
-    if (options.onError) {
-      options.onError(error);
-    }
-  }).finally(() => {
-    uploading.value = false;
-  });
-}
-
 // 保存个人信息
 const saveProfile = async (formEl: FormInstance | undefined) => {
   if (!formEl) return
@@ -281,14 +203,15 @@ const saveProfile = async (formEl: FormInstance | undefined) => {
 }
 
 // 获取收藏列表
-const getFavorites = async () => {
+const getFavorites = async (page = 1) => {
   favoritesLoading.value = true
   try {
     // 使用userStore提供的方法获取收藏列表
     await userStore.fetchFavorites()
-    // 从API获取完整的收藏详情
+    // 从API获取完整的收藏详情，添加页码参数
     const response = await axios.get('/api/favorites/', {
-      headers: { Authorization: `Token ${userStore.token}` }
+      headers: { Authorization: `Token ${userStore.token}` },
+      params: { page }
     })
     
     console.log('收藏列表响应数据:', response.data);
@@ -296,11 +219,20 @@ const getFavorites = async () => {
     // 处理不同结构的响应数据
     if (Array.isArray(response.data)) {
       favorites.value = response.data;
+      // 如果是数组，则没有分页信息
+      totalItems.value = response.data.length;
+      totalPages.value = 1;
     } else if (response.data && Array.isArray(response.data.results)) {
       favorites.value = response.data.results;
+      // 设置分页信息
+      totalItems.value = response.data.count || response.data.results.length;
+      totalPages.value = Math.ceil(totalItems.value / pageSize.value);
+      currentPage.value = page;
     } else {
       // 处理其他类型的响应格式
       favorites.value = [];
+      totalItems.value = 0;
+      totalPages.value = 0;
       console.warn('收藏列表数据格式不符合预期:', response.data);
     }
   } catch (error) {
@@ -309,6 +241,26 @@ const getFavorites = async () => {
   } finally {
     favoritesLoading.value = false
   }
+}
+
+// 分页相关变量
+const currentPage = ref(1)
+const pageSize = ref(10)
+const totalItems = ref(0)
+const totalPages = ref(0)
+
+// 处理页码变化
+const handlePageChange = (page: number) => {
+  currentPage.value = page
+  getFavorites(page)
+  
+  // 更新URL中的页码参数，保持其他参数不变
+  const query = { ...route.query, page: page.toString() }
+  // 如果是第一页，移除页码参数
+  if (page === 1) {
+    delete query.page
+  }
+  router.push({ query })
 }
 
 // 移除收藏
@@ -322,8 +274,30 @@ const removeFavorite = async (scenicId: string) => {
     await userStore.toggleFavorite(scenicId)
     ElMessage.success('已取消收藏')
     
-    // 刷新收藏列表
+    // 从当前列表中移除
     favorites.value = favorites.value.filter(item => item.id !== scenicId)
+    
+    // 如果当前页面的收藏全部被移除，并且不是第一页，则回到上一页
+    if (favorites.value.length === 0 && currentPage.value > 1) {
+      currentPage.value -= 1
+      getFavorites(currentPage.value)
+      
+      // 更新URL
+      const query = { ...route.query, page: currentPage.value.toString() }
+      if (currentPage.value === 1) {
+        delete query.page
+      }
+      router.push({ query })
+    } else if (totalItems.value > 0) {
+      // 更新总数量和总页数
+      totalItems.value -= 1
+      totalPages.value = Math.ceil(totalItems.value / pageSize.value)
+      
+      // 如果当前页已经没有数据，但还有其他页，刷新当前页
+      if (favorites.value.length === 0 && totalPages.value > 0) {
+        getFavorites(currentPage.value)
+      }
+    }
   } catch (error) {
     ElMessage.error('取消收藏失败，请稍后重试')
   }
@@ -334,11 +308,16 @@ onMounted(() => {
   // 检查URL参数，如果有tab参数并且是'favorites'，则切换到收藏标签页
   if (route.query.tab === 'favorites') {
     activeTab.value = 'favorites'
+    
+    // 如果URL中包含页码，使用URL中的页码
+    if (route.query.page) {
+      currentPage.value = parseInt(route.query.page as string) || 1
+    }
   }
 
   // 如果选择了收藏标签页，加载收藏列表
   if (activeTab.value === 'favorites') {
-    getFavorites()
+    getFavorites(currentPage.value)
   }
   
   // 确保头像URL正确格式化并加载
@@ -355,9 +334,15 @@ onMounted(() => {
 watch(() => route.query.tab, (newVal) => {
   if (newVal === 'favorites') {
     activeTab.value = 'favorites'
+    
+    // 如果URL中包含页码，使用URL中的页码
+    if (route.query.page) {
+      currentPage.value = parseInt(route.query.page as string) || 1
+    }
+    
     // 如果收藏列表为空，重新加载
     if (favorites.value.length === 0) {
-      getFavorites()
+      getFavorites(currentPage.value)
     }
   }
 }, { immediate: true })
@@ -365,17 +350,19 @@ watch(() => route.query.tab, (newVal) => {
 // 切换标签页时加载数据
 const handleTabClick = (tab: any) => {
   if (tab.props.name === 'favorites' && favorites.value.length === 0) {
-    getFavorites()
+    getFavorites(currentPage.value)
   }
   
   // 更新URL，便于刷新页面时保持在同一个标签页
-  router.push({ query: { tab: tab.props.name } })
+  const query = { tab: tab.props.name }
+  
+  // 如果是收藏页且不是第一页，添加页码参数
+  if (tab.props.name === 'favorites' && currentPage.value > 1) {
+    Object.assign(query, { page: currentPage.value })
+  }
+  
+  router.push({ query })
 }
-
-// 用户信息
-const userInfo = computed(() => {
-  return userStore.getUserInfo()
-})
 
 // 测试直接访问头像
 const testDirectAccess = () => {
@@ -577,7 +564,7 @@ const handleDeleteAccount = async () => {
             >
               <div class="favorite-content">
                 <el-image 
-                  :src="item.image" 
+                  :src="item.image || '/static/images/default-scenic.jpg'" 
                   fit="cover"
                   class="scenic-image"
                 >
@@ -617,6 +604,18 @@ const handleDeleteAccount = async () => {
                 </div>
               </div>
             </el-card>
+          </div>
+          
+          <!-- 分页组件 -->
+          <div class="pagination-container" v-if="totalPages > 1">
+            <el-pagination
+              background
+              layout="prev, pager, next"
+              :total="totalItems"
+              :page-size="pageSize"
+              :current-page="currentPage"
+              @current-change="handlePageChange"
+            />
           </div>
         </el-tab-pane>
       </el-tabs>
@@ -826,6 +825,16 @@ const handleDeleteAccount = async () => {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
+}
+
+.pagination-container {
+  margin-top: 20px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  padding: 15px 0;
+  grid-column: 1 / -1; /* 确保在网格布局中占据所有列 */
 }
 
 @media (min-width: 768px) {

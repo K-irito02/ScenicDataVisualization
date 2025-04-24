@@ -4,14 +4,8 @@ import { useRouter, useRoute } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
-import { User, Lock, Picture } from '@element-plus/icons-vue'
+import { User, Lock } from '@element-plus/icons-vue'
 
-interface LoginResponse {
-  token?: string
-  user_id?: string
-  username?: string
-  is_admin?: boolean
-}
 
 const router = useRouter()
 const route = useRoute()
@@ -25,9 +19,28 @@ const loginForm = reactive({
 const loading = ref(false)
 const loginFormRef = ref<FormInstance>()
 
+// 增强的验证规则
+const validateEmail = (_rule: any, value: string, callback: any) => {
+  // 检查是否为空
+  if (!value) {
+    return callback(new Error('请输入用户名或邮箱'))
+  }
+  
+  // 如果输入的是邮箱，检查邮箱格式
+  if (value.includes('@')) {
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/
+    if (!emailRegex.test(value)) {
+      return callback(new Error('邮箱格式不正确'))
+    }
+  }
+  
+  callback() // 验证通过
+}
+
 const rules = reactive<FormRules>({
   username: [
-    { required: true, message: '请输入用户名或邮箱', trigger: 'blur' }
+    { required: true, message: '请输入用户名或邮箱', trigger: 'blur' },
+    { validator: validateEmail, trigger: 'blur' }
   ],
   password: [
     { required: true, message: '请输入密码', trigger: 'blur' },
@@ -39,9 +52,17 @@ const rules = reactive<FormRules>({
 const loginAttempts = ref(0);
 const maxLoginAttempts = 3; // 登录尝试最大次数
 const debounceTimeout = ref<number | null>(null);
+const lockoutTime = ref(0); // 锁定时间（秒）
+const lockoutTimer = ref<number | null>(null);
 
 // 处理防抖登录提交
 const debounceLogin = (formEl: FormInstance | undefined) => {
+  // 如果在锁定期内，显示提示并返回
+  if (lockoutTime.value > 0) {
+    ElMessage.warning(`请等待 ${lockoutTime.value} 秒后再试`);
+    return;
+  }
+  
   // 清除之前的计时器
   if (debounceTimeout.value) {
     clearTimeout(debounceTimeout.value);
@@ -76,6 +97,16 @@ onMounted(() => {
       message: '您已成功退出登录',
       duration: 3000
     })
+  } else if (route.query.reset === 'true') {
+    ElMessage.success({
+      message: '密码已重置成功，请使用新密码登录',
+      duration: 3000
+    })
+  } else if (route.query.registered === 'true') {
+    ElMessage.success({
+      message: '注册成功！请登录您的账号',
+      duration: 3000
+    })
   }
   
   // 清除可能存在的token和用户数据
@@ -88,11 +119,23 @@ const handleLogin = async (formEl: FormInstance | undefined) => {
   
   // 登录尝试次数限制，防止无限循环
   if (loginAttempts.value >= maxLoginAttempts) {
-    ElMessage.error('尝试登录次数过多，请稍后再试');
-    // 重置登录尝试次数，但添加一个恢复延迟
-    setTimeout(() => {
-      loginAttempts.value = 0;
-    }, 5000);  // 5秒后重置
+    // 设置锁定时间（递增）
+    lockoutTime.value = 30 * Math.pow(2, loginAttempts.value - maxLoginAttempts);
+    
+    ElMessage.error(`尝试登录次数过多，请等待 ${lockoutTime.value} 秒后再试`);
+    
+    // 开始锁定倒计时
+    if (lockoutTimer.value) clearInterval(lockoutTimer.value);
+    
+    lockoutTimer.value = window.setInterval(() => {
+      lockoutTime.value--;
+      if (lockoutTime.value <= 0) {
+        clearInterval(lockoutTimer.value!);
+        loginAttempts.value = 0; // 重置尝试次数
+        ElMessage.info('现在可以重新尝试登录');
+      }
+    }, 1000);
+    
     return;
   }
   
@@ -117,6 +160,12 @@ const handleLogin = async (formEl: FormInstance | undefined) => {
           username: userInfo.username,
           tokenExpiry: new Date(userInfo.tokenExpiry).toLocaleString()
         })
+        
+        // 登录成功，重置尝试次数
+        loginAttempts.value = 0;
+        
+        // 显示欢迎消息
+        ElMessage.success(`欢迎回来，${userInfo.username}！`);
         
         // 使用延时确保状态已完全更新
         setTimeout(() => {
@@ -158,10 +207,24 @@ const handleLogin = async (formEl: FormInstance | undefined) => {
           } else if (error.response.status === 400) {
             // 其他400错误通常是验证错误
             ElMessage.error(error.response.data.detail || error.response.data.message || '用户名或密码错误');
+          } else if (error.response.status === 401) {
+            // 未授权错误
+            ElMessage.error('用户名或密码错误，请重新输入');
+          } else if (error.response.status === 429) {
+            // 请求过多
+            ElMessage.error('登录请求过于频繁，请稍后再试');
+            // 增加锁定时间
+            loginAttempts.value = maxLoginAttempts;
           } else {
             // 其他HTTP错误
             ElMessage.error(error.response.data.detail || error.response.data.message || '登录失败，请稍后再试');
           }
+        } else if (error.message && error.message.includes('Network Error')) {
+          // 网络错误
+          ElMessage.error('网络连接错误，请检查您的网络连接');
+        } else if (error.message && error.message.includes('timeout')) {
+          // 请求超时
+          ElMessage.error('服务器响应超时，请稍后重试');
         } else {
           // 非HTTP错误(如网络问题)
           ElMessage.error('登录失败，无法连接到服务器');
@@ -169,6 +232,9 @@ const handleLogin = async (formEl: FormInstance | undefined) => {
       } finally {
         loading.value = false;
       }
+    } else {
+      // 表单验证失败时的友好提示
+      ElMessage.warning('请正确填写登录信息');
     }
   })
 }
@@ -202,11 +268,14 @@ const goToAdminLogin = () => {
         :rules="rules"
         label-position="top"
         class="login-form"
+        status-icon
       >
         <el-form-item label="用户名/邮箱" prop="username">
           <el-input 
             v-model="loginForm.username"
             placeholder="请输入用户名或邮箱"
+            :disabled="loading || lockoutTime > 0"
+            @keyup.enter="debounceLogin(loginFormRef)"
           >
             <template #prefix>
               <el-icon><User /></el-icon>
@@ -220,6 +289,8 @@ const goToAdminLogin = () => {
             type="password"
             placeholder="请输入密码"
             show-password
+            :disabled="loading || lockoutTime > 0"
+            @keyup.enter="debounceLogin(loginFormRef)"
           >
             <template #prefix>
               <el-icon><Lock /></el-icon>
@@ -228,7 +299,7 @@ const goToAdminLogin = () => {
         </el-form-item>
         
         <div class="form-actions">
-          <el-button @click="goToForgotPassword" type="text" class="forgot-password">
+          <el-button @click="goToForgotPassword" type="text" class="forgot-password" :disabled="loading">
             忘记密码？
           </el-button>
         </div>
@@ -236,22 +307,24 @@ const goToAdminLogin = () => {
         <el-button 
           type="primary" 
           :loading="loading" 
+          :disabled="lockoutTime > 0"
           class="login-button" 
           @click="debounceLogin(loginFormRef)"
         >
-          登录
+          <span v-if="lockoutTime > 0">{{ lockoutTime }}秒后可重试</span>
+          <span v-else>登录</span>
         </el-button>
         
         <div class="form-footer">
           <span>没有账号？</span>
-          <el-button @click="goToRegister" type="text" class="register-link">
+          <el-button @click="goToRegister" type="text" class="register-link" :disabled="loading">
             立即注册
           </el-button>
         </div>
         
         <div class="admin-login-link">
-          <el-button @click="goToAdminLogin" type="text">
-            管理员登录
+          <el-button @click="goToAdminLogin" type="text" :disabled="loading">
+            管理员入口
           </el-button>
         </div>
       </el-form>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { ref, reactive, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { request } from '@/api'
@@ -22,10 +22,77 @@ const sendingCode = ref(false)
 const countdown = ref(0)
 const registerFormRef = ref<FormInstance>()
 
+// 密码强度检查器
+const passwordStrength = computed(() => {
+  const password = registerForm.password;
+  if (!password) return { score: 0, level: '空', color: '#e6e6e6' };
+  
+  let score = 0;
+  
+  // 长度检查
+  if (password.length >= 8) score += 1;
+  if (password.length >= 10) score += 1;
+  
+  // 包含数字
+  if (/\d/.test(password)) score += 1;
+  
+  // 包含小写字母
+  if (/[a-z]/.test(password)) score += 1;
+  
+  // 包含大写字母
+  if (/[A-Z]/.test(password)) score += 1;
+  
+  // 包含特殊字符
+  if (/[^A-Za-z0-9]/.test(password)) score += 1;
+  
+  // 根据分数确定强度级别
+  let level, color;
+  if (score <= 2) {
+    level = '弱';
+    color = '#F56C6C';
+  } else if (score <= 4) {
+    level = '中';
+    color = '#E6A23C';
+  } else {
+    level = '强';
+    color = '#67C23A';
+  }
+  
+  return { score, level, color };
+});
+
 // 表单验证规则
-const validatePass = (rule: any, value: string, callback: any) => {
+const validateUsername = (_rule: any, value: string, callback: any) => {
+  if (value === '') {
+    callback(new Error('请输入用户名'))
+  } else if (value.length < 3) {
+    callback(new Error('用户名长度不能少于3个字符'))
+  } else if (value.length > 20) {
+    callback(new Error('用户名长度不能超过20个字符'))
+  } else if (!/^[a-zA-Z0-9_\u4e00-\u9fa5]+$/.test(value)) {
+    callback(new Error('用户名只能包含字母、数字、下划线和汉字'))
+  } else {
+    callback()
+  }
+}
+
+const validateEmail = (_rule: any, value: string, callback: any) => {
+  if (value === '') {
+    callback(new Error('请输入邮箱地址'))
+  } else if (!/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(value)) {
+    callback(new Error('请输入有效的邮箱地址'))
+  } else {
+    callback()
+  }
+}
+
+const validatePass = (_rule: any, value: string, callback: any) => {
   if (value === '') {
     callback(new Error('请输入密码'))
+  } else if (value.length < 6) {
+    callback(new Error('密码长度不能少于6个字符'))
+  } else if (passwordStrength.value.score <= 2) {
+    callback(new Error('密码强度较弱，建议包含大小写字母、数字和特殊字符'))
   } else {
     if (registerForm.confirmPassword !== '') {
       if (registerFormRef.value) {
@@ -36,7 +103,7 @@ const validatePass = (rule: any, value: string, callback: any) => {
   }
 }
 
-const validatePass2 = (rule: any, value: string, callback: any) => {
+const validatePass2 = (_rule: any, value: string, callback: any) => {
   if (value === '') {
     callback(new Error('请再次输入密码'))
   } else if (value !== registerForm.password) {
@@ -46,18 +113,27 @@ const validatePass2 = (rule: any, value: string, callback: any) => {
   }
 }
 
+const validateCode = (_rule: any, value: string, callback: any) => {
+  if (value === '') {
+    callback(new Error('请输入验证码'))
+  } else if (!/^\d{6}$/.test(value)) {
+    callback(new Error('验证码为6位数字'))
+  } else {
+    callback()
+  }
+}
+
 const rules = reactive<FormRules>({
   username: [
     { required: true, message: '请输入用户名', trigger: 'blur' },
-    { min: 3, max: 20, message: '长度在 3 到 20 个字符', trigger: 'blur' }
+    { validator: validateUsername, trigger: 'blur' }
   ],
   email: [
     { required: true, message: '请输入邮箱地址', trigger: 'blur' },
-    { type: 'email', message: '请输入正确的邮箱地址', trigger: 'blur' }
+    { validator: validateEmail, trigger: 'blur' }
   ],
   password: [
     { required: true, message: '请输入密码', trigger: 'blur' },
-    { min: 6, message: '密码长度不能少于6个字符', trigger: 'blur' },
     { validator: validatePass, trigger: 'blur' }
   ],
   confirmPassword: [
@@ -66,7 +142,7 @@ const rules = reactive<FormRules>({
   ],
   code: [
     { required: true, message: '请输入验证码', trigger: 'blur' },
-    { len: 6, message: '验证码长度为6位', trigger: 'blur' }
+    { validator: validateCode, trigger: 'blur' }
   ]
 })
 
@@ -75,6 +151,8 @@ const sendCode = async () => {
   try {
     await registerFormRef.value?.validateField('email')
     sendingCode.value = true
+    
+    ElMessage.info('正在发送验证码，请稍候...')
     
     try {
       await request({
@@ -99,6 +177,8 @@ const sendCode = async () => {
       // 检查是否为超时错误
       if (error.message && error.message.includes('timeout')) {
         ElMessage.error('发送验证码请求超时，请检查网络连接或稍后重试')
+      } else if (error.response?.status === 400 && error.response?.data?.message?.includes('该邮箱已被使用')) {
+        ElMessage.error('该邮箱已被注册，请使用其他邮箱或找回密码')
       } else if (error.response?.data?.errors) {
         const errors = error.response.data.errors
         Object.keys(errors).forEach(key => {
@@ -106,6 +186,8 @@ const sendCode = async () => {
         })
       } else if (error.response?.data?.message) {
         ElMessage.error(error.response.data.message)
+      } else if (error.message && error.message.includes('Network Error')) {
+        ElMessage.error('网络连接错误，请检查您的网络连接')
       } else {
         ElMessage.error('发送验证码失败，请稍后重试')
       }
@@ -124,6 +206,9 @@ const handleRegister = async (formEl: FormInstance | undefined) => {
   await formEl.validate(async (valid) => {
     if (valid) {
       loading.value = true
+      
+      ElMessage.info('正在提交注册信息，请稍候...')
+      
       try {
         console.log('发送注册请求，数据:', {
           username: registerForm.username,
@@ -137,19 +222,26 @@ const handleRegister = async (formEl: FormInstance | undefined) => {
           registerForm.password,
           registerForm.code
         )
-        ElMessage.success('注册成功，请登录')
-        router.push('/')
+        
+        ElMessage.success('注册成功，即将前往登录页面')
+        
+        // 跳转到登录页并传递参数
+        setTimeout(() => {
+          router.push({
+            path: '/login',
+            query: { registered: 'true' }
+          })
+        }, 1500)
       } catch (error: any) {
         console.error('注册错误详情:', error.response?.data)
-        console.error('请求数据:', error.response?.config?.data)
-        console.error('完整错误对象:', {
-          status: error.response?.status,
-          statusText: error.response?.statusText,
-          data: error.response?.data,
-          headers: error.response?.headers
-        })
         
-        if (error.response?.data?.errors) {
+        if (error.response?.status === 400 && error.response?.data?.errors?.username?.includes('用户名已存在')) {
+          ElMessage.error('该用户名已被使用，请选择其他用户名')
+        } else if (error.response?.status === 400 && error.response?.data?.errors?.email?.includes('邮箱已被注册')) {
+          ElMessage.error('该邮箱已被注册，请使用其他邮箱')
+        } else if (error.response?.status === 400 && error.response?.data?.errors?.code?.includes('验证码错误')) {
+          ElMessage.error('验证码错误或已过期，请重新获取')
+        } else if (error.response?.data?.errors) {
           const errors = error.response.data.errors
           Object.entries(errors).forEach(([key, value]) => {
             if (Array.isArray(value)) {
@@ -162,12 +254,19 @@ const handleRegister = async (formEl: FormInstance | undefined) => {
           })
         } else if (error.response?.data?.message) {
           ElMessage.error(error.response.data.message)
+        } else if (error.message && error.message.includes('Network Error')) {
+          ElMessage.error('网络连接错误，请检查您的网络连接')
+        } else if (error.message && error.message.includes('timeout')) {
+          ElMessage.error('服务器响应超时，请稍后重试')
         } else {
           ElMessage.error('注册失败，请稍后重试')
         }
       } finally {
         loading.value = false
       }
+    } else {
+      // 表单验证失败
+      ElMessage.warning('请正确填写所有必填项')
     }
   })
 }
@@ -194,13 +293,16 @@ const goToLogin = () => {
         :rules="rules"
         label-position="top"
         class="register-form"
+        status-icon
       >
         <el-form-item label="用户名" prop="username">
           <el-input 
             v-model="registerForm.username"
-            placeholder="请输入用户名"
+            placeholder="请输入用户名（3-20个字符）"
             prefix-icon="User"
+            :disabled="loading"
           />
+          <div class="form-item-tip">仅支持字母、数字、下划线和汉字</div>
         </el-form-item>
         
         <el-form-item label="邮箱" prop="email">
@@ -208,17 +310,34 @@ const goToLogin = () => {
             v-model="registerForm.email"
             placeholder="请输入邮箱"
             prefix-icon="Message"
+            :disabled="loading"
           />
+          <div class="form-item-tip">用于接收验证码和找回密码</div>
         </el-form-item>
         
         <el-form-item label="密码" prop="password">
           <el-input 
             v-model="registerForm.password"
             type="password"
-            placeholder="请输入密码"
+            placeholder="请输入密码（至少6个字符）"
             prefix-icon="Lock"
             show-password
+            :disabled="loading"
           />
+          <div class="password-strength" v-if="registerForm.password">
+            <span>密码强度：</span>
+            <span :style="{ color: passwordStrength.color }">{{ passwordStrength.level }}</span>
+            <div class="strength-bar">
+              <div 
+                class="strength-level" 
+                :style="{ 
+                  width: `${Math.min(passwordStrength.score * 16, 100)}%`,
+                  backgroundColor: passwordStrength.color 
+                }"
+              ></div>
+            </div>
+          </div>
+          <div class="form-item-tip">建议使用字母、数字和特殊字符组合</div>
         </el-form-item>
         
         <el-form-item label="确认密码" prop="confirmPassword">
@@ -228,6 +347,7 @@ const goToLogin = () => {
             placeholder="请再次输入密码"
             prefix-icon="Lock"
             show-password
+            :disabled="loading"
           />
         </el-form-item>
         
@@ -235,23 +355,25 @@ const goToLogin = () => {
           <div class="code-input-group">
             <el-input 
               v-model="registerForm.code"
-              placeholder="请输入验证码"
+              placeholder="请输入6位验证码"
               prefix-icon="Key"
+              :disabled="loading"
             />
             <el-button 
               type="primary" 
-              :disabled="sendingCode || countdown > 0" 
+              :disabled="sendingCode || countdown > 0 || loading" 
               @click="sendCode"
             >
               {{ countdown > 0 ? `${countdown}秒后重新发送` : '获取验证码' }}
             </el-button>
           </div>
+          <div class="form-item-tip">验证码将发送到您的邮箱</div>
         </el-form-item>
         
         <el-button 
           type="primary" 
-          :loading="loading" 
           class="register-button" 
+          :loading="loading"
           @click="handleRegister(registerFormRef)"
         >
           注册
@@ -259,7 +381,7 @@ const goToLogin = () => {
         
         <div class="form-footer">
           <span>已有账号？</span>
-          <el-button @click="goToLogin" type="text" class="login-link">
+          <el-button @click="goToLogin" type="text" class="login-link" :disabled="loading">
             立即登录
           </el-button>
         </div>
@@ -274,7 +396,7 @@ const goToLogin = () => {
   justify-content: center;
   align-items: center;
   min-height: 100vh;
-  background: linear-gradient(120deg, #1b1c5a 0%, #393b97 100%);
+  background: linear-gradient(120deg, #29205e 0%, #4e3abb 100%);
   padding: 20px 0;
   position: relative;
   overflow: hidden;
@@ -331,28 +453,39 @@ const goToLogin = () => {
   font-size: 24px;
   color: #333;
   text-align: center;
-  margin-bottom: 30px;
+  margin-bottom: 20px;
 }
 
 .register-form {
   width: 100%;
 }
 
-.register-button {
-  width: 100%;
-  padding: 12px 0;
-  font-size: 16px;
-  margin-bottom: 20px;
+.form-item-tip {
+  font-size: 12px;
+  color: #909399;
+  margin-top: 4px;
 }
 
-.form-footer {
-  text-align: center;
-  color: #606266;
+.password-strength {
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+  margin-top: 8px;
+  flex-wrap: wrap;
 }
 
-.login-link {
-  margin-left: 5px;
-  font-weight: bold;
+.strength-bar {
+  width: 100px;
+  height: 4px;
+  background-color: #e6e6e6;
+  border-radius: 2px;
+  overflow: hidden;
+  margin-left: 8px;
+}
+
+.strength-level {
+  height: 100%;
+  transition: width 0.3s, background-color 0.3s;
 }
 
 .code-input-group {
@@ -365,6 +498,26 @@ const goToLogin = () => {
 }
 
 .code-input-group .el-button {
-  width: 140px;
+  width: 130px;
+  font-size: 13px;
+  padding: 0 10px;
+  white-space: nowrap;
+}
+
+.register-button {
+  width: 100%;
+  padding: 12px 0;
+  font-size: 16px;
+  margin-top: 20px;
+}
+
+.form-footer {
+  text-align: center;
+  margin-top: 20px;
+  color: #606266;
+}
+
+.login-link {
+  font-weight: bold;
 }
 </style> 

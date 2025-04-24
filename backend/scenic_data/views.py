@@ -1142,7 +1142,7 @@ class ProvinceCityDistributionView(views.APIView):
                     UserActionRecord.objects.create(
                         user=request.user,
                         action_type='view_province_city_distribution',
-                        content=f"查看省份城市分布: {province_name}"
+                        details=f"查看省份城市分布: {province_name}"
                     )
                 except Exception as record_error:
                     print(f"记录用户操作失败: {record_error}")
@@ -1234,7 +1234,7 @@ class DistrictDistributionView(views.APIView):
                     UserActionRecord.objects.create(
                         user=request.user,
                         action_type='view_district_distribution',
-                        content=f"查看区县分布: {province_name}-{city_name}"
+                        details=f"查看区县分布: {province_name}-{city_name}"
                     )
                 except Exception as record_error:
                     print(f"记录用户操作失败: {record_error}")

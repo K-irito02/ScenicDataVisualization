@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, nextTick, onUnmounted, watch } from 'vue'
+import { ref, onMounted, nextTick, onUnmounted, watch } from 'vue'
 import { useScenicStore } from '@/stores/scenic'
 import * as echarts from 'echarts'
 // 导入本地地图数据
@@ -16,11 +16,6 @@ const DEFAULT_MUNICIPALITY_CITY = '市辖区'
 // 判断是否为直辖市
 const isMunicipality = (provinceName: string) => {
   return MUNICIPALITIES.includes(provinceName)
-}
-
-// 获取直辖市的"城市"名称
-const getMunicipalityCity = (provinceName: string) => {
-  return isMunicipality(provinceName) ? DEFAULT_MUNICIPALITY_CITY : ''
 }
 
 // 确保中国地图数据被正确注册
@@ -318,7 +313,7 @@ const showProvinceDetail = (provinceName: string) => {
   showProvinceMap.value = true;
   
   // 获取API数据并初始化地图
-  loadProvinceDataAndInitMap(provinceName, province.scenics);
+  loadProvinceDataAndInitMap(provinceName);
 }
 
 // 高亮柱状图中的省份
@@ -365,7 +360,7 @@ const highlightProvinceInBarChart = (provinceName: string) => {
 }
 
 // 加载省份数据并初始化地图
-const loadProvinceDataAndInitMap = async (provinceName: string, scenics: any[]) => {
+const loadProvinceDataAndInitMap = async (provinceName: string) => {
   console.log(`加载${provinceName}数据并初始化地图`);
   mapLoading.value = true;
   
@@ -690,7 +685,7 @@ const initProvinceMapWithApiData = (provinceName: string, cityData: any[]) => {
               // 非直辖市的第三层下钻已取消，显示提示信息
               if (!isMunicipality(currentProvince.value)) {
                 console.log(`非直辖市${currentProvince.value}的${cityName}被点击，但第三层下钻已禁用`);
-                ElMessage.info(`已取消非直辖市的城市详情查看功能`);
+                ElMessage.info(`暂未实现市级行政区下钻功能`);
                 return;
               }
               
@@ -1075,35 +1070,54 @@ watch(showProvinceMap, (newVal, oldVal) => {
 
 // 清空地图缓存，强制重新加载地图
 const clearMapCache = () => {
-  // 清除echarts实例
-  if (mapChartInstance.value) {
-    mapChartInstance.value.dispose()
-    mapChartInstance.value = null
+  // 根据当前地图级别决定刷新哪个地图
+  if (currentMapLevel.value === 0) {
+    // 全国地图级别
+    if (mapChartInstance.value) {
+      mapChartInstance.value.dispose()
+      mapChartInstance.value = null
+    }
+    
+    // 重新初始化全国地图
+    nextTick(() => {
+      initMapChart()
+      updateCharts(true)
+    })
+    
+    ElMessage.success('全国地图数据已重新加载')
+  } else if (currentMapLevel.value === 1) {
+    // 省级地图
+    if (provinceMapChartInstance.value) {
+      provinceMapChartInstance.value.dispose()
+      provinceMapChartInstance.value = null
+    }
+    
+    // 重新初始化省级地图，保持当前省份
+    nextTick(() => {
+      const province = scenicStore.provinceData.find(item => item.name === currentProvince.value)
+      if (province && province.scenics) {
+        initProvinceMapWithApiData(currentProvince.value, cityData.value)
+      }
+    })
+    
+    ElMessage.success(`${currentProvince.value}地图数据已重新加载`)
+  } else if (currentMapLevel.value === 2) {
+    // 市级地图
+    if (cityMapChartInstance.value) {
+      cityMapChartInstance.value.dispose()
+      cityMapChartInstance.value = null
+    }
+    
+    // 重新初始化市级地图，保持当前城市
+    nextTick(() => {
+      const province = scenicStore.provinceData.find(item => item.name === currentProvince.value)
+      if (province && province.scenics) {
+        initCityMap(currentProvince.value, currentCity.value, province.scenics)
+      }
+    })
+    
+    ElMessage.success(`${currentCity.value}地图数据已重新加载`)
   }
-  
-  if (provinceMapChartInstance.value) {
-    provinceMapChartInstance.value.dispose()
-    provinceMapChartInstance.value = null
-  }
-  
-  if (cityMapChartInstance.value) {
-    cityMapChartInstance.value.dispose()
-    cityMapChartInstance.value = null
-  }
-  
-  // 重置状态
-  currentMapLevel.value = 0
-  showProvinceMap.value = false
-  showCityMap.value = false
-  currentProvince.value = ''
-  currentCity.value = ''
-  
-  // 重新初始化
-  nextTick(() => {
-    initMapChart()
-  })
-  
-  ElMessage.success('地图数据已重新加载')
 }
 
 // 确保整个页面初始化
@@ -1178,154 +1192,15 @@ const initCityMap = (provinceName: string, cityName: string, scenics: any[]) => 
   try {
     // 使用动态导入 - 尝试加载市级地图数据
     import(/* webpackChunkName: "city-map" */ `@/assets/geojson/city/${provinceName}/${cityName}.json`)
-      .then(async (cityJson) => {
-        // 隐藏加载状态
-        cityMapChartInstance.value?.hideLoading()
-        
-        try {
-          // 注册市级地图数据
-          echarts.registerMap(cityName, cityJson.default)
-          console.log(`${cityName}地图数据注册成功`)
-          
-          // 获取地图中包含的区域名称
-          const geoJSON = cityJson.default;
-          const mapRegions = geoJSON.features.map((feature: any) => feature.properties.name);
-          console.log(`地图包含的区域名称:`, mapRegions);
-          
-          // 获取区县数据
-          let districtData: Array<{name: string, value: number}> = []
-          try {
-            const apiDistrictData = await scenicStore.getDistrictDistribution(provinceName, cityName)
-            if (apiDistrictData && apiDistrictData.length > 0) {
-              // 确保每个区县的值是有效数字并且名称在地图中存在
-              districtData = apiDistrictData.map((district: { name: string; value: any }) => {
-                // 确保值是数字，如果不是则转换为0
-                const numValue = Number(district.value);
-                const value = isNaN(numValue) ? 0 : numValue;
-                
-                // 记录日志以便调试
-                if (isNaN(numValue)) {
-                  console.warn(`区县 ${district.name} 的景区数量值 ${district.value} 无效，已替换为0`);
-                }
-                
-                return {
-                  name: district.name,
-                  value: value
-                };
-              });
-              
-              // 检查区县名称与地图名称匹配情况
-              const unmatchedNames = districtData.filter(d => !mapRegions.includes(d.name));
-              if (unmatchedNames.length > 0) {
-                console.warn(`存在不匹配的区县名称:`, unmatchedNames.map(d => d.name));
-              }
-              
-              console.log(`使用API返回的区县数据:`, districtData);
-            } else {
-              console.warn(`API未返回区县数据，将构建简单数据`)
-              // 过滤该城市的景点
-              const cityScenicSpots = scenics.filter(spot => spot.city === cityName)
-              
-              // 简单构建一个默认的热力数据
-              districtData = [{
-                name: cityName,
-                value: cityScenicSpots.length
-              }]
-            }
-          } catch (error) {
-            console.error(`获取区县数据失败:`, error)
-            // 过滤该城市的景点
-            const cityScenicSpots = scenics.filter(spot => spot.city === cityName)
-            
-            // 简单构建一个默认的热力数据
-            districtData = [{
-              name: cityName,
-              value: cityScenicSpots.length
-            }]
-          }
-          
-          // 找出最大值，用于设置visualMap的范围
-          const maxValue = Math.max(...districtData.map(item => item.value), 1)
-          
-          const option = {
-            title: {
-              text: `${cityName}景区分布热力图`,
-              left: 'center',
-              textStyle: {
-                fontSize: 18
-              }
-            },
-            tooltip: {
-              trigger: 'item',
-              formatter: function(params: any) {
-                // 确保值是有效数字
-                const value = isNaN(params.value) ? 0 : params.value;
-                return `${params.name}: ${value} 个景区`;
-              }
-            },
-            visualMap: {
-              min: 0,
-              max: maxValue > 0 ? maxValue : 10,
-              left: 'left',
-              top: 'bottom',
-              text: ['高', '低'],
-              calculable: true,
-              inRange: {
-                color: ['#edf8fb', '#b2e2e2', '#66c2a4', '#2ca25f', '#006d2c']
-              }
-            },
-            series: [
-              {
-                name: '景区数量',
-                type: 'map',
-                map: cityName,
-                roam: true,
-                zoom: 1.2,
-                label: {
-                  show: true,
-                  fontSize: 10,
-                  color: '#333'
-                },
-                itemStyle: {
-                  areaColor: '#edf8fb',
-                  borderColor: '#1890ff',
-                  borderWidth: 0.5
-                },
-                emphasis: {
-                  label: {
-                    show: true,
-                    fontSize: 12,
-                    color: '#000'
-                  },
-                  itemStyle: {
-                    areaColor: '#b3daff'
-                  }
-                },
-                data: districtData
-              }
-            ]
-          }
-          
-          // 应用配置
-          cityMapChartInstance.value?.setOption(option)
-          
-          // 更新柱状图为区县数据
-          updateBarChartWithDistrictData(districtData);
-        } catch (error) {
-          console.error(`设置${cityName}地图失败:`, error)
-          cityMapError.value = true
-          ElMessage.error(`无法显示${cityName}地图数据`)
-        }
+      .then(() => {
+        // 初始化城市地图
+        initCityMap(provinceName, cityName, scenics || [])
       })
       .catch(error => {
-        // 隐藏加载状态
-        cityMapChartInstance.value?.hideLoading()
-        
-        console.error(`加载${cityName}地图数据失败:`, error)
+        console.error(`城市地图文件不存在: ${provinceName}/${cityName}.json`, error)
         cityMapError.value = true
-        ElMessage.error(`加载${cityName}地图数据失败，该城市地图可能不存在`)
         
-        // 如果加载失败，显示一个简单的提示
+        // 显示失败提示但仍然更新柱状图
         if (cityMapChartInstance.value) {
           cityMapChartInstance.value.setOption({
             title: {
@@ -1342,7 +1217,7 @@ const initCityMap = (provinceName: string, cityName: string, scenics: any[]) => 
                 left: 'center',
                 top: 'middle',
                 style: {
-                  text: '无法加载该城市地图数据，请检查地图文件是否存在',
+                  text: '缺少城市地图文件，请联系管理员添加相应地图文件',
                   fill: '#999',
                   font: '14px Microsoft YaHei'
                 }
@@ -1426,7 +1301,7 @@ const showCityDetail = (cityName: string) => {
           
           // 检查城市地图文件是否存在
           import(/* webpackChunkName: "city-map" */ `@/assets/geojson/city/${currentProvince.value}/${cityName}.json`)
-            .then(cityJson => {
+            .then(() => {
               // 初始化城市地图
               initCityMap(currentProvince.value, cityName, province.scenics || [])
             })

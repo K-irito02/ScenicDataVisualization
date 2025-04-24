@@ -170,7 +170,7 @@ onMounted(() => {
             <h3>{{ source.name }}</h3>
             <p>{{ source.description }}</p>
             <div class="data-count">
-              <span class="count-label">数据贡献：</span>
+              <span class="count-label">{{ key === 'mafengwo' ? '数据贡献：' : '数据增强：' }}</span>
               <span class="count-value">{{ source.dataCount.toLocaleString() }} 条</span>
             </div>
           </div>

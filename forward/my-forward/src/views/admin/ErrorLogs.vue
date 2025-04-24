@@ -3,7 +3,7 @@
     <div class="filter-bar">
       <el-form :inline="true" :model="filterForm" class="filter-form">
         <el-form-item label="错误级别">
-          <el-select v-model="filterForm.level" placeholder="选择错误级别" clearable>
+          <el-select v-model="filterForm.level" placeholder="选择错误级别" clearable style="min-width: 150px;">
             <el-option label="调试" value="DEBUG" />
             <el-option label="信息" value="INFO" />
             <el-option label="警告" value="WARNING" />
@@ -12,13 +12,13 @@
           </el-select>
         </el-form-item>
         <el-form-item label="错误类型">
-          <el-select v-model="filterForm.error_type" placeholder="选择错误类型" clearable>
+          <el-select v-model="filterForm.error_type" placeholder="选择错误类型" clearable style="min-width: 180px;">
             <el-option label="前端" value="FRONTEND" />
             <el-option label="后端" value="BACKEND" />
           </el-select>
         </el-form-item>
         <el-form-item label="时间范围">
-          <el-select v-model="filterForm.days" placeholder="选择时间范围" clearable>
+          <el-select v-model="filterForm.days" placeholder="选择时间范围" clearable style="min-width: 150px;">
             <el-option label="今天" :value="1" />
             <el-option label="最近3天" :value="3" />
             <el-option label="最近7天" :value="7" />

@@ -30,17 +30,6 @@ interface ProvinceData {
   }>
 }
 
-interface CityData {
-  name: string
-  value: number
-  scenics?: Array<{
-    id: string
-    name: string
-    longitude: number
-    latitude: number
-  }>
-}
-
 interface ScenicLevel {
   name: string
   value: number

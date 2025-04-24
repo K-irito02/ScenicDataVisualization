@@ -13,10 +13,24 @@ const email = ref('')
 const loading = ref(false)
 const formRef = ref<FormInstance>()
 
+// 增强的邮箱验证逻辑
+const validateEmail = (_rule: any, value: string, callback: any) => {
+  if (!value) {
+    return callback(new Error('请输入邮箱地址'))
+  }
+  
+  const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/
+  if (!emailRegex.test(value)) {
+    return callback(new Error('请输入有效的邮箱地址'))
+  }
+  
+  callback() // 验证通过
+}
+
 const rules = reactive<FormRules>({
   email: [
     { required: true, message: '请输入邮箱地址', trigger: 'blur' },
-    { type: 'email', message: '请输入正确的邮箱地址', trigger: 'blur' }
+    { validator: validateEmail, trigger: 'blur' }
   ]
 })
 
@@ -27,8 +41,11 @@ const handleSubmit = async (formEl: FormInstance | undefined) => {
     if (valid) {
       loading.value = true
       
+      // 显示正在处理的提示
+      ElMessage.info('正在发送验证码，请稍候...')
+      
       try {
-        const response = await userStore.forgotPassword(email.value)
+        await userStore.forgotPassword(email.value)
         ElMessage.success('验证码已发送，请检查您的邮箱')
         
         // 转到重置密码页面，并传递邮箱
@@ -38,12 +55,39 @@ const handleSubmit = async (formEl: FormInstance | undefined) => {
         })
       } catch (error: any) {
         console.error('发送验证码失败:', error)
-        // 显示后端返回的错误消息，特别关注邮箱重复的提示
-        const errorMessage = error.response?.data?.message || '发送验证码失败，请稍后重试'
-        ElMessage.error(errorMessage)
+        
+        // 改进错误提示，针对不同情况给出不同反馈
+        if (error.response?.status === 404) {
+          // 邮箱不存在但后端为了安全考虑可能不会明确告知
+          ElMessage.warning({
+            message: '如果该邮箱已注册，验证码将发送到您的邮箱',
+            duration: 4000
+          })
+          
+          // 用延迟模拟邮件发送过程，提升用户体验
+          setTimeout(() => {
+            ElMessage.error('没有找到与该邮箱关联的账号')
+          }, 2000)
+        } else if (error.response?.status === 429) {
+          // 请求过于频繁
+          ElMessage.error('请求过于频繁，请稍后再试')
+        } else if (error.message && error.message.includes('Network Error')) {
+          // 网络错误
+          ElMessage.error('网络连接错误，请检查您的网络连接')
+        } else if (error.message && error.message.includes('timeout')) {
+          // 请求超时
+          ElMessage.error('服务器响应超时，请稍后重试')
+        } else {
+          // 其他错误
+          const errorMessage = error.response?.data?.message || '发送验证码失败，请稍后重试'
+          ElMessage.error(errorMessage)
+        }
       } finally {
         loading.value = false
       }
+    } else {
+      // 表单验证未通过
+      ElMessage.warning('请输入有效的邮箱地址')
     }
   })
 }
@@ -73,16 +117,20 @@ const goToLogin = () => {
         :rules="rules"
         label-position="top"
         class="forgot-password-form"
+        status-icon
       >
         <el-form-item label="邮箱" prop="email">
           <el-input 
             v-model="email"
-            placeholder="请输入邮箱"
+            placeholder="请输入注册时使用的邮箱"
+            :disabled="loading"
+            @keyup.enter="handleSubmit(formRef)"
           >
             <template #prefix>
               <el-icon><Message /></el-icon>
             </template>
           </el-input>
+          <div class="form-tip">请确保输入的邮箱能够正常接收邮件</div>
         </el-form-item>
         
         <el-button 
@@ -95,7 +143,7 @@ const goToLogin = () => {
         </el-button>
         
         <div class="form-footer">
-          <el-button @click="goToLogin" type="text" class="login-link">
+          <el-button @click="goToLogin" type="text" class="login-link" :disabled="loading">
             返回登录
           </el-button>
         </div>
@@ -178,6 +226,12 @@ const goToLogin = () => {
 
 .forgot-password-form {
   width: 100%;
+}
+
+.form-tip {
+  font-size: 12px;
+  color: #909399;
+  margin-top: 4px;
 }
 
 .submit-button {

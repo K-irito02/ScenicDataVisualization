@@ -218,7 +218,7 @@ import { User, UserFilled, Edit, View, Plus, CircleClose, CircleCheck } from '@e
 import { ElMessage } from 'element-plus'
 import ElMessageBox from 'element-plus/es/components/message-box/index'
 import type { FormInstance } from 'element-plus'
-import { getUsers, toggleUserStatus, updateUser } from '@/api/admin'
+import { getUsers, toggleUserStatus, updateUser, getUserStats } from '@/api/admin'
 
 export default defineComponent({
   name: 'Users',
@@ -338,9 +338,22 @@ export default defineComponent({
     }
     
     // 查看用户详情
-    const handleViewUser = (user: any) => {
+    const handleViewUser = async (user: any) => {
       currentUser.value = { ...user }
       dialogVisible.value = true
+      
+      try {
+        // 获取用户统计信息
+        const response = await getUserStats(user.id)
+        if (response && response.data) {
+          // 更新用户详情中的统计数据
+          currentUser.value.favorites = response.data.favorites || 0
+          currentUser.value.searches = response.data.searches || 0
+        }
+      } catch (error) {
+        console.error('获取用户统计信息失败:', error)
+        ElMessage.warning('获取用户统计信息失败')
+      }
     }
     
     // 切换用户状态

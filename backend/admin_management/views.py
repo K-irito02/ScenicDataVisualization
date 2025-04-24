@@ -2,12 +2,13 @@ from django.shortcuts import render
 from rest_framework import status, views, permissions
 from rest_framework.response import Response
 from django.contrib.auth.models import User
-from user_management.models import UserProfile, UserActionRecord
+from user_management.models import UserProfile, UserActionRecord, UserFavorite
 from .models import SystemErrorLog
 from .serializers import AdminUserSerializer, AdminUserRecordSerializer, SystemErrorLogSerializer
 import traceback
 import logging
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+from django.db.models import Count
 
 # 创建日志记录器
 logger = logging.getLogger(__name__)
@@ -668,3 +669,43 @@ def log_system_error(level, message, request=None, exception=None, error_type='B
         # 如果在记录错误日志时发生错误，记录到标准日志
         logger.critical(f"无法记录系统错误: {str(e)}")
         return False
+
+class UserStatsView(views.APIView):
+    """用户统计信息视图"""
+    permission_classes = [permissions.IsAuthenticated, IsAdminUser]
+    
+    def get(self, request, user_id):
+        try:
+            # 确认用户存在
+            try:
+                user = User.objects.get(id=user_id)
+            except User.DoesNotExist:
+                return Response(
+                    {'error': f'ID为{user_id}的用户不存在'}, 
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # 获取收藏数量
+            favorites_count = UserFavorite.objects.filter(user=user).count()
+            
+            # 获取搜索次数
+            searches_count = UserActionRecord.objects.filter(
+                user=user, 
+                action_type='search'
+            ).count()
+            
+            # 返回统计数据
+            return Response({
+                'favorites': favorites_count,
+                'searches': searches_count,
+                'user_id': user_id,
+                'username': user.username
+            })
+            
+        except Exception as e:
+            # 记录错误
+            log_system_error('ERROR', f"获取用户统计信息失败: {str(e)}", request, e)
+            return Response(
+                {'error': '获取用户统计信息失败', 'detail': str(e)}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
