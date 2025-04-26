@@ -66,17 +66,17 @@ class ProvinceTraffic(models.Model):
 
 class TimeData(models.Model):
     """景区开放时间数据模型"""
-    scenic_id = models.CharField(max_length=20, null=True, blank=True, verbose_name='景区ID')
+    id = models.CharField(max_length=20, primary_key=True, blank=True, verbose_name='景区ID')
     scenic_name = models.CharField(max_length=100, verbose_name='景区名')
     city_name = models.CharField(max_length=50, verbose_name='城市名')
-    time_range = models.CharField(max_length=200, blank=True, null=True, verbose_name='开放时间段')
-    date_range = models.CharField(max_length=200, blank=True, null=True, verbose_name='日期范围')
-    weekdays = models.CharField(max_length=100, blank=True, null=True, verbose_name='适用工作日')
-    season = models.CharField(max_length=50, blank=True, null=True, verbose_name='季节')
+    time_range = models.CharField(max_length=200, blank=True, verbose_name='开放时间段')
+    date_range = models.CharField(max_length=200, blank=True, verbose_name='日期范围')
+    weekdays = models.CharField(max_length=100, blank=True, verbose_name='适用工作日')
+    season = models.CharField(max_length=50, blank=True, verbose_name='季节')
     is_holiday = models.BooleanField(default=False, verbose_name='是否节假日')
     is_closed = models.BooleanField(default=False, verbose_name='是否关闭')
     is_24h = models.BooleanField(default=False, verbose_name='是否24小时开放')
-    stop_ticket_time = models.CharField(max_length=50, blank=True, null=True, verbose_name='停止售票时间')
+    stop_ticket_time = models.CharField(max_length=50, blank=True, verbose_name='停止售票时间')
     
     def __str__(self):
         return self.scenic_name
@@ -88,11 +88,11 @@ class TimeData(models.Model):
 
 class TrafficData(models.Model):
     """交通数据模型"""
-    transport_mode = models.CharField(max_length=50, verbose_name='交通类型')
+    transport = models.CharField(max_length=50, verbose_name='交通类型')
     transport_count = models.IntegerField(blank=True, null=True, verbose_name='交通类型出现次数')
     
     def __str__(self):
-        return self.transport_mode
+        return self.transport
     
     class Meta:
         verbose_name = '交通数据'
@@ -101,7 +101,7 @@ class TrafficData(models.Model):
 
 class HierarchyTicketBase(models.Model):
     """层级票价基础模型（抽象类）"""
-    level = models.CharField(max_length=50, verbose_name='等级名称')
+    level = models.CharField(max_length=50, primary_key=True, verbose_name='等级名称')
     count = models.IntegerField(verbose_name='该等级的景区数量')
     average_price = models.FloatField(verbose_name='平均票价')
     min_price = models.FloatField(verbose_name='最低票价')

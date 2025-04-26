@@ -1,161 +1,75 @@
+ # 全国景区数据分析及可视化系统 - Ubuntu部署步骤
+
 ## 一、服务器环境准备
 
 ### 1. 安装基础工具
 ```bash
-sudo yum update -y
-sudo yum install -y git wget vim epel-release
-sudo yum install -y gcc gcc-c++ make
+# 更新系统软件包
+sudo apt update && sudo apt upgrade -y
+
+# 安装基础开发工具
+sudo apt install -y git wget vim build-essential
 ```
 
 ### 2. 安装Python环境
 ```bash
-# 安装Python开发工具
-sudo yum install -y python3 python3-devel python3-pip
+# 安装Python和开发工具
+sudo apt install -y python3 python3-dev python3-pip python3-venv
 
 # 更新pip
-sudo pip3 install --upgrade pip
+sudo -H pip3 install --upgrade pip
 ```
 
 ### 3. 安装MySQL
 ```bash
-# 添加MySQL仓库
-sudo rpm -Uvh https://repo.mysql.com/mysql80-community-release-el7-3.noarch.rpm
-sudo yum install -y mysql-server
+# 安装MySQL服务器
+sudo apt install -y mysql-server
 
 # 启动MySQL并设置开机自启
-sudo systemctl start mysqld
-sudo systemctl enable mysqld
-
-# 获取临时密码
-sudo grep 'temporary password' /var/log/mysqld.log
-# ​​使用临时密码登录​​
-# mysql -u root -p
-# 粘贴临时密码（密码不会显示，输入后按回车）。
-# ​​立即修改密码​​
-# ALTER USER 'root'@'localhost' IDENTIFIED BY '你的新密码';
-# 新密码需满足 MySQL 8.0 的复杂度要求（大小写字母+数字+符号）。
-
+sudo systemctl start mysql
+sudo systemctl enable mysql
 
 # 配置MySQL安全设置
 sudo mysql_secure_installation
 ```
-<!-- ​​验证当前 root 密码​​（首次需输入临时密码）：
-Enter password for user root: [输入临时密码]
-​​设置新密码​​：
-New password: [输入新密码]
-Re-enter new password: [确认密码]
-​​移除匿名用户​​：
-Remove anonymous users? [Y/n] y
-​​禁止 root 远程登录​​：
-Disallow root login remotely? [Y/n] y
-​​删除测试数据库​​：
-Remove test database and access to it? [Y/n] y
-​​重载权限表​​：
-Reload privilege tables now? [Y/n] y -->
-
-<!-- [root@VM-4-15-centos .ssh]# sudo mysql_secure_installation
-
-Securing the MySQL server deployment.
-
-Enter password for user root: 
-
-The existing password for the user account root has expired. Please set a new password.
-
-New password: 
-
-Re-enter new password: 
-The 'validate_password' component is installed on the server.
-The subsequent steps will run with the existing configuration
-of the component.
-Using existing password for root.
-
-Estimated strength of the password: 100 
-Change the password for root ? ((Press y|Y for Yes, any other key for No) : y
-
-New password: 
-
-Re-enter new password: 
-
-Estimated strength of the password: 100 
-Do you wish to continue with the password provided?(Press y|Y for Yes, any other key for No) : y
-By default, a MySQL installation has an anonymous user,
-allowing anyone to log into MySQL without having to have
-a user account created for them. This is intended only for
-testing, and to make the installation go a bit smoother.
-You should remove them before moving into a production
-environment.
-
-Remove anonymous users? (Press y|Y for Yes, any other key for No) : y
-Success.
-
-
-Normally, root should only be allowed to connect from
-'localhost'. This ensures that someone cannot guess at
-the root password from the network.
-
-Disallow root login remotely? (Press y|Y for Yes, any other key for No) : y
-Success.
-
-By default, MySQL comes with a database named 'test' that
-anyone can access. This is also intended only for testing,
-and should be removed before moving into a production
-environment.
-
-
-Remove test database and access to it? (Press y|Y for Yes, any other key for No) : y
- - Dropping test database...
-Success.
-
- - Removing privileges on test database...
-Success.
-
-Reloading the privilege tables will ensure that all changes
-made so far will take effect immediately.
-
-Reload privilege tables now? (Press y|Y for Yes, any other key for No) : y
-Success.
-
-All done!  -->
+<!-- 运行MySQL安全脚本时，会执行以下操作:
+- 设置root密码（如果尚未设置）
+- 移除匿名用户
+- 禁止root远程登录
+- 删除测试数据库
+- 重载权限表 -->
 
 ### 4. 安装Redis
 ```bash
-sudo yum install -y redis
+# 安装Redis服务器
+sudo apt install -y redis-server
 
 # 启动Redis并设置开机自启
-sudo systemctl start redis
-sudo systemctl enable redis
+sudo systemctl start redis-server
+sudo systemctl enable redis-server
 ```
 
 ### 5. 安装Node.js环境（用于前端构建）
 ```bash
-# 1. 移除所有nodejs仓库
-sudo rm -f /etc/yum.repos.d/nodesource*.repo
-
-# 2. 清除缓存
-sudo yum clean all
-sudo rm -rf /var/cache/yum
-
-# 1. 安装NVM
+# 安装NVM
 curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.5/install.sh | bash
 
-# 2. 加载NVM
+# 加载NVM
 export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  
 
-# 3. 安装Node.js 16 Centos 7的glibc版本为2.17，若安装的Node.js版本太高，不支持
+# 安装Node.js 16
 nvm install 16
 
-# 4. 确认版本
-node -v
-
-# 验证安装
+# 确认版本
 node -v
 npm -v
 ```
 
 ### 6. 安装Nginx
 ```bash
-sudo yum install -y nginx
+# 安装Nginx
+sudo apt install -y nginx
 
 # 启动Nginx并设置开机自启
 sudo systemctl start nginx
@@ -166,62 +80,54 @@ sudo systemctl enable nginx
 
 ### 1. 创建项目目录
 ```bash
-mkdir -p /var/www/scenic
+sudo mkdir -p /var/www/scenic
 cd /var/www/scenic
 ```
 
 ### 2. 创建虚拟环境
 ```bash
-pip3 install virtualenv
-virtualenv venv
+# 创建Python虚拟环境
+python3 -m venv venv
+
+# 激活虚拟环境
 source venv/bin/activate
 ```
 
 ### 3. 上传后端代码
 将本地`backend`目录上传到服务器的`/var/www/scenic/backend`目录
-（可以使用SCP、FTP或Git方式上传）
+（可以使用SCP、SFTP或Git方式上传）
+
+```bash
 # 从GitHub拉取特定分支的backend文件夹
 # 1. 确保安装了git
-sudo yum install -y git
+sudo apt install -y git
 
 # 2. 导航到目标父目录
-sudo mkdir -p /var/www/scenic
 cd /var/www/scenic
 
-# 3. 克隆特定分支
+# 3. 克隆特定分支（如果使用私有仓库，使用个人访问令牌）
 git clone -b lite_version --single-branch https://github.com/K-irito02/ScenicDataVisualization.git temp_repo
-
-# 使用Token进行Git操作 克隆仓库时使用格式：
-git clone https://<你的token>@github.com/用户名/仓库名.git
-
+# 使用Token进行Git操作时，克隆仓库使用格式：
+# git clone https://<你的token>@github.com/用户名/仓库名.git
+例如：git clone -b lite_version --single-branch https://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@github.com/K-irito02/ScenicDataVisualization.git temp_repo
 # 4. 移动backend文件夹到正确位置
 mv temp_repo/backend .
 
 # 5. 删除临时仓库目录
 rm -rf temp_repo
 
-# 6. 设置适当的权限
-# 正确的CentOS命令，在CentOS系统上，Nginx默认使用nginx用户和组
-sudo chown -R nginx:nginx backend
-sudo chmod -R 755 backend
+# 6. 设置适当的权限 (Ubuntu中Nginx默认使用www-data用户)
+sudo chown -R www-data:www-data /var/www/scenic/backend
+sudo chmod -R 755 /var/www/scenic/backend
 
-# 安装必要的 SELinux 管理工具
-运行以下命令安装：
-sudo yum install policycoreutils-python
-# 设置正确的SELinux上下文（如果您的系统启用了SELinux）
-sudo semanage fcontext -a -t httpd_sys_content_t "/var/www/scenic/backend(/.*)?"
-sudo restorecon -Rv /var/www/scenic/backend
-
-# 为特定目录设置写入权限
-sudo find /var/www/scenic/backend/uploads -type d -exec chmod 775 {} \;
-sudo find /var/www/scenic/backend/logs -type d -exec chmod 775 {} \;
-
-# 如果后端需要写入权限（例如上传文件或日志），您可能需要：
+# 7. 创建并设置上传和日志目录权限
 sudo mkdir -p /var/www/scenic/backend/uploads
 sudo mkdir -p /var/www/scenic/backend/logs
-# 为特定目录设置写入权限
-sudo find /var/www/scenic/backend/uploads -type d -exec chmod 775 {} \;
-sudo find /var/www/scenic/backend/logs -type d -exec chmod 775 {} \;
+sudo chown -R www-data:www-data /var/www/scenic/backend/uploads
+sudo chown -R www-data:www-data /var/www/scenic/backend/logs
+sudo chmod -R 775 /var/www/scenic/backend/uploads
+sudo chmod -R 775 /var/www/scenic/backend/logs
+```
 
 ### 4. 安装后端依赖
 ```bash
@@ -236,7 +142,7 @@ pip install django==5.1.6 djangorestframework django-cors-headers mysqlclient re
 
 ### 5. 修改后端配置
 ```bash
-vim settings.py
+nano settings.py
 ```
 
 修改以下内容：
@@ -273,7 +179,7 @@ SECRET_KEY = '生成一个新的安全密钥'
 
 ### 6. 配置MySQL数据库
 ```bash
-mysql -u root -p
+sudo mysql
 ```
 
 ```sql
@@ -304,7 +210,7 @@ pip install gunicorn
 
 ### 10. 创建Gunicorn服务配置
 ```bash
-sudo vim /etc/systemd/system/scenic-gunicorn.service
+sudo nano /etc/systemd/system/scenic-gunicorn.service
 ```
 
 添加以下内容：
@@ -314,8 +220,8 @@ Description=Scenic Gunicorn Daemon
 After=network.target
 
 [Service]
-User=root
-Group=root
+User=www-data
+Group=www-data
 WorkingDirectory=/var/www/scenic/backend
 ExecStart=/var/www/scenic/venv/bin/gunicorn --workers 3 --bind 127.0.0.1:8000 wsgi:application
 
@@ -334,9 +240,21 @@ sudo systemctl enable scenic-gunicorn
 ### 1. 上传前端代码
 将本地`forward/my-forward`目录上传到服务器的`/var/www/scenic/frontend`目录
 
+```bash
+# 如果使用GitHub仓库
+cd /var/www/scenic
+git clone -b lite_version --single-branch https://github.com/K-irito02/ScenicDataVisualization.git temp_repo
+mv temp_repo/forward/my-forward /var/www/scenic/frontend
+rm -rf temp_repo
+
+# 设置权限
+sudo chown -R www-data:www-data /var/www/scenic/frontend
+sudo chmod -R 755 /var/www/scenic/frontend
+```
+
 ### 2. 修改前端API配置
 ```bash
-vim /var/www/scenic/frontend/.env
+nano /var/www/scenic/frontend/.env
 ```
 
 修改为：
@@ -360,7 +278,7 @@ npm run build
 
 ### 1. 创建Nginx配置文件
 ```bash
-sudo vim /etc/nginx/conf.d/scenic.conf
+sudo nano /etc/nginx/sites-available/scenic
 ```
 
 添加以下内容：
@@ -404,8 +322,9 @@ server {
 }
 ```
 
-### 2. 测试并重新加载Nginx配置
+### 2. 启用站点配置并测试
 ```bash
+sudo ln -s /etc/nginx/sites-available/scenic /etc/nginx/sites-enabled/
 sudo nginx -t
 sudo systemctl reload nginx
 ```
@@ -414,16 +333,24 @@ sudo systemctl reload nginx
 
 ### 开放必要的端口
 ```bash
-sudo firewall-cmd --permanent --add-service=http
-sudo firewall-cmd --permanent --add-service=https
-sudo firewall-cmd --reload
+# 安装UFW（如果尚未安装）
+sudo apt install -y ufw
+
+# 配置UFW规则
+sudo ufw allow 'Nginx Full'
+sudo ufw allow ssh
+sudo ufw allow http
+sudo ufw allow https
+
+# 如果防火墙未启用，可以启用
+sudo ufw enable
 ```
 
 ## 六、HTTPS配置（可选但推荐）
 
 ### 1. 安装Certbot
 ```bash
-sudo yum install -y certbot python3-certbot-nginx
+sudo apt install -y certbot python3-certbot-nginx
 ```
 
 ### 2. 获取并配置SSL证书
@@ -446,7 +373,7 @@ sudo journalctl -u scenic-gunicorn
 ### 2. 定期备份数据库
 ```bash
 # 创建备份脚本
-vim /var/www/scenic/backup_db.sh
+nano /var/www/scenic/backup_db.sh
 ```
 
 添加以下内容：
@@ -455,7 +382,7 @@ vim /var/www/scenic/backup_db.sh
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 BACKUP_DIR="/var/www/backups"
 mkdir -p $BACKUP_DIR
-mysqldump -u scenic_user -p密码 scenic_area > "$BACKUP_DIR/scenic_area_$TIMESTAMP.sql"
+mysqldump -u scenic_user -p'密码' scenic_area > "$BACKUP_DIR/scenic_area_$TIMESTAMP.sql"
 ```
 
 设置可执行权限并添加到crontab：
@@ -479,19 +406,32 @@ crontab -e
 2. **文件权限**：
    - 确保`media`和`static`目录有适当的读写权限
    ```bash
-   sudo chown -R nginx:nginx /var/www/scenic/media
-   sudo chown -R nginx:nginx /var/www/scenic/static
+   sudo mkdir -p /var/www/scenic/media
+   sudo mkdir -p /var/www/scenic/static
+   sudo chown -R www-data:www-data /var/www/scenic/media
+   sudo chown -R www-data:www-data /var/www/scenic/static
+   sudo chmod -R 755 /var/www/scenic/static
+   sudo chmod -R 775 /var/www/scenic/media
    ```
 
 3. **定期更新**：
    - 设置服务器安全更新
    ```bash
-   sudo yum-config-manager --enable updates
-   sudo yum -y update
+   sudo apt update && sudo apt upgrade -y
    ```
 
 4. **备份策略**：
    - 定期备份源代码和数据库
    - 考虑使用远程存储保存备份
 
-按照以上步骤操作，您的全国景区数据分析及可视化系统应该能够成功部署在CentOS云服务器上。如需进一步优化，可考虑配置Redis缓存、启用内容压缩和实施更严格的安全措施。
+5. **安全措施**：
+   - 配置SSH密钥认证
+   - 禁用密码登录
+   - 考虑使用fail2ban预防暴力攻击
+
+6. **性能优化**：
+   - 配置Redis缓存
+   - 启用Nginx压缩
+   - 配置浏览器缓存控制
+
+按照以上步骤操作，您的全国景区数据分析及可视化系统应该能够成功部署在Ubuntu云服务器上。此部署方案适用于Ubuntu 20.04 LTS和Ubuntu 22.04 LTS版本。
