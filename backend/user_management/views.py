@@ -10,6 +10,8 @@ from django.core.mail import send_mail
 from django.conf import settings
 import random
 from .utils import redis_client  # 从utils导入redis_client
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
 
 from .models import UserProfile, UserFavorite, UserActionRecord
 from django.contrib.auth.models import User
@@ -18,6 +20,7 @@ from .serializers import (
     ProfileUpdateSerializer, UserFavoriteSerializer
 )
 
+@method_decorator(csrf_exempt, name='dispatch')
 class LoginView(APIView):
     """用户登录视图"""
     permission_classes = [permissions.AllowAny]
@@ -41,14 +44,17 @@ class LoginView(APIView):
                 profile.last_login = timezone.now()
                 profile.save()
                 
-                # 记录登录操作
+                # 记录登录操作和设备信息
+                device_info = request.META.get('HTTP_USER_AGENT', '未知设备')
+                ip_address = self.get_client_ip(request)
+                
                 UserActionRecord.objects.create(
                     user=user,
                     action_type='login',
-                    details='用户登录'
+                    details=f'用户登录 (设备: {device_info}, IP: {ip_address})'
                 )
                 
-                # 获取或创建令牌
+                # 获取或创建令牌 - 允许相同用户在不同设备上登录
                 token, created = Token.objects.get_or_create(user=user)
                 
                 # 准备响应数据
@@ -62,7 +68,15 @@ class LoginView(APIView):
                     'is_admin': user.is_staff
                 }
                 
-                return Response(response_data)
+                # 创建响应对象
+                response = Response(response_data)
+                
+                # 设置响应头，允许跨域
+                response["Access-Control-Allow-Origin"] = "*"
+                response["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+                response["Access-Control-Allow-Headers"] = "Authorization, Content-Type, X-CSRFToken"
+                
+                return response
             
             # 序列化器验证失败的情况
             # 提取错误信息，检查是否包含"用户已被禁用"
@@ -100,7 +114,26 @@ class LoginView(APIView):
                 {'detail': '登录失败', 'message': f'服务器处理请求时出错: {str(e)}'}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+    
+    def get_client_ip(self, request):
+        """获取客户端IP地址"""
+        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+        if x_forwarded_for:
+            ip = x_forwarded_for.split(',')[0]
+        else:
+            ip = request.META.get('REMOTE_ADDR', '未知IP')
+        return ip
+    
+    def options(self, request, *args, **kwargs):
+        """处理OPTIONS预检请求"""
+        response = Response()
+        response['Access-Control-Allow-Origin'] = '*'
+        response['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+        response['Access-Control-Allow-Headers'] = 'Authorization, Content-Type, X-CSRFToken'
+        response['Access-Control-Max-Age'] = '86400'  # 24小时
+        return response
 
+@method_decorator(csrf_exempt, name='dispatch')
 class RegisterView(APIView):
     """用户注册视图"""
     permission_classes = [permissions.AllowAny]
@@ -119,10 +152,17 @@ class RegisterView(APIView):
                     details='用户注册'
                 )
                 
-                return Response({
+                response = Response({
                     'success': True,
                     'message': '注册成功'
                 }, status=status.HTTP_201_CREATED)
+                
+                # 添加跨域响应头
+                response["Access-Control-Allow-Origin"] = "*"
+                response["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+                response["Access-Control-Allow-Headers"] = "Authorization, Content-Type, X-CSRFToken"
+                
+                return response
             else:
                 print(f"数据验证失败，错误信息: {serializer.errors}")
                 return Response({
@@ -137,6 +177,15 @@ class RegisterView(APIView):
                 'message': f'注册失败: {str(e)}',
                 'errors': {'detail': str(e)}
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def options(self, request, *args, **kwargs):
+        """处理OPTIONS预检请求"""
+        response = Response()
+        response['Access-Control-Allow-Origin'] = '*'
+        response['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+        response['Access-Control-Allow-Headers'] = 'Authorization, Content-Type, X-CSRFToken'
+        response['Access-Control-Max-Age'] = '86400'  # 24小时
+        return response
 
 class ProfileUpdateView(APIView):
     """用户资料更新视图"""
@@ -371,21 +420,24 @@ class SendEmailCodeView(APIView):
         logger = logging.getLogger(__name__)
         
         email = request.data.get('email')
+        is_profile_update = request.data.get('is_profile_update', False)
+        
         if not email:
             return Response({
                 'success': False,
                 'message': '请提供邮箱地址'
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        # 检查邮箱是否已被注册
-        try:
-            if User.objects.filter(email=email).exists():
-                return Response({
-                    'success': False,
-                    'message': '该邮箱已被使用'
-                }, status=status.HTTP_400_BAD_REQUEST)
-        except Exception as e:
-            logger.error(f"检查邮箱是否已存在时出错: {str(e)}")
+        # 检查邮箱是否已被注册 (只在注册场景下检查，不在个人资料更新时检查)
+        if not is_profile_update:
+            try:
+                if User.objects.filter(email=email).exists():
+                    return Response({
+                        'success': False,
+                        'message': '该邮箱已被使用'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+            except Exception as e:
+                logger.error(f"检查邮箱是否已存在时出错: {str(e)}")
         
         # 生成6位随机验证码
         code = ''.join(random.choices('0123456789', k=6))
@@ -409,10 +461,29 @@ class SendEmailCodeView(APIView):
             # 在单独的try-except块中处理邮件发送
             try:
                 from django.core.mail import EmailMessage
+                # 根据不同场景使用不同的邮件主题和内容
+                subject = '邮箱验证码' if is_profile_update else '注册验证码'
+                body_intro = '感谢您修改邮箱信息。' if is_profile_update else '感谢您注册使用全国景区数据分析及可视化系统。'
+                
                 email_message = EmailMessage(
-                    subject='景区数据分析系统 - 验证码',
-                    body=f'您的验证码是：{code}，有效期为5分钟。请勿将验证码泄露给他人。',
-                    from_email=settings.EMAIL_HOST_USER,
+                    subject=subject,
+                    body=f'''尊敬的用户：
+                    
+您好！
+
+{body_intro}
+
+您的验证码是：{code}
+
+该验证码有效期为5分钟，请勿将验证码泄露给他人。
+
+如果这不是您本人的操作，请忽略此邮件。
+
+---------------------
+全国景区数据分析及可视化系统团队
+此邮件由系统自动发送，请勿回复
+''',
+                    from_email=settings.DEFAULT_FROM_EMAIL,
                     to=[email]
                 )
                 email_message.send(fail_silently=False)
@@ -509,6 +580,7 @@ class DeleteAccountView(APIView):
                 'message': f'删除账户时出错: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+@method_decorator(csrf_exempt, name='dispatch')
 class ForgotPasswordView(APIView):
     """忘记密码视图 - 发送重置密码验证码"""
     permission_classes = [permissions.AllowAny]
@@ -564,9 +636,24 @@ class ForgotPasswordView(APIView):
             try:
                 from django.core.mail import EmailMessage
                 email_message = EmailMessage(
-                    subject='景区数据分析系统 - 重置密码验证码',
-                    body=f'您的重置密码验证码是：{code}，有效期为5分钟。请勿将验证码泄露给他人。如果这不是您的操作，请忽略此邮件。',
-                    from_email=settings.EMAIL_HOST_USER,
+                    subject='重置密码验证码',
+                    body=f'''尊敬的用户：
+                    
+您好！
+
+您正在进行密码重置操作。
+
+您的重置密码验证码是：{code}
+
+该验证码有效期为5分钟，请勿将验证码泄露给他人。
+
+如果这不是您本人的操作，请忽略此邮件并确保您的账号安全。
+
+---------------------
+全国景区数据分析及可视化系统团队
+此邮件由系统自动发送，请勿回复
+''',
+                    from_email=settings.DEFAULT_FROM_EMAIL,
                     to=[email]
                 )
                 email_message.send(fail_silently=False)
@@ -615,6 +702,7 @@ class ForgotPasswordView(APIView):
                 'message': '验证码发送失败，请稍后重试'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+@method_decorator(csrf_exempt, name='dispatch')
 class ResetPasswordView(APIView):
     """重置密码视图 - 验证验证码并重置密码"""
     permission_classes = [permissions.AllowAny]

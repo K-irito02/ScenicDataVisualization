@@ -117,73 +117,160 @@ const goToLogin = () => {
 </script>
 
 <template>
-  <div class="forgot-password-container">
-    <div class="forgot-password-box">
-      <div class="logo-container">
-        <img src="/logo.png" alt="Logo" class="logo">
-        <h2 class="system-title">全国景区数据分析及可视化系统</h2>
-      </div>
-      
-      <h3 class="forgot-password-title">忘记密码</h3>
-      
-      <p class="instructions">
-        请输入您的注册邮箱，我们会向该邮箱发送验证码，用于重置密码。
-      </p>
-      
-      <el-form
-        ref="formRef"
-        :model="{ email }"
-        :rules="rules"
-        label-position="top"
-        class="forgot-password-form"
-        status-icon
-        :validate-on-rule-change="false"
-        validate-on-input
-      >
-        <el-form-item label="邮箱" prop="email">
-          <el-input 
-            v-model="email"
-            placeholder="请输入注册时使用的邮箱"
-            :disabled="loading"
-            @keyup.enter="handleSubmit(formRef)"
-            @input="() => formRef?.validateField('email')"
-            clearable
-          >
-            <template #prefix>
-              <el-icon><Message /></el-icon>
-            </template>
-          </el-input>
-          <div class="form-tip">请确保输入的邮箱能够正常接收邮件</div>
-        </el-form-item>
-        
-        <el-button 
-          type="primary" 
-          :loading="loading" 
-          class="submit-button" 
-          @click="handleSubmit(formRef)"
-        >
-          发送验证码
-        </el-button>
-        
-        <div class="form-footer">
-          <el-button @click="goToLogin" type="text" class="login-link" :disabled="loading">
-            返回登录
-          </el-button>
+  <div class="auth-container">
+    <!-- 左侧学校信息区域 -->
+    <div class="school-info">
+      <div class="school-header">
+        <div class="school-logo">
+          <img src="/logo-zijin.png" alt="南京理工大学紫金学院" class="logo-image">
         </div>
-      </el-form>
+        <div class="school-name">
+          <h1>南京理工大学紫金学院</h1>
+          <h2>NANJING UNIVERSITY OF SCIENCE AND TECHNOLOGY ZIJIN COLLEGE</h2>
+        </div>
+      </div>
+      <div class="department-info">
+        <p>计算机与人工智能学院</p>
+        <p>2025届本科毕业设计</p>
+      </div>
+    </div>
+    
+    <!-- 右侧忘记密码区域 -->
+    <div class="forgot-password-container">
+      <div class="forgot-password-box">
+        <div class="logo-container">
+          <img src="/logo.png" alt="Logo" class="logo">
+          <h2 class="system-title">全国景区数据分析及可视化系统</h2>
+        </div>
+        
+        <h3 class="forgot-password-title">忘记密码</h3>
+        
+        <p class="instructions">
+          请输入您的注册邮箱，我们会向该邮箱发送验证码，用于重置密码。
+        </p>
+        
+        <el-form
+          ref="formRef"
+          :model="{ email }"
+          :rules="rules"
+          label-position="top"
+          class="forgot-password-form"
+          status-icon
+          :validate-on-rule-change="false"
+          validate-on-input
+        >
+          <el-form-item label="邮箱" prop="email">
+            <el-input 
+              v-model="email"
+              placeholder="请输入注册时使用的邮箱"
+              :disabled="loading"
+              @keyup.enter="handleSubmit(formRef)"
+              @input="() => formRef?.validateField('email')"
+              clearable
+            >
+              <template #prefix>
+                <el-icon><Message /></el-icon>
+              </template>
+            </el-input>
+            <div class="form-tip">请确保输入的邮箱能够正常接收邮件</div>
+          </el-form-item>
+          
+          <el-button 
+            type="primary" 
+            :loading="loading" 
+            class="submit-button" 
+            @click="handleSubmit(formRef)"
+          >
+            发送验证码
+          </el-button>
+          
+          <div class="form-footer">
+            <el-button @click="goToLogin" type="text" class="login-link" :disabled="loading">
+              返回登录
+            </el-button>
+          </div>
+        </el-form>
+      </div>
     </div>
   </div>
 </template>
 
 <style scoped>
+.auth-container {
+  display: flex;
+  height: 100vh;
+  width: 100%;
+  overflow: hidden;
+  background: linear-gradient(135deg, #4a0060 0%, #1a0d3b 100%);
+}
+
+/* 左侧学校信息区域样式 */
+.school-info {
+  flex: 1;
+  color: white;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
+  text-align: center;
+  max-width: 42%;
+  margin-left: 5%;
+}
+
+.school-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.school-logo {
+  margin-right: 20px;
+}
+
+.school-logo img {
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  object-fit: cover;
+  margin-top: 20px;
+}
+
+.school-name {
+  text-align: left;
+}
+
+.school-name h1 {
+  font-size: 65px;
+  margin-bottom: 10px;
+  font-weight: 500;
+  font-family: "华文行楷", "STXingkai", serif;
+  width: 100%;
+}
+
+.school-name h2 {
+  font-size: 16px;
+  font-weight: 400;
+  margin-bottom: 20px;
+  letter-spacing: 1px;
+  font-family: "Noto Serif SC", serif;
+  font-weight: 900;
+}
+
+.department-info {
+  font-size: 18px;
+  line-height: 1.6;
+}
+
+/* 右侧忘记密码区域样式 */
 .forgot-password-container {
+  flex: 1;
   display: flex;
   justify-content: center;
   align-items: center;
-  height: 100vh;
-  background: linear-gradient(120deg, #29205e 0%, #4e3abb 100%);
   position: relative;
   overflow: hidden;
+  max-width: 58%;
 }
 
 .forgot-password-container::before {
@@ -223,6 +310,9 @@ const goToLogin = () => {
 
 .logo {
   height: 60px;
+  width: 60px;
+  border-radius: 50%;
+  object-fit: cover;
   margin-bottom: 10px;
 }
 
@@ -296,5 +386,45 @@ const goToLogin = () => {
 :deep(.el-form-item.is-error .el-input__validateIcon) {
   color: #f56c6c;
   display: inline-flex !important;
+}
+
+/* 响应式调整 */
+@media (max-width: 1024px) {
+  .auth-container {
+    flex-direction: column;
+  }
+  
+  .school-info,
+  .forgot-password-container {
+    flex: none;
+    width: 100%;
+    max-width: 100%;
+    margin-left: 0;
+  }
+  
+  .school-info {
+    padding: 20px 0;
+  }
+  
+  .school-header {
+    justify-content: center;
+  }
+  
+  .school-logo img {
+    width: 80px;
+    height: 80px;
+  }
+  
+  .school-name h1 {
+    font-size: 32px;
+  }
+  
+  .school-name h2 {
+    font-size: 14px;
+  }
+  
+  .department-info {
+    font-size: 16px;
+  }
 }
 </style> 

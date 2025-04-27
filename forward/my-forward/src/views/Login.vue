@@ -274,100 +274,179 @@ const goToAdminLogin = () => {
 </script>
 
 <template>
-  <div class="login-container">
-    <div class="login-box">
-      <div class="logo-container">
-        <img src="/logo.png" alt="景区数据分析及可视化系统" class="logo-image" />
-        <h2 class="system-title">全国景区数据分析及可视化系统</h2>
+  <div class="auth-container">
+    <!-- 左侧学校信息区域 -->
+    <div class="school-info">
+      <div class="school-header">
+        <div class="school-logo">
+          <img src="/logo-zijin.png" alt="南京理工大学紫金学院" class="logo-image">
+        </div>
+        <div class="school-name">
+          <h1>南京理工大学紫金学院</h1>
+          <h2>NANJING UNIVERSITY OF SCIENCE AND TECHNOLOGY ZIJIN COLLEGE</h2>
+        </div>
       </div>
-      
-      <h3 class="login-title">用户登录</h3>
-      
-      <el-form
-        ref="loginFormRef"
-        :model="loginForm"
-        :rules="rules"
-        label-position="top"
-        class="login-form"
-        status-icon
-        :validate-on-rule-change="false"
-        validate-on-input
-      >
-        <el-form-item label="用户名/邮箱" prop="username">
-          <el-input 
-            v-model="loginForm.username"
-            placeholder="请输入用户名或邮箱"
-            :disabled="loading || lockoutTime > 0"
-            @keyup.enter="debounceLogin(loginFormRef)"
-            @input="() => loginFormRef?.validateField('username')"
-            clearable
-          >
-            <template #prefix>
-              <el-icon><User /></el-icon>
-            </template>
-          </el-input>
-        </el-form-item>
-        
-        <el-form-item label="密码" prop="password">
-          <el-input 
-            v-model="loginForm.password"
-            type="password"
-            placeholder="请输入密码"
-            show-password
-            :disabled="loading || lockoutTime > 0"
-            @keyup.enter="debounceLogin(loginFormRef)"
-            @input="() => loginFormRef?.validateField('password')"
-            clearable
-          >
-            <template #prefix>
-              <el-icon><Lock /></el-icon>
-            </template>
-          </el-input>
-        </el-form-item>
-        
-        <div class="form-actions">
-          <el-button @click="goToForgotPassword" type="text" class="forgot-password" :disabled="loading">
-            忘记密码？
-          </el-button>
+      <div class="department-info">
+        <p>计算机与人工智能学院</p>
+        <p>2025届本科毕业设计</p>
+      </div>
+    </div>
+    
+    <!-- 右侧登录区域 -->
+    <div class="login-container">
+      <div class="login-box">
+        <div class="logo-container">
+          <img src="/logo.png" alt="Logo" class="logo">
+          <h2 class="system-title">全国景区数据分析及可视化系统</h2>
         </div>
         
-        <el-button 
-          type="primary" 
-          :loading="loading" 
-          :disabled="lockoutTime > 0"
-          class="login-button" 
-          @click="debounceLogin(loginFormRef)"
+        <h3 class="login-title">用户登录</h3>
+        
+        <el-form
+          ref="loginFormRef"
+          :model="loginForm"
+          :rules="rules"
+          label-position="top"
+          class="login-form"
+          status-icon
         >
-          <span v-if="lockoutTime > 0">{{ lockoutTime }}秒后可重试</span>
-          <span v-else>登录</span>
-        </el-button>
-        
-        <div class="form-footer">
-          <span>没有账号？</span>
-          <el-button @click="goToRegister" type="text" class="register-link" :disabled="loading">
-            立即注册
+          <el-form-item label="用户名/邮箱" prop="username">
+            <el-input 
+              v-model="loginForm.username"
+              placeholder="请输入用户名或邮箱"
+              :disabled="loading || lockoutTime > 0"
+              @keyup.enter="debounceLogin(loginFormRef)"
+            >
+              <template #prefix>
+                <el-icon><User /></el-icon>
+              </template>
+            </el-input>
+          </el-form-item>
+          
+          <el-form-item label="密码" prop="password">
+            <el-input 
+              v-model="loginForm.password"
+              type="password"
+              placeholder="请输入密码"
+              :disabled="loading || lockoutTime > 0"
+              @keyup.enter="debounceLogin(loginFormRef)"
+              show-password
+            >
+              <template #prefix>
+                <el-icon><Lock /></el-icon>
+              </template>
+            </el-input>
+          </el-form-item>
+          
+          <div class="form-actions">
+            <el-checkbox>记住我</el-checkbox>
+            <el-button @click="goToForgotPassword" type="text">忘记密码?</el-button>
+          </div>
+          
+          <el-button 
+            type="primary" 
+            :loading="loading" 
+            class="login-button" 
+            @click="debounceLogin(loginFormRef)"
+            :disabled="lockoutTime > 0"
+          >
+            {{ lockoutTime > 0 ? `请等待 ${lockoutTime} 秒` : '登录' }}
           </el-button>
-        </div>
-        
-        <div class="admin-login-link">
-          <el-button @click="goToAdminLogin" type="text" :disabled="loading">
-            管理员入口
-          </el-button>
-        </div>
-      </el-form>
+          
+          <div class="form-footer">
+            <span>还没有账号? </span>
+            <el-button @click="goToRegister" type="text" class="register-link">
+              注册
+            </el-button>
+          </div>
+          
+          <div class="admin-login-link">
+            <el-button @click="goToAdminLogin" type="text">
+              管理员登录
+            </el-button>
+          </div>
+        </el-form>
+      </div>
     </div>
   </div>
 </template>
 
 <style scoped>
+.auth-container {
+  display: flex;
+  height: 100vh;
+  width: 100%;
+  overflow: hidden;
+  background: linear-gradient(135deg, #4a0060 0%, #1a0d3b 100%);
+}
+
+/* 左侧学校信息区域样式 */
+.school-info {
+  flex: 1;
+  color: white;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
+  text-align: center;
+  max-width: 42%;
+  margin-left: 7%;
+}
+
+.school-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.school-logo {
+  margin-right: 20px;
+}
+
+.school-logo img {
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  object-fit: cover;
+  margin-top: 20px;
+}
+
+.school-name {
+  text-align: left;
+}
+
+.school-name h1 {
+  font-size: 65px;
+  margin-bottom: 10px;
+  font-weight: 500;
+  font-family: "华文行楷", "STXingkai", serif;
+  width: 100%;
+}
+
+.school-name h2 {
+  font-size: 16px;
+  font-weight: 400;
+  margin-bottom: 20px;
+  letter-spacing: 1px;
+  font-family: "Noto Serif SC", serif;
+  font-weight: 900;
+}
+
+.department-info {
+  font-size: 18px;
+  line-height: 1.6;
+}
+
+/* 右侧登录区域样式 */
 .login-container {
+  flex: 1;
   display: flex;
   justify-content: center;
   align-items: center;
-  height: 100vh;
-  background: linear-gradient(120deg, #191549 0%, #072e83 100%);
   position: relative;
   overflow: hidden;
+  max-width: 58%;
 }
 
 .login-container::before {
@@ -405,66 +484,57 @@ const goToAdminLogin = () => {
   margin-bottom: 30px;
 }
 
-.logo-image {
-  width: 100px;
-  height: 100px;
+.logo {
+  height: 60px;
+  width: 60px;
+  border-radius: 50%;
+  object-fit: cover;
   margin-bottom: 10px;
 }
 
 .system-title {
   font-size: 20px;
-  text-align: center;
-  margin-top: 15px;
   color: #333;
-  font-weight: 500;
+  text-align: center;
+  margin: 0;
 }
 
 .login-title {
-  font-size: 22px;
-  text-align: center;
-  margin-bottom: 20px;
+  font-size: 24px;
   color: #333;
+  text-align: center;
+  margin-bottom: 30px;
 }
 
 .login-form {
-  margin-top: 20px;
+  width: 100%;
 }
 
 .form-actions {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
   margin-bottom: 20px;
-}
-
-.forgot-password {
-  font-size: 14px;
-  color: #999;
-  padding: 0;
 }
 
 .login-button {
   width: 100%;
-  padding: 12px 20px;
+  padding: 12px 0;
+  font-size: 16px;
   margin-bottom: 20px;
 }
 
 .form-footer {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 14px;
-  color: #666;
+  text-align: center;
+  margin-bottom: 10px;
 }
 
 .register-link {
-  margin-left: 5px;
-  font-weight: 500;
-  padding: 0;
+  font-weight: bold;
 }
 
 .admin-login-link {
   text-align: center;
-  margin-top: 15px;
+  margin-top: 10px;
 }
 
 /* 添加自定义样式确保验证状态图标正确显示 */
@@ -490,5 +560,45 @@ const goToAdminLogin = () => {
 :deep(.el-form-item.is-error .el-input__validateIcon) {
   color: #f56c6c;
   display: inline-flex !important;
+}
+
+/* 响应式调整 */
+@media (max-width: 1024px) {
+  .auth-container {
+    flex-direction: column;
+  }
+  
+  .school-info,
+  .login-container {
+    flex: none;
+    width: 100%;
+    max-width: 100%;
+    margin-left: 0;
+  }
+  
+  .school-info {
+    padding: 20px 0;
+  }
+  
+  .school-header {
+    justify-content: center;
+  }
+  
+  .school-logo img {
+    width: 80px;
+    height: 80px;
+  }
+  
+  .school-name h1 {
+    font-size: 32px;
+  }
+  
+  .school-name h2 {
+    font-size: 14px;
+  }
+  
+  .department-info {
+    font-size: 16px;
+  }
 }
 </style> 

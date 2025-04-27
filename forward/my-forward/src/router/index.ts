@@ -9,27 +9,32 @@ const routes: Array<RouteRecordRaw> = [
   {
     path: '/login',
     name: 'Login',
-    component: () => import('@/views/Login.vue')
+    component: () => import('@/views/Login.vue'),
+    meta: { title: '用户登录' }
   },
   {
     path: '/register',
     name: 'Register',
-    component: () => import('@/views/Register.vue')
+    component: () => import('@/views/Register.vue'),
+    meta: { title: '用户注册' }
   },
   {
     path: '/forgot-password',
     name: 'ForgotPassword',
-    component: () => import('@/views/ForgotPassword.vue')
+    component: () => import('@/views/ForgotPassword.vue'),
+    meta: { title: '忘记密码' }
   },
   {
     path: '/reset-password',
     name: 'ResetPassword',
-    component: () => import('@/views/ResetPassword.vue')
+    component: () => import('@/views/ResetPassword.vue'),
+    meta: { title: '重置密码' }
   },
   {
     path: '/admin',
     name: 'AdminLogin',
-    component: () => import('@/views/AdminLogin.vue')
+    component: () => import('@/views/AdminLogin.vue'),
+    meta: { title: '管理员登录' }
   },
   {
     path: '/logout-redirect',
@@ -39,7 +44,8 @@ const routes: Array<RouteRecordRaw> = [
       beforeRouteEnter(_to: RouteLocationNormalized, _from: RouteLocationNormalized, next: NavigationGuardNext) {
         next('/login');
       }
-    }
+    },
+    meta: { title: '正在注销' }
   },
   {
     path: '/dashboard',
@@ -193,6 +199,17 @@ router.beforeEach((to: RouteLocationNormalized, _from: RouteLocationNormalized, 
     next({ name: 'AdminLogin' })
   } else {
     next()
+  }
+  
+  // 设置动态标题
+  const defaultTitle = '景区数据分析与可视化系统'
+  if (to.meta && to.meta.title) {
+    // 获取路由中定义的标题
+    const pageTitle = to.meta.title as string
+    // 同时更新文档标题和favicon旁边的标题
+    document.title = pageTitle
+  } else {
+    document.title = defaultTitle
   }
 })
 

@@ -51,9 +51,10 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
-    'corsheaders.middleware.CorsMiddleware',  # CORS 中间件
+    'corsheaders.middleware.CorsMiddleware',  # CORS 中间件必须在Common之前，CSRF之前
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
+    'user_management.middleware.CustomCorsMiddleware',  # 自定义CORS中间件
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
@@ -119,9 +120,9 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalization
 # https://docs.djangoproject.com/en/5.1/topics/i18n/
 
-LANGUAGE_CODE = 'en-us'
+LANGUAGE_CODE = 'zh-hans'
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = 'Asia/Shanghai'
 
 USE_I18N = True
 
@@ -155,6 +156,50 @@ CORS_ALLOW_HEADERS = [
     'x-anonymous-error-log',
 ]
 
+# 添加CORS允许的方法和暴露的头信息
+CORS_ALLOW_METHODS = [
+    'DELETE',
+    'GET',
+    'OPTIONS',
+    'PATCH',
+    'POST',
+    'PUT',
+]
+
+CORS_EXPOSE_HEADERS = [
+    'content-type',
+    'content-length',
+    'authorization',
+]
+
+# 添加具体的允许的域名列表作为备选方案
+CORS_ALLOWED_ORIGINS = [
+    'http://localhost:8080',
+    'http://localhost:5173',
+    'http://localhost:3000',
+    'http://127.0.0.1:8080',
+    'http://127.0.0.1:5173',
+    'http://127.0.0.1:3000',
+    # 在这里添加您的生产环境域名
+]
+
+# 添加CSRF信任的源
+CSRF_TRUSTED_ORIGINS = [
+    'http://localhost:8080',
+    'http://localhost:5173',
+    'http://localhost:3000',
+    'http://127.0.0.1:8080',
+    'http://127.0.0.1:5173',
+    'http://127.0.0.1:3000',
+    # 在这里添加您的生产环境域名
+]
+
+# 禁用CSRF，仅在开发环境使用，生产环境请删除此设置
+CSRF_COOKIE_SECURE = False
+CSRF_COOKIE_HTTPONLY = False
+CSRF_USE_SESSIONS = False
+CSRF_COOKIE_SAMESITE = 'Lax'
+
 # REST Framework 配置
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
@@ -179,6 +224,7 @@ EMAIL_PORT = 587  # QQ邮箱的SMTP端口
 EMAIL_USE_TLS = True
 EMAIL_HOST_USER = '2412311965@qq.com'  # QQ邮箱地址
 EMAIL_HOST_PASSWORD = 'whlnoylzdopeechd'  # QQ邮箱授权码
+DEFAULT_FROM_EMAIL = '全国景区数据分析及可视化系统 <2412311965@qq.com>'  # 发件人显示名称
 
 # Redis settings
 REDIS_HOST = 'localhost'

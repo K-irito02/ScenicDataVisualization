@@ -248,160 +248,217 @@ const resendCode = async () => {
   }
 }
 
-const goToForgotPassword = () => {
-  router.push('/forgot-password')
-}
-
-const goToLogin = () => {
-  router.push('/login')
-}
 </script>
 
 <template>
-  <div class="reset-password-container">
-    <div class="reset-password-box">
-      <div class="logo-container">
-        <img src="/logo.png" alt="Logo" class="logo">
-        <h2 class="system-title">全国景区数据分析及可视化系统</h2>
+  <div class="auth-container">
+    <!-- 左侧学校信息区域 -->
+    <div class="school-info">
+      <div class="school-header">
+        <div class="school-logo">
+          <img src="/logo-zijin.png" alt="南京理工大学紫金学院" class="logo-image">
+        </div>
+        <div class="school-name">
+          <h1>南京理工大学紫金学院</h1>
+          <h2>NANJING UNIVERSITY OF SCIENCE AND TECHNOLOGY ZIJIN COLLEGE</h2>
+        </div>
       </div>
-      
-      <h3 class="reset-password-title">重置密码</h3>
-      
-      <p class="instructions">
-        请输入您收到的验证码和新密码，完成密码重置。
-      </p>
-      
-      <el-form
-        ref="formRef"
-        :model="form"
-        :rules="rules"
-        label-position="top"
-        class="reset-password-form"
-        status-icon
-        :validate-on-rule-change="false"
-        validate-on-input
-      >
-        <el-form-item label="邮箱" prop="email">
-          <el-input 
-            v-model="form.email"
-            placeholder="请输入邮箱"
-            :disabled="!!route.query.email || loading"
-            @input="() => formRef?.validateField('email')"
-            clearable
-          >
-            <template #prefix>
-              <el-icon><Message /></el-icon>
-            </template>
-          </el-input>
-        </el-form-item>
+      <div class="department-info">
+        <p>计算机与人工智能学院</p>
+        <p>2025届本科毕业设计</p>
+      </div>
+    </div>
+    
+    <!-- 右侧重置密码区域 -->
+    <div class="reset-password-container">
+      <div class="reset-password-box">
+        <div class="logo-container">
+          <img src="/logo.png" alt="Logo" class="logo">
+          <h2 class="system-title">全国景区数据分析及可视化系统</h2>
+        </div>
         
-        <el-form-item label="验证码" prop="code">
-          <div class="code-input-group">
+        <h3 class="reset-password-title">重置密码</h3>
+        
+        <p class="instructions">
+          请输入您收到的验证码，以及您希望设置的新密码。
+        </p>
+        
+        <el-form
+          ref="formRef"
+          :model="form"
+          :rules="rules"
+          label-position="top"
+          class="reset-password-form"
+          status-icon
+        >
+          <el-form-item label="邮箱" prop="email">
             <el-input 
-              v-model="form.code"
-              placeholder="请输入6位数字验证码"
-              :disabled="loading"
-              @keyup.enter="handleSubmit(formRef)"
-              @input="() => formRef?.validateField('code')"
-              clearable
+              v-model="form.email"
+              placeholder="请确认您的邮箱地址"
+              :disabled="true"
             >
               <template #prefix>
-                <el-icon><Key /></el-icon>
+                <el-icon><Message /></el-icon>
               </template>
             </el-input>
-            <el-button 
-              @click="resendCode" 
-              class="resend-button" 
-              :disabled="resending || resendCountdown > 0 || loading"
-              :loading="resending && resendCountdown === 0"
+          </el-form-item>
+          
+          <el-form-item label="验证码" prop="code" class="verification-code-item">
+            <div class="verification-code-container">
+              <el-input 
+                v-model="form.code"
+                placeholder="请输入6位验证码"
+                :disabled="loading"
+              >
+                <template #prefix>
+                  <el-icon><Key /></el-icon>
+                </template>
+              </el-input>
+              <el-button 
+                type="primary" 
+                :disabled="resending" 
+                @click="resendCode"
+                class="send-code-button"
+              >
+                {{ resendCountdown > 0 ? `${resendCountdown}秒后重试` : '重新获取验证码' }}
+              </el-button>
+            </div>
+          </el-form-item>
+          
+          <el-form-item label="新密码" prop="password">
+            <el-input 
+              v-model="form.password"
+              type="password"
+              placeholder="请设置新密码"
+              :disabled="loading"
+              show-password
             >
-              <span v-if="resendCountdown > 0">{{ resendCountdown }}秒后重发</span>
-              <span v-else>重新发送</span>
+              <template #prefix>
+                <el-icon><Lock /></el-icon>
+              </template>
+            </el-input>
+            <div class="password-strength">
+              <span>密码强度：</span>
+              <div class="strength-indicator">
+                <div 
+                  class="strength-bar" 
+                  :style="{ width: (passwordStrength.score / 6) * 100 + '%', background: passwordStrength.color }"
+                ></div>
+              </div>
+              <span :style="{ color: passwordStrength.color }">{{ passwordStrength.level }}</span>
+            </div>
+          </el-form-item>
+          
+          <el-form-item label="确认新密码" prop="confirmPassword">
+            <el-input 
+              v-model="form.confirmPassword"
+              type="password"
+              placeholder="请再次输入新密码"
+              :disabled="loading"
+              show-password
+            >
+              <template #prefix>
+                <el-icon><Lock /></el-icon>
+              </template>
+            </el-input>
+          </el-form-item>
+          
+          <el-button 
+            type="primary" 
+            :loading="loading" 
+            class="submit-button" 
+            @click="handleSubmit(formRef)"
+          >
+            确认重置密码
+          </el-button>
+          
+          <div class="form-footer">
+            <el-button type="text" @click="$router.push('/login')" class="login-link" :disabled="loading">
+              返回登录
             </el-button>
           </div>
-          <div class="form-tip">验证码将发送到您的邮箱，有效期5分钟</div>
-        </el-form-item>
-        
-        <el-form-item label="新密码" prop="password">
-          <el-input 
-            v-model="form.password"
-            type="password"
-            placeholder="请输入新密码（至少6个字符）"
-            show-password
-            :disabled="loading"
-            @input="() => formRef?.validateField('password')"
-            clearable
-          >
-            <template #prefix>
-              <el-icon><Lock /></el-icon>
-            </template>
-          </el-input>
-          <div class="password-strength" v-if="form.password">
-            <span>密码强度：</span>
-            <span :style="{ color: passwordStrength.color }">{{ passwordStrength.level }}</span>
-            <div class="strength-bar">
-              <div 
-                class="strength-level" 
-                :style="{ 
-                  width: `${Math.min(passwordStrength.score * 16, 100)}%`,
-                  backgroundColor: passwordStrength.color 
-                }"
-              ></div>
-            </div>
-            <div class="form-tip">建议使用字母、数字和特殊字符组合</div>
-          </div>
-        </el-form-item>
-        
-        <el-form-item label="确认密码" prop="confirmPassword">
-          <el-input 
-            v-model="form.confirmPassword"
-            type="password"
-            placeholder="请再次输入新密码"
-            show-password
-            :disabled="loading"
-            @keyup.enter="handleSubmit(formRef)"
-            @input="() => formRef?.validateField('confirmPassword')"
-            clearable
-          >
-            <template #prefix>
-              <el-icon><Lock /></el-icon>
-            </template>
-          </el-input>
-        </el-form-item>
-        
-        <el-button 
-          type="primary" 
-          :loading="loading" 
-          class="submit-button" 
-          @click="handleSubmit(formRef)"
-        >
-          重置密码
-        </el-button>
-        
-        <div class="form-footer">
-          <el-button @click="goToForgotPassword" type="text" class="back-link" :disabled="loading">
-            返回上一步
-          </el-button>
-          <el-divider direction="vertical" />
-          <el-button @click="goToLogin" type="text" class="login-link" :disabled="loading">
-            返回登录
-          </el-button>
-        </div>
-      </el-form>
+        </el-form>
+      </div>
     </div>
   </div>
 </template>
 
 <style scoped>
+.auth-container {
+  display: flex;
+  height: 100vh;
+  width: 100%;
+  overflow: hidden;
+  background: linear-gradient(135deg, #4a0060 0%, #1a0d3b 100%);
+}
+
+/* 左侧学校信息区域样式 */
+.school-info {
+  flex: 1;
+  color: white;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
+  text-align: center;
+  max-width: 42%;
+  margin-left: 5%;
+}
+
+.school-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.school-logo {
+  margin-right: 20px;
+}
+
+.school-logo img {
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  object-fit: cover;
+  margin-top: 20px;
+}
+
+.school-name {
+  text-align: left;
+}
+
+.school-name h1 {
+  font-size: 65px;
+  margin-bottom: 10px;
+  font-weight: 500;
+  font-family: "华文行楷", "STXingkai", serif;
+  width: 100%;
+}
+
+.school-name h2 {
+  font-size: 16px;
+  font-weight: 400;
+  margin-bottom: 20px;
+  letter-spacing: 1px;
+  font-family: "Noto Serif SC", serif;
+  font-weight: 900;
+}
+
+.department-info {
+  font-size: 18px;
+  line-height: 1.6;
+}
+
+/* 右侧重置密码区域样式 */
 .reset-password-container {
+  flex: 1;
   display: flex;
   justify-content: center;
   align-items: center;
-  min-height: 100vh;
-  background: linear-gradient(120deg, #29205e 0%, #4e3abb 100%);
-  padding: 20px 0;
   position: relative;
   overflow: hidden;
+  max-width: 58%;
 }
 
 .reset-password-container::before {
@@ -425,6 +482,8 @@ const goToLogin = () => {
   position: relative;
   z-index: 2;
   transition: all 0.3s ease;
+  max-height: 90vh;
+  overflow-y: auto;
 }
 
 .reset-password-box:hover {
@@ -441,6 +500,9 @@ const goToLogin = () => {
 
 .logo {
   height: 60px;
+  width: 60px;
+  border-radius: 50%;
+  object-fit: cover;
   margin-bottom: 10px;
 }
 
@@ -469,48 +531,37 @@ const goToLogin = () => {
   width: 100%;
 }
 
-.form-tip {
-  font-size: 12px;
-  color: #909399;
-  margin-top: 4px;
-}
-
-.code-input-group {
-  display: flex;
-  gap: 10px;
-}
-
-.code-input-group .el-input {
-  flex: 1;
-}
-
-.code-input-group .el-button {
-  width: 130px;
-  white-space: nowrap;
-  font-size: 13px;
-  padding: 0 10px;
-}
-
 .password-strength {
   display: flex;
   align-items: center;
   font-size: 12px;
-  margin-top: 8px;
-  flex-wrap: wrap;
+  margin-top: 5px;
+  color: #606266;
+}
+
+.strength-indicator {
+  flex: 1;
+  height: 6px;
+  background-color: #eee;
+  border-radius: 3px;
+  margin: 0 8px;
+  overflow: hidden;
 }
 
 .strength-bar {
-  width: 100px;
-  height: 4px;
-  background-color: #e6e6e6;
-  border-radius: 2px;
-  overflow: hidden;
-  margin-left: 8px;
+  height: 100%;
+  border-radius: 3px;
+  transition: all 0.3s ease;
 }
 
-.strength-level {
-  height: 100%;
-  transition: width 0.3s, background-color 0.3s;
+.verification-code-container {
+  display: flex;
+  gap: 10px;
+}
+
+.send-code-button {
+  width: 140px;
+  font-size: 14px;
 }
 
 .submit-button {
@@ -518,46 +569,68 @@ const goToLogin = () => {
   padding: 12px 0;
   font-size: 16px;
   margin-top: 20px;
+  margin-bottom: 20px;
 }
 
 .form-footer {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  margin-top: 20px;
+  text-align: center;
+  color: #606266;
 }
 
-.back-link,
 .login-link {
   font-weight: bold;
 }
 
-.el-divider {
-  margin: 0 10px;
-}
-
-/* 添加自定义样式确保验证状态图标正确显示 */
-:deep(.el-form-item.is-success .el-input__wrapper) {
-  border-color: #67c23a !important;
-  box-shadow: 0 0 0 1px #67c23a inset !important;
-}
-
-:deep(.el-form-item.is-error .el-input__wrapper) {
-  border-color: #f56c6c !important;
-  box-shadow: 0 0 0 1px #f56c6c inset !important;
-}
-
-:deep(.el-form-item__error) {
-  color: #f56c6c;
-}
-
-:deep(.el-form-item.is-success .el-input__validateIcon) {
-  color: #67c23a;
-  display: inline-flex !important;
-}
-
-:deep(.el-form-item.is-error .el-input__validateIcon) {
-  color: #f56c6c;
-  display: inline-flex !important;
+/* 响应式调整 */
+@media (max-width: 1024px) {
+  .auth-container {
+    flex-direction: column;
+  }
+  
+  .school-info,
+  .reset-password-container {
+    flex: none;
+    width: 100%;
+    max-width: 100%;
+    margin-left: 0;
+  }
+  
+  .school-info {
+    padding: 20px 0;
+  }
+  
+  .school-header {
+    justify-content: center;
+  }
+  
+  .school-logo img {
+    width: 80px;
+    height: 80px;
+  }
+  
+  .school-name h1 {
+    font-size: 32px;
+  }
+  
+  .school-name h2 {
+    font-size: 14px;
+  }
+  
+  .department-info {
+    font-size: 16px;
+  }
+  
+  .reset-password-box {
+    width: 90%;
+    padding: 30px;
+  }
+  
+  .verification-code-container {
+    flex-direction: column;
+  }
+  
+  .send-code-button {
+    width: 100%;
+  }
 }
 </style> 

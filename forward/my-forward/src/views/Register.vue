@@ -299,140 +299,204 @@ const goToLogin = () => {
 </script>
 
 <template>
-  <div class="register-container">
-    <div class="register-box">
-      <div class="logo-container">
-        <img src="/logo.png" alt="Logo" class="logo">
-        <h2 class="system-title">全国景区数据分析及可视化系统</h2>
+  <div class="auth-container">
+    <!-- 左侧学校信息区域 -->
+    <div class="school-info">
+      <div class="school-header">
+        <div class="school-logo">
+          <img src="/logo-zijin.png" alt="南京理工大学紫金学院" class="logo-image">
+        </div>
+        <div class="school-name">
+          <h1>南京理工大学紫金学院</h1>
+          <h2>NANJING UNIVERSITY OF SCIENCE AND TECHNOLOGY ZIJIN COLLEGE</h2>
+        </div>
       </div>
-      
-      <h3 class="register-title">用户注册</h3>
-      
-      <el-form
-        ref="registerFormRef"
-        :model="registerForm"
-        :rules="rules"
-        label-position="top"
-        class="register-form"
-        status-icon
-        :validate-on-rule-change="false"
-        validate-on-input
-      >
-        <el-form-item label="用户名" prop="username">
-          <el-input 
-            v-model="registerForm.username"
-            placeholder="请输入用户名（3-20个字符）"
-            prefix-icon="User"
-            :disabled="loading"
-            @input="() => registerFormRef?.validateField('username')"
-            clearable
-          />
-          <div class="form-item-tip">仅支持字母、数字、下划线和汉字</div>
-        </el-form-item>
+      <div class="department-info">
+        <p>计算机与人工智能学院</p>
+        <p>2025届本科毕业设计</p>
+      </div>
+    </div>
+    
+    <!-- 右侧注册区域 -->
+    <div class="register-container">
+      <div class="register-box">
+        <div class="logo-container">
+          <img src="/logo.png" alt="Logo" class="logo">
+          <h2 class="system-title">全国景区数据分析及可视化系统</h2>
+        </div>
         
-        <el-form-item label="邮箱" prop="email">
-          <el-input 
-            v-model="registerForm.email"
-            placeholder="请输入邮箱"
-            prefix-icon="Message"
-            :disabled="loading"
-            @input="() => registerFormRef?.validateField('email')"
-            clearable
-          />
-          <div class="form-item-tip">用于接收验证码和找回密码</div>
-        </el-form-item>
+        <h3 class="register-title">用户注册</h3>
         
-        <el-form-item label="密码" prop="password">
-          <el-input 
-            v-model="registerForm.password"
-            type="password"
-            placeholder="请输入密码（至少6个字符）"
-            prefix-icon="Lock"
-            show-password
-            :disabled="loading"
-            @input="() => registerFormRef?.validateField('password')"
-            clearable
-          />
-          <div class="password-strength" v-if="registerForm.password">
-            <span>密码强度：</span>
-            <span :style="{ color: passwordStrength.color }">{{ passwordStrength.level }}</span>
-            <div class="strength-bar">
-              <div 
-                class="strength-level" 
-                :style="{ 
-                  width: `${Math.min(passwordStrength.score * 16, 100)}%`,
-                  backgroundColor: passwordStrength.color 
-                }"
-              ></div>
-            </div>
-          </div>
-          <div class="form-item-tip">建议使用字母、数字和特殊字符组合</div>
-        </el-form-item>
-        
-        <el-form-item label="确认密码" prop="confirmPassword">
-          <el-input 
-            v-model="registerForm.confirmPassword"
-            type="password"
-            placeholder="请再次输入密码"
-            prefix-icon="Lock"
-            show-password
-            :disabled="loading"
-            @input="() => registerFormRef?.validateField('confirmPassword')"
-            clearable
-          />
-        </el-form-item>
-        
-        <el-form-item label="验证码" prop="code">
-          <div class="code-input-group">
+        <el-form
+          ref="registerFormRef"
+          :model="registerForm"
+          :rules="rules"
+          label-position="top"
+          class="register-form"
+          status-icon
+        >
+          <el-form-item label="用户名" prop="username">
             <el-input 
-              v-model="registerForm.code"
-              placeholder="请输入6位验证码"
-              prefix-icon="Key"
+              v-model="registerForm.username"
+              placeholder="请设置用户名（3-20个字符）"
               :disabled="loading"
-              @input="() => registerFormRef?.validateField('code')"
-              clearable
             />
-            <el-button 
-              type="primary" 
-              :disabled="sendingCode || countdown > 0 || loading" 
-              @click="sendCode"
-            >
-              {{ countdown > 0 ? `${countdown}秒后重新发送` : '获取验证码' }}
+          </el-form-item>
+          
+          <el-form-item label="邮箱" prop="email">
+            <el-input 
+              v-model="registerForm.email"
+              placeholder="请输入有效的邮箱地址"
+              :disabled="loading"
+            />
+          </el-form-item>
+          
+          <el-form-item label="密码" prop="password">
+            <el-input 
+              v-model="registerForm.password"
+              type="password"
+              placeholder="请设置密码（至少6个字符）"
+              :disabled="loading"
+              show-password
+            />
+            <div class="password-strength">
+              <span>密码强度：</span>
+              <div class="strength-indicator">
+                <div 
+                  class="strength-bar" 
+                  :style="{ width: (passwordStrength.score / 6) * 100 + '%', background: passwordStrength.color }"
+                ></div>
+              </div>
+              <span :style="{ color: passwordStrength.color }">{{ passwordStrength.level }}</span>
+            </div>
+          </el-form-item>
+          
+          <el-form-item label="确认密码" prop="confirmPassword">
+            <el-input 
+              v-model="registerForm.confirmPassword"
+              type="password"
+              placeholder="请再次输入密码"
+              :disabled="loading"
+              show-password
+            />
+          </el-form-item>
+          
+          <el-form-item label="验证码" prop="code" class="verification-code-item">
+            <div class="verification-code-container">
+              <el-input 
+                v-model="registerForm.code"
+                placeholder="请输入6位验证码"
+                :disabled="loading"
+                style="flex: 1"
+              />
+              <el-button 
+                type="primary" 
+                :disabled="sendingCode || loading" 
+                @click="sendCode"
+                class="send-code-button"
+              >
+                {{ countdown > 0 ? `${countdown}秒后重试` : '发送验证码' }}
+              </el-button>
+            </div>
+          </el-form-item>
+          
+          <el-button 
+            type="primary" 
+            :loading="loading" 
+            class="register-button" 
+            @click="handleRegister(registerFormRef)"
+          >
+            注册
+          </el-button>
+          
+          <div class="form-footer">
+            <span>已有账号? </span>
+            <el-button @click="goToLogin" type="text" class="login-link">
+              登录
             </el-button>
           </div>
-          <div class="form-item-tip">验证码将发送到您的邮箱</div>
-        </el-form-item>
-        
-        <el-button 
-          type="primary" 
-          class="register-button" 
-          :loading="loading"
-          @click="handleRegister(registerFormRef)"
-        >
-          注册
-        </el-button>
-        
-        <div class="form-footer">
-          <span>已有账号？</span>
-          <el-button @click="goToLogin" type="text" class="login-link" :disabled="loading">
-            立即登录
-          </el-button>
-        </div>
-      </el-form>
+        </el-form>
+      </div>
     </div>
   </div>
 </template>
 
 <style scoped>
+.auth-container {
+  display: flex;
+  height: 100vh;
+  width: 100%;
+  overflow: hidden;
+  background: linear-gradient(135deg, #4a0060 0%, #1a0d3b 100%);
+}
+
+/* 左侧学校信息区域样式 */
+.school-info {
+  flex: 1;
+  color: white;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
+  text-align: center;
+  max-width: 42%;
+  margin-left: 5%;
+}
+
+.school-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.school-logo {
+  margin-right: 20px;
+}
+
+.school-logo img {
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  object-fit: cover;
+  margin-top: 20px;
+}
+
+.school-name {
+  text-align: left;
+}
+
+.school-name h1 {
+  font-size: 65px;
+  margin-bottom: 10px;
+  font-weight: 500;
+  font-family: "华文行楷", "STXingkai", serif;
+  width: 100%;
+}
+
+.school-name h2 {
+  font-size: 16px;
+  font-weight: 400;
+  margin-bottom: 20px;
+  letter-spacing: 1px;
+  font-family: "Noto Serif SC", serif;
+  font-weight: 900;
+}
+
+.department-info {
+  font-size: 18px;
+  line-height: 1.6;
+}
+
+/* 右侧注册区域样式 */
 .register-container {
+  flex: 1;
   display: flex;
   justify-content: center;
   align-items: center;
-  min-height: 100vh;
-  background: linear-gradient(120deg, #29205e 0%, #4e3abb 100%);
-  padding: 20px 0;
   position: relative;
   overflow: hidden;
+  max-width: 58%;
 }
 
 .register-container::before {
@@ -456,6 +520,8 @@ const goToLogin = () => {
   position: relative;
   z-index: 2;
   transition: all 0.3s ease;
+  max-height: 90vh;
+  overflow-y: auto;
 }
 
 .register-box:hover {
@@ -472,6 +538,9 @@ const goToLogin = () => {
 
 .logo {
   height: 60px;
+  width: 60px;
+  border-radius: 50%;
+  object-fit: cover;
   margin-bottom: 10px;
 }
 
@@ -493,48 +562,37 @@ const goToLogin = () => {
   width: 100%;
 }
 
-.form-item-tip {
-  font-size: 12px;
-  color: #909399;
-  margin-top: 4px;
-}
-
 .password-strength {
   display: flex;
   align-items: center;
   font-size: 12px;
-  margin-top: 8px;
-  flex-wrap: wrap;
+  margin-top: 5px;
+  color: #606266;
+}
+
+.strength-indicator {
+  flex: 1;
+  height: 6px;
+  background-color: #eee;
+  border-radius: 3px;
+  margin: 0 8px;
+  overflow: hidden;
 }
 
 .strength-bar {
-  width: 100px;
-  height: 4px;
-  background-color: #e6e6e6;
-  border-radius: 2px;
-  overflow: hidden;
-  margin-left: 8px;
-}
-
-.strength-level {
   height: 100%;
-  transition: width 0.3s, background-color 0.3s;
+  border-radius: 3px;
+  transition: all 0.3s ease;
 }
 
-.code-input-group {
+.verification-code-container {
   display: flex;
   gap: 10px;
 }
 
-.code-input-group .el-input {
-  flex: 1;
-}
-
-.code-input-group .el-button {
-  width: 130px;
-  font-size: 13px;
-  padding: 0 10px;
-  white-space: nowrap;
+.send-code-button {
+  width: 140px;
+  font-size: 14px;
 }
 
 .register-button {
@@ -542,11 +600,11 @@ const goToLogin = () => {
   padding: 12px 0;
   font-size: 16px;
   margin-top: 20px;
+  margin-bottom: 20px;
 }
 
 .form-footer {
   text-align: center;
-  margin-top: 20px;
   color: #606266;
 }
 
@@ -554,28 +612,56 @@ const goToLogin = () => {
   font-weight: bold;
 }
 
-/* 添加自定义样式确保验证状态图标正确显示 */
-:deep(.el-form-item.is-success .el-input__wrapper) {
-  border-color: #67c23a !important;
-  box-shadow: 0 0 0 1px #67c23a inset !important;
-}
-
-:deep(.el-form-item.is-error .el-input__wrapper) {
-  border-color: #f56c6c !important;
-  box-shadow: 0 0 0 1px #f56c6c inset !important;
-}
-
-:deep(.el-form-item__error) {
-  color: #f56c6c;
-}
-
-:deep(.el-form-item.is-success .el-input__validateIcon) {
-  color: #67c23a;
-  display: inline-flex !important;
-}
-
-:deep(.el-form-item.is-error .el-input__validateIcon) {
-  color: #f56c6c;
-  display: inline-flex !important;
+/* 响应式调整 */
+@media (max-width: 1024px) {
+  .auth-container {
+    flex-direction: column;
+  }
+  
+  .school-info,
+  .register-container {
+    flex: none;
+    width: 100%;
+    max-width: 100%;
+    margin-left: 0;
+  }
+  
+  .school-info {
+    padding: 20px 0;
+  }
+  
+  .school-header {
+    justify-content: center;
+  }
+  
+  .school-logo img {
+    width: 80px;
+    height: 80px;
+  }
+  
+  .school-name h1 {
+    font-size: 32px;
+  }
+  
+  .school-name h2 {
+    font-size: 14px;
+  }
+  
+  .department-info {
+    font-size: 16px;
+  }
+  
+  .register-box {
+    width: 90%;
+    padding: 30px;
+  }
+  
+  .verification-code-container {
+    flex-direction: column;
+  }
+  
+  .send-code-button {
+    width: 100%;
+  }
 }
 </style> 

@@ -1458,7 +1458,7 @@ const updateBarChartWithDistrictData = (districtData: Array<{name: string, value
         <div class="card-header">
           <span>景区基础分布分析</span>
           <div class="header-buttons">
-            <el-button @click="clearMapCache" type="info" size="small">
+            <el-button @click="clearMapCache" type="primary" size="small">
               刷新地图
             </el-button>
             <el-button v-if="showCityMap" @click="backToProvince" type="primary" size="small">
@@ -1642,7 +1642,7 @@ const updateBarChartWithDistrictData = (districtData: Array<{name: string, value
 
 .loading-text {
   margin-top: 15px;
-  color: #909399;
+  color: #409EFF;
   font-size: 14px;
 }
 

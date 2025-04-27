@@ -9,7 +9,11 @@ export function login(username_or_email: string, password: string) {
   return request({
     url: '/api/login/',
     method: 'post',
-    data: { username_or_email, password }
+    data: { username_or_email, password },
+    withCredentials: true, // 允许跨域请求携带身份凭证
+    headers: {
+      'Content-Type': 'application/json',
+    }
   });
 }
 
@@ -29,6 +33,10 @@ export function register(username: string, email: string, password: string, code
       email,
       password,
       code
+    },
+    withCredentials: true, // 允许跨域请求携带身份凭证
+    headers: {
+      'Content-Type': 'application/json',
     }
   });
 }
@@ -175,5 +183,21 @@ export function deleteAccount(password: string) {
     url: '/api/users/delete-account/',
     method: 'post',
     data: { password }
+  });
+}
+
+/**
+ * 发送邮箱验证码
+ * @param email 邮箱
+ * @param isProfileUpdate 是否为个人资料更新场景
+ */
+export function sendEmailCode(email: string, isProfileUpdate: boolean = false) {
+  return request({
+    url: '/api/email/send-code/',
+    method: 'post',
+    data: { 
+      email,
+      is_profile_update: isProfileUpdate
+    }
   });
 } 

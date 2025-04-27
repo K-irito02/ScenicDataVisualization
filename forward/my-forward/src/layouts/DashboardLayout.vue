@@ -144,7 +144,7 @@ const menuGroups = [
       <el-container>
         <el-header class="layout-header">
           <div class="header-left">
-            <h2 class="page-title">{{ route.meta.title || '全国景区的数据分析及可视化系统' }}</h2>
+            <h2 class="page-title">{{ route.meta.title || '全国景区数据分析及可视化系统' }}</h2>
           </div>
           <div class="header-right">
             <el-dropdown>

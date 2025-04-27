@@ -3,13 +3,31 @@ import { useUserStore } from '../stores/user';
 import { ElMessage } from 'element-plus';
 import errorLogger from './error-logger';
 
+// 获取CSRF令牌函数
+function getCsrfToken() {
+  // 从cookie中获取csrf token
+  const name = 'csrftoken=';
+  const decodedCookie = decodeURIComponent(document.cookie);
+  const cookieArray = decodedCookie.split(';');
+  
+  for (let i = 0; i < cookieArray.length; i++) {
+    let cookie = cookieArray[i].trim();
+    if (cookie.indexOf(name) === 0) {
+      return cookie.substring(name.length, cookie.length);
+    }
+  }
+  return '';
+}
+
 // 创建axios实例
 const instance = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || '/',
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json'
-  }
+  },
+  // 设置跨域请求携带凭证
+  withCredentials: true
 });
 
 // 请求拦截器
@@ -20,6 +38,12 @@ instance.interceptors.request.use(
     // 对于登录、注册等公开API，不需要检查token
     const publicAPIs = ['/api/login/', '/api/register/', '/api/email/send-code/', '/api/forgot-password/', '/api/reset-password/', '/api/admin/frontend-error/', '/api/scenic/search/'];
     const isPublicAPI = publicAPIs.some(api => config.url?.includes(api));
+    
+    // 添加CSRF令牌到请求头
+    const csrfToken = getCsrfToken();
+    if (csrfToken) {
+      config.headers['X-CSRFToken'] = csrfToken;
+    }
     
     // 如果是景区搜索API且用户已登录，添加身份认证信息
     if (config.url?.includes('/api/scenic/search/') && userStore.isAuthenticated()) {

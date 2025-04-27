@@ -100,7 +100,7 @@ source venv/bin/activate
 ```bash
 # 从GitHub拉取特定分支的backend文件夹
 # 1. 确保安装了git
-sudo apt install -y git
+# sudo apt install -y git
 
 # 2. 导航到目标父目录
 cd /var/www/scenic
@@ -175,10 +175,29 @@ MEDIA_ROOT = '/var/www/scenic/media'
 
 # 安全密钥（生成新的密钥）
 SECRET_KEY = '生成一个新的安全密钥'
+
+# 添加具体的允许的域名列表作为备选方案
+CORS_ALLOWED_ORIGINS = [
+    'http://localhost:8080',
+    'http://localhost:5173',
+    'http://localhost:3000',
+    'http://127.0.0.1:8080',
+    'http://127.0.0.1:5173',
+    'http://127.0.0.1:3000',
+    # 在这里添加您的生产环境域名
+]
+
 ```
 
 ### 6. 配置MySQL数据库
-```bash
+# 数据库导入
+# 先登录MySQL
+mysql -u root -p
+# 登录成功后，在MySQL提示符下执行
+use scenic_area;
+source /opt/scenic_area.sql;
+
+<!-- ```bash
 sudo mysql
 ```
 
@@ -188,9 +207,21 @@ CREATE USER 'scenic_user'@'localhost' IDENTIFIED BY '设置一个强密码';
 GRANT ALL PRIVILEGES ON scenic_area.* TO 'scenic_user'@'localhost';
 FLUSH PRIVILEGES;
 EXIT;
-```
+``` -->
 
 ### 7. 数据库迁移
+# 更改整个项目目录权限（推荐做法）
+# 如果这是您的开发环境，最好是给整个项目目录合适的权限：
+# 查看目录的当前所有者和权限
+ls -la /var/www/scenic/backend/scenic_data/migrations/
+
+# 更改目录所有权给当前用户
+sudo chown -R ubuntu:ubuntu /var/www/scenic/backend/scenic_data/migrations/
+
+# 或者添加写入权限
+sudo chmod -R 775 /var/www/scenic/backend/scenic_data/migrations/
+
+
 ```bash
 cd /var/www/scenic/backend
 python manage.py makemigrations
@@ -223,7 +254,8 @@ After=network.target
 User=www-data
 Group=www-data
 WorkingDirectory=/var/www/scenic/backend
-ExecStart=/var/www/scenic/venv/bin/gunicorn --workers 3 --bind 127.0.0.1:8000 wsgi:application
+Environment="PYTHONPATH=/var/www/scenic/backend"
+ExecStart=/var/www/scenic/venv/bin/gunicorn --workers 3 --bind unix:/var/www/scenic/scenic.sock wsgi:application
 
 [Install]
 WantedBy=multi-user.target
@@ -234,6 +266,10 @@ WantedBy=multi-user.target
 sudo systemctl start scenic-gunicorn
 sudo systemctl enable scenic-gunicorn
 ```
+
+sudo systemctl daemon-reload
+sudo systemctl restart scenic-gunicorn
+sudo systemctl restart nginx
 
 ## 三、前端部署准备
 
@@ -264,6 +300,7 @@ VITE_API_BASE_URL=https://你的域名 # 或 http://你的服务器IP
 
 ### 3. 安装前端依赖
 ```bash
+sudo chown -R ubuntu:ubuntu /var/www/scenic/
 cd /var/www/scenic/frontend
 npm install
 ```
@@ -346,7 +383,7 @@ sudo ufw allow https
 sudo ufw enable
 ```
 
-## 六、HTTPS配置（可选但推荐）
+<!-- ## 六、HTTPS配置（可选但推荐）
 
 ### 1. 安装Certbot
 ```bash
@@ -356,7 +393,7 @@ sudo apt install -y certbot python3-certbot-nginx
 ### 2. 获取并配置SSL证书
 ```bash
 sudo certbot --nginx -d 你的域名
-```
+``` -->
 
 ## 七、监控与维护
 

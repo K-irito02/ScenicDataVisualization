@@ -69,14 +69,14 @@ class TimeData(models.Model):
     id = models.CharField(max_length=20, primary_key=True, blank=True, verbose_name='景区ID')
     scenic_name = models.CharField(max_length=100, verbose_name='景区名')
     city_name = models.CharField(max_length=50, verbose_name='城市名')
-    time_range = models.CharField(max_length=200, blank=True, verbose_name='开放时间段')
-    date_range = models.CharField(max_length=200, blank=True, verbose_name='日期范围')
-    weekdays = models.CharField(max_length=100, blank=True, verbose_name='适用工作日')
-    season = models.CharField(max_length=50, blank=True, verbose_name='季节')
-    is_holiday = models.BooleanField(default=False, verbose_name='是否节假日')
-    is_closed = models.BooleanField(default=False, verbose_name='是否关闭')
-    is_24h = models.BooleanField(default=False, verbose_name='是否24小时开放')
-    stop_ticket_time = models.CharField(max_length=50, blank=True, verbose_name='停止售票时间')
+    time_range = models.CharField(max_length=200, null=True, blank=True, verbose_name='开放时间段')
+    date_range = models.CharField(max_length=200, null=True, blank=True, verbose_name='日期范围')
+    weekdays = models.CharField(max_length=100, null=True, blank=True, verbose_name='适用工作日')
+    season = models.CharField(max_length=50, null=True, blank=True, verbose_name='季节')
+    is_holiday = models.BooleanField(default=False, null=True, blank=True, verbose_name='是否节假日')
+    is_closed = models.BooleanField(default=False, null=True, blank=True, verbose_name='是否关闭')
+    is_24h = models.BooleanField(default=False, null=True, blank=True, verbose_name='是否24小时开放')
+    stop_ticket_time = models.CharField(max_length=50, null=True, blank=True, verbose_name='停止售票时间')
     
     def __str__(self):
         return self.scenic_name
@@ -103,10 +103,10 @@ class HierarchyTicketBase(models.Model):
     """层级票价基础模型（抽象类）"""
     level = models.CharField(max_length=50, primary_key=True, verbose_name='等级名称')
     count = models.IntegerField(verbose_name='该等级的景区数量')
-    average_price = models.FloatField(verbose_name='平均票价')
-    min_price = models.FloatField(verbose_name='最低票价')
-    max_price = models.FloatField(verbose_name='最高票价')
-    median_price = models.FloatField(verbose_name='中位数票价')
+    average_price = models.FloatField(blank=True, null=True, verbose_name='平均票价')
+    min_price = models.FloatField(blank=True, null=True, verbose_name='最低票价')
+    max_price = models.FloatField(blank=True, null=True, verbose_name='最高票价')
+    median_price = models.FloatField(blank=True, null=True, verbose_name='中位数票价')
     
     class Meta:
         abstract = True
@@ -117,6 +117,7 @@ class ScenicLevelPrice(HierarchyTicketBase):
         verbose_name = '景区等级票价'
         verbose_name_plural = '景区等级票价'
         db_table = 'scenic_level_price'
+        managed = True
 
 class MuseumLevelPrice(HierarchyTicketBase):
     """博物馆等级与门票价格关系"""
@@ -124,6 +125,7 @@ class MuseumLevelPrice(HierarchyTicketBase):
         verbose_name = '博物馆等级票价'
         verbose_name_plural = '博物馆等级票价'
         db_table = 'museum_level_price'
+        managed = True
 
 class GeoLogicalParkLevelPrice(HierarchyTicketBase):
     """地质公园等级与门票价格关系"""
@@ -131,6 +133,7 @@ class GeoLogicalParkLevelPrice(HierarchyTicketBase):
         verbose_name = '地质公园等级票价'
         verbose_name_plural = '地质公园等级票价'
         db_table = 'geological_park_level_price'
+        managed = True
 
 class ForestParkLevelPrice(HierarchyTicketBase):
     """森林公园等级与门票价格关系"""
@@ -138,6 +141,7 @@ class ForestParkLevelPrice(HierarchyTicketBase):
         verbose_name = '森林公园等级票价'
         verbose_name_plural = '森林公园等级票价'
         db_table = 'forest_park_level_price'
+        managed = True
 
 class WetlandLevelPrice(HierarchyTicketBase):
     """湿地公园等级与门票价格关系"""
@@ -145,6 +149,7 @@ class WetlandLevelPrice(HierarchyTicketBase):
         verbose_name = '湿地公园等级票价'
         verbose_name_plural = '湿地公园等级票价'
         db_table = 'wetland_level_price'
+        managed = True
 
 class CulturalRelicLevelPrice(HierarchyTicketBase):
     """文物保护单位等级与门票价格关系"""
@@ -152,6 +157,7 @@ class CulturalRelicLevelPrice(HierarchyTicketBase):
         verbose_name = '文物保护单位等级票价'
         verbose_name_plural = '文物保护单位等级票价'
         db_table = 'cultural_relic_level_price'
+        managed = True
 
 class NatureReserveLevelPrice(HierarchyTicketBase):
     """自然景区等级与门票价格关系"""
@@ -159,3 +165,4 @@ class NatureReserveLevelPrice(HierarchyTicketBase):
         verbose_name = '自然景区等级票价'
         verbose_name_plural = '自然景区等级票价'
         db_table = 'nature_reserve_level_price'
+        managed = True

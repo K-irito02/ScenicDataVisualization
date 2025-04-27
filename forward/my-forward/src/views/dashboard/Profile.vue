@@ -21,9 +21,15 @@ const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
 const profileForm = reactive({
   username: userStore.username,
   email: userStore.email,
+  email_code: '',
   location: userStore.location,
   avatar: userStore.avatar
 })
+
+const originalEmail = ref(userStore.email) // 保存原始邮箱用于比较
+const showEmailCodeField = ref(false) // 控制验证码字段显示
+const emailCodeSending = ref(false) // 验证码发送状态
+const emailCodeCountdown = ref(0) // 验证码倒计时
 
 const profileFormRef = ref<FormInstance>()
 
@@ -35,6 +41,19 @@ const rules = reactive<FormRules>({
   email: [
     { required: true, message: '请输入邮箱地址', trigger: 'blur' },
     { type: 'email', message: '请输入正确的邮箱地址', trigger: 'blur' }
+  ],
+  email_code: [
+    { validator: (_rule, value, callback) => {
+        if (showEmailCodeField.value && !value) {
+          callback(new Error('请输入验证码'));
+        } else if (value && value.length !== 6) {
+          callback(new Error('验证码为6位数字'));
+        } else {
+          callback();
+        }
+      }, 
+      trigger: 'blur' 
+    }
   ]
 })
 
@@ -135,6 +154,49 @@ const handleAvatarSuccess = (response: any) => {
   ElMessage.success('头像上传成功');
 }
 
+// 检查邮箱是否有变更
+const checkEmailChange = () => {
+  if (profileForm.email !== originalEmail.value) {
+    showEmailCodeField.value = true
+  } else {
+    showEmailCodeField.value = false
+    profileForm.email_code = '' // 清空验证码
+  }
+}
+
+// 发送邮箱验证码
+const sendEmailCode = async () => {
+  if (!profileForm.email) {
+    ElMessage.warning('请先输入邮箱地址')
+    return
+  }
+
+  if (!/^[\w-]+(\.[\w-]+)*@([\w-]+\.)+[a-zA-Z]{2,7}$/.test(profileForm.email)) {
+    ElMessage.warning('请输入有效的邮箱地址')
+    return
+  }
+
+  emailCodeSending.value = true
+  try {
+    await userStore.sendEmailCode(profileForm.email, true) // true表示是个人资料更新场景
+    ElMessage.success('验证码已发送，请查收邮件')
+    
+    // 设置倒计时
+    emailCodeCountdown.value = 60
+    const timer = setInterval(() => {
+      emailCodeCountdown.value--
+      if (emailCodeCountdown.value <= 0) {
+        clearInterval(timer)
+      }
+    }, 1000)
+  } catch (error: any) {
+    console.error('发送验证码失败:', error)
+    ElMessage.error(error.response?.data?.message || '发送验证码失败，请稍后重试')
+  } finally {
+    emailCodeSending.value = false
+  }
+}
+
 // 保存个人信息
 const saveProfile = async (formEl: FormInstance | undefined) => {
   if (!formEl) return
@@ -163,19 +225,33 @@ const saveProfile = async (formEl: FormInstance | undefined) => {
         // 确保资料表单中的avatar是最新的
         profileForm.avatar = avatarToSubmit;
         
-        console.log('提交更新的个人资料:', {
+        // 准备要提交的数据
+        const updateData: any = {
           username: profileForm.username,
           email: profileForm.email,
           location: profileForm.location,
           avatar: profileForm.avatar
-        });
+        }
         
-        await userStore.updateProfile({
-          username: profileForm.username,
-          email: profileForm.email,
-          location: profileForm.location,
-          avatar: profileForm.avatar
-        })
+        // 如果邮箱有变更，添加验证码
+        if (profileForm.email !== originalEmail.value) {
+          if (!profileForm.email_code) {
+            ElMessage.warning('修改邮箱需要验证码')
+            loading.value = false
+            return
+          }
+          updateData.email_code = profileForm.email_code
+        }
+        
+        console.log('提交更新的个人资料:', updateData);
+        
+        await userStore.updateProfile(updateData)
+        
+        // 更新原始邮箱
+        originalEmail.value = profileForm.email
+        // 隐藏验证码字段和清空验证码
+        showEmailCodeField.value = false
+        profileForm.email_code = ''
         
         // 成功后强制刷新头像显示
         setTimeout(() => {
@@ -188,7 +264,9 @@ const saveProfile = async (formEl: FormInstance | undefined) => {
         console.error('个人资料更新错误:', error);
         
         // 显示更详细的错误信息
-        if (error.response?.data?.errors?.avatar) {
+        if (error.response?.data?.errors?.email_code) {
+          ElMessage.error(`验证码错误: ${error.response.data.errors.email_code.join(', ')}`);
+        } else if (error.response?.data?.errors?.avatar) {
           ElMessage.error(`头像URL格式错误: ${error.response.data.errors.avatar.join(', ')}`);
         } else if (error.response?.data?.message) {
           ElMessage.error(error.response.data.message);
@@ -427,6 +505,15 @@ const handleDeleteAccount = async () => {
     deleteAccountLoading.value = false
   }
 }
+
+// 监听邮箱变更
+watch(() => profileForm.email, (newEmail) => {
+  if (newEmail !== originalEmail.value) {
+    showEmailCodeField.value = true
+  } else {
+    showEmailCodeField.value = false
+  }
+}, { immediate: true })
 </script>
 
 <template>
@@ -510,7 +597,21 @@ const handleDeleteAccount = async () => {
                 </el-form-item>
                 
                 <el-form-item label="邮箱" prop="email">
-                  <el-input v-model="profileForm.email" placeholder="请输入邮箱地址" />
+                  <el-input v-model="profileForm.email" placeholder="请输入邮箱地址" @input="checkEmailChange" />
+                </el-form-item>
+                
+                <el-form-item v-if="showEmailCodeField" label="验证码" prop="email_code">
+                  <div class="verify-code-input">
+                    <el-input v-model="profileForm.email_code" placeholder="请输入验证码" />
+                    <el-button 
+                      type="primary" 
+                      :disabled="emailCodeSending || emailCodeCountdown > 0" 
+                      @click="sendEmailCode"
+                    >
+                      {{ emailCodeCountdown > 0 ? `${emailCodeCountdown}秒后重试` : '获取验证码' }}
+                    </el-button>
+                  </div>
+                  <div class="verify-code-tip">修改邮箱需要先验证新邮箱，请输入发送到新邮箱的验证码</div>
                 </el-form-item>
                 
                 <el-form-item label="所在地" prop="location">
@@ -835,6 +936,21 @@ const handleDeleteAccount = async () => {
   width: 100%;
   padding: 15px 0;
   grid-column: 1 / -1; /* 确保在网格布局中占据所有列 */
+}
+
+.verify-code-input {
+  display: flex;
+  gap: 10px;
+}
+
+.verify-code-input .el-input {
+  flex: 1;
+}
+
+.verify-code-tip {
+  font-size: 12px;
+  color: #909399;
+  margin-top: 5px;
 }
 
 @media (min-width: 768px) {

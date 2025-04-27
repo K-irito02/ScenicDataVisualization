@@ -9,7 +9,19 @@ import './assets/main.css'
 import * as ElementPlusIconsVue from '@element-plus/icons-vue'
 import axios from 'axios'
 import { errorLogger } from './api'
+import type { RouteLocationNormalized } from 'vue-router'
 // 移除懒加载插件，使用浏览器原生懒加载和Element Plus的loading指令
+
+// 创建标题更新函数
+const updateWindowTitle = (title: string) => {
+  document.title = title || '景区数据分析与可视化系统';
+};
+
+// 将favicon的标题与当前路由同步
+router.afterEach((to: RouteLocationNormalized) => {
+  const pageTitle = to.meta.title as string || '景区数据分析与可视化系统';
+  updateWindowTitle(pageTitle);
+});
 
 // 配置 axios
 axios.defaults.baseURL = import.meta.env.VITE_API_BASE_URL || '/'

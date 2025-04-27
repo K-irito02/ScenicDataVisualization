@@ -158,10 +158,45 @@ class ProfileUpdateSerializer(serializers.ModelSerializer):
     """用户资料更新序列化器"""
     username = serializers.CharField(source='user.username', required=False)
     email = serializers.EmailField(source='user.email', required=False)
+    email_code = serializers.CharField(write_only=True, required=False)
     
     class Meta:
         model = UserProfile
-        fields = ('username', 'email', 'avatar', 'location')
+        fields = ('username', 'email', 'email_code', 'avatar', 'location')
+    
+    def validate(self, data):
+        """验证当邮箱变更时，需要验证码"""
+        user_data = data.get('user', {})
+        email = user_data.get('email')
+        email_code = data.pop('email_code', None)
+        
+        # 获取当前用户的邮箱
+        current_user = self.instance.user
+        current_email = current_user.email if current_user else None
+        
+        # 如果正在修改邮箱地址
+        if email and current_email and email != current_email:
+            if not email_code:
+                raise serializers.ValidationError({"email_code": ["修改邮箱地址需要验证码"]})
+            
+            # 从Redis获取验证码
+            from .utils import redis_client
+            redis_key = f'email_code:{email}'
+            stored_code = redis_client.get(redis_key)
+            
+            if not stored_code:
+                raise serializers.ValidationError({"email_code": ["验证码已过期，请重新获取"]})
+            
+            if email_code != stored_code:
+                raise serializers.ValidationError({"email_code": ["验证码错误"]})
+            
+            # 验证码正确，删除Redis中的验证码
+            try:
+                redis_client.delete(redis_key)
+            except Exception as e:
+                print(f"删除Redis验证码失败: {str(e)}")
+        
+        return data
     
     def validate_avatar(self, value):
         """验证并处理avatar URL"""
