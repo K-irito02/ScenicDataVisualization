@@ -162,6 +162,10 @@ DATABASES = {
         'PASSWORD': '你的MySQL密码',
         'HOST': 'localhost',
         'PORT': '3306',
+        'OPTIONS': {
+            'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
+            'charset': 'utf8mb4',
+        },
     }
 }
 
@@ -297,6 +301,7 @@ nano /var/www/scenic/frontend/.env
 ```
 VITE_API_BASE_URL=https://你的域名 # 或 http://你的服务器IP
 ```
+www.k-irito.online
 
 ### 3. 安装前端依赖
 ```bash
@@ -304,6 +309,10 @@ sudo chown -R ubuntu:ubuntu /var/www/scenic/
 cd /var/www/scenic/frontend
 npm install
 ```
+步骤1：安装 Highcharts 核心库​​
+npm install highcharts --save
+​​步骤2：安装 Highcharts 类型声明（TypeScript 必需）​​
+npm install @types/highcharts --save-dev
 
 ### 4. 构建前端项目
 ```bash
@@ -360,10 +369,75 @@ server {
 ```
 
 ### 2. 启用站点配置并测试
+#### 若目录下已存在
+• 根本问题：  
+
+  `/etc/nginx/sites-enabled/` 目录下已存在名为 `scenic` 的文件或链接，导致无法重复创建。
+
+---
+
+**2. 解决方案**
+
+**方法1：删除现有文件后重新链接（推荐）**
+```bash
+# 1. 删除已存在的文件/链接
+sudo rm /etc/nginx/sites-enabled/scenic
+
+# 2. 重新创建符号链接
+sudo ln -s /etc/nginx/sites-available/scenic /etc/nginx/sites-enabled/
+```
+
+**方法2：强制覆盖（如果确认需要替换）**
+```bash
+sudo ln -sf /etc/nginx/sites-available/scenic /etc/nginx/sites-enabled/
+```
+• `-f` 参数会强制覆盖现有文件。
+
+
+**方法3：检查现有文件内容（谨慎操作）**
+如果不确定是否要删除，先查看现有文件内容：
+```bash
+# 查看文件类型（是真实文件还是符号链接）
+ls -l /etc/nginx/sites-enabled/scenic
+
+# 查看文件内容（如果是真实文件）
+cat /etc/nginx/sites-enabled/scenic
+```
+• 如果是无用的旧配置，用 方法1 删除。  
+
+• 如果是其他有效配置，建议重命名而非删除：
+
+  ```bash
+  sudo mv /etc/nginx/sites-enabled/scenic /etc/nginx/sites-enabled/scenic.backup
+  sudo ln -s /etc/nginx/sites-available/scenic /etc/nginx/sites-enabled/
+  ```
+
+---
+
+**3. 验证操作**
+```bash
+# 检查链接是否创建成功
+ls -l /etc/nginx/sites-enabled/ | grep scenic
+
+# 应显示类似输出：
+# lrwxrwxrwx 1 root root 35 May 10 10:00 scenic -> /etc/nginx/sites-available/scenic
+```
+sudo systemctl restart nginx  //重启服务	✅ 短暂中断
+
+#### 若目录下不存在
 ```bash
 sudo ln -s /etc/nginx/sites-available/scenic /etc/nginx/sites-enabled/
 sudo nginx -t
 sudo systemctl reload nginx
+# 1. sudo systemctl reload nginx 命令作用​​
+# ​​功能​​：让 Nginx 服务 ​​重新加载配置文件​​（如 nginx.conf 或 sites-available/ 下的配置）。
+# ​​特点​​：
+# ​​不停机​​：重新加载过程中，Nginx 保持运行，不会中断现有连接（无缝过渡）。
+# ​​安全​​：如果新配置有语法错误，会继续使用旧配置，避免服务崩溃。
+# ​​2. 适用场景​​
+# 修改了 Nginx 配置后（如添加新站点、调整反向代理规则）。
+# 更新 SSL 证书后需要重新加载。
+# 更改了负载均衡或缓存策略。
 ```
 
 ## 五、防火墙配置
@@ -384,8 +458,46 @@ sudo ufw enable
 ```
 
 <!-- ## 六、HTTPS配置（可选但推荐）
+步骤1：修改 Nginx 配置​​
+编辑你的 Nginx 站点配置文件（如 /etc/nginx/sites-available/scenic），确保包含以下规则：
 
-### 1. 安装Certbot
+server {
+    listen 80;
+    server_name www.k-irito.online;
+
+    # 允许 Certbot 验证路径
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/www/html;
+        default_type "text/plain";
+        try_files $uri =404;  # 确保未找到文件时返回 404
+    }
+
+    # 其他配置...
+    location / {
+        root /var/www/scenic/frontend/dist;  # 前端构建产物路径
+        try_files $uri $uri/ /index.html;
+    }
+}
+步骤2：创建验证目录并设置权限​​
+sudo mkdir -p /var/www/html/.well-known/acme-challenge
+sudo chown -R ubuntu:ubuntu /var/www/html/.well-known
+sudo chmod -R 755 /var/www/html/.well-known
+
+​步骤3：测试并重载 Nginx​​
+# 测试配置语法
+sudo nginx -t
+
+# 重载配置
+sudo systemctl reload nginx
+步骤4：验证路径是否返回 404​​
+curl -I http://www.k-irito.online/.well-known/acme-challenge/test
+
+​​期望输出​​：
+HTTP/1.1 404 Not Found
+​​步骤5：重新运行 Certbot​​
+sudo certbot --nginx -d www.k-irito.online
+
+方法 1：### 1. 安装Certbot
 ```bash
 sudo apt install -y certbot python3-certbot-nginx
 ```
@@ -394,6 +506,16 @@ sudo apt install -y certbot python3-certbot-nginx
 ```bash
 sudo certbot --nginx -d 你的域名
 ``` -->
+方法 2：使用腾讯云免费证书
+SSL证书配置已成功完成！以下是已完成的步骤：
+✅ 解压了上传的证书文件 www.k-irito.online_nginx.zip
+✅ 将证书文件放置在正确的位置：
+证书文件：/etc/ssl/certs/k-irito.online.pem
+私钥文件：/etc/ssl/private/k-irito.online.key
+✅ 设置了正确的文件权限
+✅ Nginx配置已经包含SSL设置
+✅ Nginx配置测试通过
+✅ 重启了Nginx服务
 
 ## 七、监控与维护
 
