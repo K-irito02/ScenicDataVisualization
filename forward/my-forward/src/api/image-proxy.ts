@@ -12,9 +12,14 @@ export function processImageUrl(
 ): string {
   try {
     // 如果URL为空，使用默认图片
-    if (!imageUrl) {
-      console.log('[图片处理] 图片URL为空，使用默认图片');
+    if (!imageUrl || imageUrl === 'null' || imageUrl === 'undefined') {
+      console.log('[图片处理] 图片URL为空或无效，使用默认图片');
       return fallbackImage;
+    }
+    
+    // 如果URL是相对路径且不以/开头，添加斜杠
+    if (!imageUrl.startsWith('/') && !imageUrl.startsWith('http')) {
+      imageUrl = '/' + imageUrl;
     }
     
     // 如果是相对路径或已经是http开头的URL，直接返回

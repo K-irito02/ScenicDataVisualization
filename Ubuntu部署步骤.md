@@ -304,6 +304,7 @@ VITE_API_BASE_URL=https://你的域名 # 或 http://你的服务器IP
 www.k-irito.online
 
 ### 3. 安装前端依赖
+nvm use 22    //切换Nodejs版本
 ```bash
 sudo chown -R ubuntu:ubuntu /var/www/scenic/
 cd /var/www/scenic/frontend
@@ -528,7 +529,8 @@ sudo tail -f /var/log/nginx/access.log
 # Gunicorn服务日志
 sudo journalctl -u scenic-gunicorn
 ```
-
+sudo vim /etc/nginx/sites-available/scenic
+sudo vim /etc/systemd/system/scenic-gunicorn.service
 ### 2. 定期备份数据库
 ```bash
 # 创建备份脚本

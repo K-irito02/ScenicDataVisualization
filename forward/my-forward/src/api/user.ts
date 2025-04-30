@@ -200,4 +200,20 @@ export function sendEmailCode(email: string, isProfileUpdate: boolean = false) {
       is_profile_update: isProfileUpdate
     }
   });
+}
+
+/**
+ * 验证邮箱验证码
+ * @param email 邮箱
+ * @param code 验证码
+ */
+export function verifyEmailCode(email: string, code: string) {
+  return request({
+    url: '/api/email/verify-code/',
+    method: 'post',
+    data: { 
+      email,
+      code
+    }
+  });
 } 

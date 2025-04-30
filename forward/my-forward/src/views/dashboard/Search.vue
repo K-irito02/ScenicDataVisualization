@@ -216,7 +216,7 @@ import { request } from '@/api'
 import { processImageUrl, DEFAULT_IMAGE } from '@/api/image-proxy'
 
 // 设置API基础URL
-const API_BASE_URL = 'http://localhost:8000/api'
+const API_BASE_URL = 'http://localhost:8001/api'
 
 // API服务
 const apiService = {
@@ -401,7 +401,7 @@ export default defineComponent({
     
     // 级别选择框的占位文本
     const levelPlaceholder = computed(() => {
-      return isWaterScenic.value ? '无级别选择' : '景区级别'
+      return isWaterScenic.value ? '无类型选择' : '景区类型'
     })
     
     // 根据当前选择的类型返回可用的级别

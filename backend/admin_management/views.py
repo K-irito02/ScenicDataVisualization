@@ -7,8 +7,9 @@ from .models import SystemErrorLog
 from .serializers import AdminUserSerializer, AdminUserRecordSerializer, SystemErrorLogSerializer
 import traceback
 import logging
+import json
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
-from django.db.models import Count
+from django.db.models import Count, Min, Max
 
 # 创建日志记录器
 logger = logging.getLogger(__name__)
@@ -204,17 +205,28 @@ class AdminUserRecordView(views.APIView):
             page = request.query_params.get('page', 1)
             page_size = request.query_params.get('pageSize', 10)
             user_id = request.query_params.get('user_id', None)
+            username = request.query_params.get('username', None)
             record_type = request.query_params.get('record_type', None)
             start_date = request.query_params.get('start_date', None)
             end_date = request.query_params.get('end_date', None)
             export = request.query_params.get('export', 'false').lower() == 'true'
+            chart_data = request.query_params.get('chart_data', 'false').lower() == 'true'
             
             # 查询用户记录
             records = UserActionRecord.objects.all().select_related('user').order_by('-timestamp')
             
-            # 按用户筛选
+            # 按用户ID筛选
             if user_id:
-                records = records.filter(user_id=user_id)
+                try:
+                    user_id = int(user_id)
+                    records = records.filter(user_id=user_id)
+                except (ValueError, TypeError):
+                    # 无效的用户ID值，记录错误但不筛选
+                    logger.warning(f"收到无效的用户ID值: {user_id}")
+            
+            # 按用户名筛选 (精确匹配)
+            if username:
+                records = records.filter(user__username=username)
                 
             # 按记录类型筛选
             if record_type:
@@ -229,7 +241,7 @@ class AdminUserRecordView(views.APIView):
                     import datetime
                     start_datetime = datetime.datetime.combine(start_date, datetime.time.min, tzinfo=timezone.get_current_timezone())
                     records = records.filter(timestamp__gte=start_datetime)
-                    
+            
             if end_date:
                 from django.utils.dateparse import parse_date
                 end_date = parse_date(end_date)
@@ -239,22 +251,13 @@ class AdminUserRecordView(views.APIView):
                     end_datetime = datetime.datetime.combine(end_date, datetime.time.max, tzinfo=timezone.get_current_timezone())
                     records = records.filter(timestamp__lte=end_datetime)
             
-            # 导出数据
+            # 如果是导出请求，调用导出方法
             if export:
                 return self.export_records(records)
             
-            # 生成统计数据
-            all_records_queryset = records  # 保存过滤后但未分页的查询集用于统计
-            total_records = all_records_queryset.count()
-            search_records = all_records_queryset.filter(action_type='search').count()
-            favorite_records = all_records_queryset.filter(action_type='favorite').count()
-            login_records = all_records_queryset.filter(action_type='login').count()
-            register_records = all_records_queryset.filter(action_type='register').count()
-            admin_records = all_records_queryset.filter(action_type='admin').count()
-            profile_update_records = all_records_queryset.filter(action_type='profile_update').count()
-            
-            # 获取时间趋势数据
-            time_trend_data = self.get_time_trend_data(all_records_queryset)
+            # 如果只需要图表数据，不进行分页
+            if chart_data:
+                return self.get_chart_data(records)
             
             # 分页
             paginator = Paginator(records, page_size)
@@ -268,6 +271,16 @@ class AdminUserRecordView(views.APIView):
             # 序列化
             serializer = AdminUserRecordSerializer(records_page, many=True)
             
+            # 统计各类型记录数量
+            total_records = records.count()
+            search_records = records.filter(action_type='search').count()
+            favorite_records = records.filter(action_type='favorite').count()
+            login_records = records.filter(action_type='login').count()
+            register_records = records.filter(action_type='register').count()
+            admin_records = records.filter(action_type='admin').count()
+            profile_update_records = records.filter(action_type='profile_update').count()
+            view_scenic_detail_records = records.filter(action_type='view_scenic_detail').count()
+            
             # 构造返回的summary数据
             summary = {
                 'totalRecords': total_records,
@@ -277,7 +290,7 @@ class AdminUserRecordView(views.APIView):
                 'registerRecords': register_records,
                 'adminRecords': admin_records,
                 'profileUpdateRecords': profile_update_records,
-                'timeTrend': time_trend_data
+                'viewScenicDetailRecords': view_scenic_detail_records
             }
             
             # 返回结果
@@ -293,6 +306,392 @@ class AdminUserRecordView(views.APIView):
             # 记录错误
             log_system_error('ERROR', f"获取用户记录失败: {str(e)}", request, e)
             return Response({'error': '获取用户记录失败', 'detail': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def get_chart_data(self, queryset):
+        """获取图表数据"""
+        try:
+            from django.db.models import Count
+            from django.db.models.functions import TruncDate
+            import datetime
+            
+            logger.info(f"开始处理图表数据，记录数量: {queryset.count()}")
+            
+            # 饼图数据 - 各类型记录数量统计
+            pie_data = list(queryset.values('action_type')
+                           .annotate(count=Count('id'))
+                           .order_by('action_type'))
+            
+            logger.info(f"生成饼图数据: {json.dumps(pie_data, ensure_ascii=False)}")
+            
+            # 为每种类型添加中文名称
+            for item in pie_data:
+                action_type = item['action_type']
+                if action_type == 'search':
+                    item['name'] = '搜索'
+                elif action_type == 'favorite':
+                    item['name'] = '收藏'
+                elif action_type == 'login':
+                    item['name'] = '登录'
+                elif action_type == 'register':
+                    item['name'] = '注册'
+                elif action_type == 'admin':
+                    item['name'] = '管理员操作'
+                elif action_type == 'profile_update':
+                    item['name'] = '修改个人信息'
+                elif action_type == 'view_scenic_detail':
+                    item['name'] = '查看景区详情'
+                else:
+                    item['name'] = action_type
+            
+            # 获取时间趋势数据
+            trend_data = self.get_time_trend_data(queryset)
+            
+            logger.info(f"生成趋势图数据成功，x轴数据长度: {len(trend_data['xAxisData'])}")
+            
+            return Response({
+                'pie_data': pie_data,
+                'trend_data': trend_data
+            })
+        except Exception as e:
+            # 记录错误，并返回一个有效但空的结构
+            error_msg = f"获取图表数据失败: {str(e)}"
+            logger.error(error_msg)
+            logger.error(traceback.format_exc())
+            log_system_error('ERROR', error_msg, None, e)
+            
+            # 创建默认数据
+            from django.utils import timezone
+            import datetime
+            
+            today = timezone.now().date()
+            empty_dates = [(today - datetime.timedelta(days=i)) for i in range(29, -1, -1)]
+            empty_x_axis = [date.strftime('%Y-%m-%d') for date in empty_dates]
+            empty_values = [0] * len(empty_x_axis)
+            
+            return Response({
+                'pie_data': [],
+                'trend_data': {
+                    'xAxisData': empty_x_axis,
+                    'searchData': empty_values.copy(),
+                    'favoriteData': empty_values.copy(),
+                    'loginData': empty_values.copy(),
+                    'registerData': empty_values.copy(),
+                    'adminData': empty_values.copy(),
+                    'profileUpdateData': empty_values.copy(),
+                    'viewScenicDetailData': empty_values.copy()
+                }
+            })
+    
+    def get_time_trend_data(self, queryset):
+        """获取时间趋势数据"""
+        try:
+            from django.db.models import Count, Min, Max
+            from django.db.models.functions import TruncDate, Cast
+            from django.db.models.fields import DateField
+            import datetime
+            from django.utils import timezone
+            import logging
+            
+            logger = logging.getLogger(__name__)
+            
+            # 调试信息
+            print(f"[INFO] 开始处理时间趋势数据，当前查询集记录数：{queryset.count()}")
+            logger.info(f"开始处理时间趋势数据，当前查询集记录数：{queryset.count()}")
+            
+            # 输出几条样本记录的timestamp值，用于调试
+            sample_timestamps = list(queryset.values('timestamp')[:5])
+            print(f"[INFO] 时间戳样本：{sample_timestamps}")
+            logger.info(f"时间戳样本：{sample_timestamps}")
+            
+            # 如果查询集为空，使用默认的30天范围
+            if queryset.count() == 0:
+                print(f"[INFO] 查询集为空，返回空时间趋势数据")
+                logger.warning("查询集为空，返回空时间趋势数据")
+                
+                # 获取过去30天的日期范围
+                end_date = timezone.now().date()
+                start_date = end_date - datetime.timedelta(days=29)
+                
+                # 生成日期序列用于空数据
+                date_range = []
+                current_date = start_date
+                while current_date <= end_date:
+                    date_range.append(current_date)
+                    current_date += datetime.timedelta(days=1)
+                
+                # 返回格式化后的空数据
+                return {
+                    'xAxisData': [date.strftime('%Y-%m-%d') for date in date_range],
+                    'searchData': [0] * len(date_range),
+                    'favoriteData': [0] * len(date_range),
+                    'loginData': [0] * len(date_range),
+                    'registerData': [0] * len(date_range),
+                    'adminData': [0] * len(date_range),
+                    'profileUpdateData': [0] * len(date_range),
+                    'viewScenicDetailData': [0] * len(date_range)
+                }
+            
+            # 查找数据集中的最早和最晚日期，而不是使用当前日期
+            try:
+                # 获取查询集中的最小和最大日期
+                date_range_agg = queryset.aggregate(
+                    min_date=Min('timestamp'),
+                    max_date=Max('timestamp')
+                )
+                
+                min_date = date_range_agg['min_date'].date() if date_range_agg['min_date'] else timezone.now().date() - datetime.timedelta(days=29)
+                max_date = date_range_agg['max_date'].date() if date_range_agg['max_date'] else timezone.now().date()
+                
+                # 确保日期范围至少包含30天，如果不足则扩展
+                if (max_date - min_date).days < 29:
+                    # 日期范围不足30天，向前扩展
+                    min_date = max_date - datetime.timedelta(days=29)
+                
+                # 使用找到的日期范围
+                start_date = min_date
+                end_date = max_date
+                
+                print(f"[INFO] 从数据集确定的时间范围：{start_date} 至 {end_date}")
+                logger.info(f"从数据集确定的时间范围：{start_date} 至 {end_date}")
+            except Exception as range_error:
+                print(f"[ERROR] 确定日期范围失败: {str(range_error)}")
+                logger.error(f"确定日期范围失败: {str(range_error)}")
+                
+                # 使用默认的30天范围
+                end_date = timezone.now().date()
+                start_date = end_date - datetime.timedelta(days=29)
+                
+                print(f"[INFO] 使用默认时间范围：{start_date} 至 {end_date}")
+                logger.info(f"使用默认时间范围：{start_date} 至 {end_date}")
+            
+            # 手动处理日期聚合，由于TruncDate可能在某些数据库或Django版本中不正常工作
+            try:
+                # 尝试使用Cast和DateField进行明确的日期类型转换
+                date_counts = queryset.annotate(
+                    date=Cast('timestamp', DateField())
+                ).values('date', 'action_type').annotate(
+                    count=Count('id')
+                ).order_by('date')
+                
+                print(f"[INFO] 使用Cast进行日期聚合，数量：{len(date_counts)}")
+                logger.info(f"使用Cast进行日期聚合，数量：{len(date_counts)}")
+                
+                # 输出样本数据
+                sample_records = list(date_counts[:5]) + list(date_counts[max(0, len(date_counts)-5):])
+                print(f"[INFO] Cast日期聚合样本：{sample_records}")
+                logger.info(f"Cast日期聚合样本：{sample_records}")
+                
+                # 如果使用Cast后date仍然是None，尝试手动提取日期部分
+                if sample_records and sample_records[0]['date'] is None:
+                    print(f"[INFO] Cast后日期仍为None，尝试手动提取日期部分")
+                    logger.info(f"Cast后日期仍为None，尝试手动提取日期部分")
+                    
+                    # 直接获取所有记录，按照timestamp和action_type手动分组
+                    all_records = list(queryset.values('timestamp', 'action_type'))
+                    date_count_map = {}
+                    
+                    # 手动将timestamp转换为日期字符串，然后按日期和操作类型分组计数
+                    for record in all_records:
+                        if record['timestamp']:
+                            try:
+                                # 转换为日期对象
+                                record_date = record['timestamp'].date()
+                                record_action = record['action_type']
+                                
+                                # 创建键值对
+                                key = (record_date, record_action)
+                                if key not in date_count_map:
+                                    date_count_map[key] = 0
+                                date_count_map[key] += 1
+                            except Exception as date_error:
+                                print(f"[ERROR] 处理时间戳失败: {str(date_error)}, 记录: {record}")
+                                logger.error(f"处理时间戳失败: {str(date_error)}, 记录: {record}")
+                    
+                    # 转换为与date_counts相同格式的列表
+                    date_counts = [
+                        {'date': key[0], 'action_type': key[1], 'count': count}
+                        for key, count in date_count_map.items()
+                    ]
+                    
+                    # 按日期排序
+                    date_counts.sort(key=lambda x: x['date'])
+                    
+                    print(f"[INFO] 手动处理后的日期统计数量：{len(date_counts)}")
+                    logger.info(f"手动处理后的日期统计数量：{len(date_counts)}")
+                    
+                    # 输出样本
+                    sample_records = date_counts[:5] + date_counts[max(0, len(date_counts)-5):]
+                    print(f"[INFO] 手动日期统计样本：{sample_records}")
+                    logger.info(f"手动日期统计样本：{sample_records}")
+            except Exception as agg_error:
+                print(f"[ERROR] 日期聚合失败: {str(agg_error)}")
+                logger.error(f"日期聚合失败: {str(agg_error)}")
+                
+                # 如果聚合失败，尝试手动分析
+                try:
+                    print(f"[INFO] 尝试手动分析时间戳数据")
+                    logger.info(f"尝试手动分析时间戳数据")
+                    
+                    # 直接获取所有记录，按照timestamp和action_type手动分组
+                    all_records = list(queryset.values('timestamp', 'action_type'))
+                    date_count_map = {}
+                    
+                    # 手动将timestamp转换为日期字符串，然后按日期和操作类型分组计数
+                    for record in all_records:
+                        if record['timestamp']:
+                            try:
+                                # 转换为日期对象
+                                record_date = record['timestamp'].date()
+                                record_action = record['action_type']
+                                
+                                # 创建键值对
+                                key = (record_date, record_action)
+                                if key not in date_count_map:
+                                    date_count_map[key] = 0
+                                date_count_map[key] += 1
+                            except Exception as date_error:
+                                print(f"[ERROR] 处理时间戳失败: {str(date_error)}, 记录: {record}")
+                                logger.error(f"处理时间戳失败: {str(date_error)}, 记录: {record}")
+                    
+                    # 转换为与date_counts相同格式的列表
+                    date_counts = [
+                        {'date': key[0], 'action_type': key[1], 'count': count}
+                        for key, count in date_count_map.items()
+                    ]
+                    
+                    # 按日期排序
+                    date_counts.sort(key=lambda x: x['date'])
+                    
+                    print(f"[INFO] 手动处理后的日期统计数量：{len(date_counts)}")
+                    logger.info(f"手动处理后的日期统计数量：{len(date_counts)}")
+                except Exception as manual_error:
+                    print(f"[ERROR] 手动分析失败: {str(manual_error)}")
+                    logger.error(f"手动分析失败: {str(manual_error)}")
+                    raise agg_error  # 仍然抛出原始错误
+            
+            # 生成日期序列
+            date_range = []
+            current_date = start_date
+            while current_date <= end_date:
+                date_range.append(current_date)
+                current_date += datetime.timedelta(days=1)
+            
+            print(f"[INFO] 生成的日期序列长度：{len(date_range)}")
+            logger.info(f"生成的日期序列长度：{len(date_range)}")
+            
+            # 初始化数据结构
+            search_data = {date: 0 for date in date_range}
+            favorite_data = {date: 0 for date in date_range}
+            login_data = {date: 0 for date in date_range}
+            register_data = {date: 0 for date in date_range}
+            admin_data = {date: 0 for date in date_range}
+            profile_update_data = {date: 0 for date in date_range}
+            view_scenic_detail_data = {date: 0 for date in date_range}
+            
+            # 填充数据
+            for item in date_counts:
+                try:
+                    # 确保date不是None
+                    if item['date'] is None:
+                        continue
+                    
+                    # 确保date是日期对象
+                    date = item['date'].date() if hasattr(item['date'], 'date') else item['date']
+                    if date in date_range:
+                        action_type = item['action_type']
+                        count_value = int(item['count']) if item['count'] is not None else 0
+                        
+                        if action_type == 'search':
+                            search_data[date] = count_value
+                        elif action_type == 'favorite':
+                            favorite_data[date] = count_value
+                        elif action_type == 'login':
+                            login_data[date] = count_value
+                        elif action_type == 'register':
+                            register_data[date] = count_value
+                        elif action_type == 'admin':
+                            admin_data[date] = count_value
+                        elif action_type == 'profile_update':
+                            profile_update_data[date] = count_value
+                        elif action_type == 'view_scenic_detail':
+                            view_scenic_detail_data[date] = count_value
+                except Exception as item_error:
+                    print(f"[ERROR] 处理数据项失败: {str(item_error)}, 项: {item}")
+                    logger.error(f"处理数据项失败: {str(item_error)}, 项: {item}")
+                    continue  # 单项错误不影响整体处理
+            
+            # 格式化为前端需要的格式
+            x_axis_data = [date.strftime('%Y-%m-%d') for date in date_range]
+            search_values = [search_data[date] for date in date_range]
+            favorite_values = [favorite_data[date] for date in date_range]
+            login_values = [login_data[date] for date in date_range]
+            register_values = [register_data[date] for date in date_range]
+            admin_values = [admin_data[date] for date in date_range]
+            profile_update_values = [profile_update_data[date] for date in date_range]
+            view_scenic_detail_values = [view_scenic_detail_data[date] for date in date_range]
+            
+            result = {
+                'xAxisData': x_axis_data,
+                'searchData': search_values,
+                'favoriteData': favorite_values,
+                'loginData': login_values,
+                'registerData': register_values,
+                'adminData': admin_values,
+                'profileUpdateData': profile_update_values,
+                'viewScenicDetailData': view_scenic_detail_values
+            }
+            
+            # 验证返回的数据
+            for key, value in result.items():
+                if not isinstance(value, list):
+                    print(f"[ERROR] 返回的{key}不是列表类型: {type(value)}")
+                    logger.error(f"返回的{key}不是列表类型: {type(value)}")
+                    result[key] = []
+                if key != 'xAxisData' and len(value) != len(x_axis_data):
+                    print(f"[ERROR] 返回的{key}长度({len(value)})与x轴长度({len(x_axis_data)})不匹配")
+                    logger.error(f"返回的{key}长度({len(value)})与x轴长度({len(x_axis_data)})不匹配")
+                    # 确保长度一致
+                    result[key] = [0] * len(x_axis_data)
+            
+            # 检查趋势图是否有实际数据
+            has_data = False
+            for key in ['searchData', 'favoriteData', 'loginData', 'registerData', 'adminData', 'profileUpdateData', 'viewScenicDetailData']:
+                if any(val > 0 for val in result[key]):
+                    has_data = True
+                    break
+            
+            if not has_data:
+                print(f"[WARNING] 生成的趋势图数据全部为零，可能数据处理有问题")
+                logger.warning(f"生成的趋势图数据全部为零，可能数据处理有问题")
+            
+            print(f"[INFO] 返回的时间趋势数据: {result}")
+            logger.info(f"成功生成时间趋势数据，x轴数据长度: {len(x_axis_data)}")
+            
+            return result
+            
+        except Exception as e:
+            # 发生错误时返回空数据
+            print(f"[ERROR] 生成时间趋势数据失败: {str(e)}")
+            logger.error(f"生成时间趋势数据失败: {str(e)}")
+            print(f"[ERROR] 错误堆栈跟踪: {traceback.format_exc()}")
+            logger.error(traceback.format_exc())
+            
+            # 返回格式化后的空数据
+            empty_range = 30  # 30天空数据
+            empty_dates = [(timezone.now().date() - datetime.timedelta(days=i)) for i in range(empty_range, -1, -1)]
+            empty_x_axis = [date.strftime('%Y-%m-%d') for date in empty_dates]
+            empty_values = [0] * len(empty_x_axis)
+            
+            return {
+                'xAxisData': empty_x_axis,
+                'searchData': empty_values.copy(),
+                'favoriteData': empty_values.copy(),
+                'loginData': empty_values.copy(),
+                'registerData': empty_values.copy(),
+                'adminData': empty_values.copy(),
+                'profileUpdateData': empty_values.copy(),
+                'viewScenicDetailData': empty_values.copy()
+            }
     
     def delete(self, request, record_id=None):
         """删除用户记录"""
@@ -351,158 +750,6 @@ class AdminUserRecordView(views.APIView):
             # 记录错误
             logger.error(f"导出用户记录失败: {str(e)}")
             return Response({'error': '导出用户记录失败', 'detail': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-            
-    def get_time_trend_data(self, queryset):
-        """获取时间趋势数据"""
-        try:
-            from django.db.models import Count
-            from django.db.models.functions import TruncDate
-            import datetime
-            from django.utils import timezone
-            import logging
-            
-            logger = logging.getLogger(__name__)
-            
-            # 调试信息
-            logger.info(f"开始处理时间趋势数据，当前查询集记录数：{queryset.count()}")
-            
-            # 获取过去30天的日期范围
-            end_date = timezone.now().date()
-            start_date = end_date - datetime.timedelta(days=29)
-            
-            logger.info(f"时间范围：{start_date} 至 {end_date}")
-            
-            # 如果查询集为空，直接返回空数据
-            if queryset.count() == 0:
-                logger.warning("查询集为空，返回空时间趋势数据")
-                # 生成日期序列用于空数据
-                date_range = []
-                current_date = start_date
-                while current_date <= end_date:
-                    date_range.append(current_date)
-                    current_date += datetime.timedelta(days=1)
-                
-                # 返回格式化后的空数据
-                return {
-                    'xAxisData': [date.strftime('%Y-%m-%d') for date in date_range],
-                    'searchData': [0] * len(date_range),
-                    'favoriteData': [0] * len(date_range),
-                    'loginData': [0] * len(date_range),
-                    'registerData': [0] * len(date_range),
-                    'adminData': [0] * len(date_range),
-                    'profileUpdateData': [0] * len(date_range)
-                }
-            
-            # 按日期分组统计
-            try:
-                date_counts = queryset.filter(
-                    timestamp__date__gte=start_date,
-                    timestamp__date__lte=end_date
-                ).annotate(
-                    date=TruncDate('timestamp')
-                ).values('date', 'action_type').annotate(
-                    count=Count('id')
-                ).order_by('date')
-                
-                logger.info(f"聚合后的日期统计数量：{len(date_counts)}")
-            except Exception as agg_error:
-                logger.error(f"日期聚合失败: {str(agg_error)}")
-                raise
-            
-            # 生成日期序列
-            date_range = []
-            current_date = start_date
-            while current_date <= end_date:
-                date_range.append(current_date)
-                current_date += datetime.timedelta(days=1)
-            
-            logger.info(f"生成的日期序列长度：{len(date_range)}")
-            
-            # 初始化数据结构
-            search_data = {date: 0 for date in date_range}
-            favorite_data = {date: 0 for date in date_range}
-            login_data = {date: 0 for date in date_range}
-            register_data = {date: 0 for date in date_range}
-            admin_data = {date: 0 for date in date_range}
-            profile_update_data = {date: 0 for date in date_range}
-            
-            # 填充数据
-            for item in date_counts:
-                try:
-                    date = item['date'].date() if hasattr(item['date'], 'date') else item['date']
-                    if date in date_range:
-                        action_type = item['action_type']
-                        count_value = int(item['count']) if item['count'] is not None else 0
-                        
-                        if action_type == 'search':
-                            search_data[date] = count_value
-                        elif action_type == 'favorite':
-                            favorite_data[date] = count_value
-                        elif action_type == 'login':
-                            login_data[date] = count_value
-                        elif action_type == 'register':
-                            register_data[date] = count_value
-                        elif action_type == 'admin':
-                            admin_data[date] = count_value
-                        elif action_type == 'profile_update':
-                            profile_update_data[date] = count_value
-                except Exception as item_error:
-                    logger.error(f"处理数据项失败: {str(item_error)}, 项: {item}")
-                    continue  # 单项错误不影响整体处理
-            
-            # 格式化为前端需要的格式
-            x_axis_data = [date.strftime('%Y-%m-%d') for date in date_range]
-            search_values = [search_data[date] for date in date_range]
-            favorite_values = [favorite_data[date] for date in date_range]
-            login_values = [login_data[date] for date in date_range]
-            register_values = [register_data[date] for date in date_range]
-            admin_values = [admin_data[date] for date in date_range]
-            profile_update_values = [profile_update_data[date] for date in date_range]
-            
-            result = {
-                'xAxisData': x_axis_data,
-                'searchData': search_values,
-                'favoriteData': favorite_values,
-                'loginData': login_values,
-                'registerData': register_values,
-                'adminData': admin_values,
-                'profileUpdateData': profile_update_values
-            }
-            
-            # 验证返回的数据
-            for key, value in result.items():
-                if not isinstance(value, list):
-                    logger.error(f"返回的{key}不是列表类型: {type(value)}")
-                    result[key] = []
-                if key != 'xAxisData' and len(value) != len(x_axis_data):
-                    logger.error(f"返回的{key}长度({len(value)})与x轴长度({len(x_axis_data)})不匹配")
-                    # 确保长度一致
-                    result[key] = [0] * len(x_axis_data)
-            
-            logger.info(f"成功生成时间趋势数据，x轴数据长度: {len(x_axis_data)}")
-            
-            return result
-            
-        except Exception as e:
-            # 发生错误时返回空数据
-            logger.error(f"生成时间趋势数据失败: {str(e)}")
-            logger.exception("详细错误信息:")
-            
-            # 返回格式化后的空数据
-            empty_range = 30  # 30天空数据
-            empty_dates = [(timezone.now().date() - datetime.timedelta(days=i)) for i in range(empty_range, -1, -1)]
-            empty_x_axis = [date.strftime('%Y-%m-%d') for date in empty_dates]
-            empty_values = [0] * len(empty_x_axis)
-            
-            return {
-                'xAxisData': empty_x_axis,
-                'searchData': empty_values.copy(),
-                'favoriteData': empty_values.copy(),
-                'loginData': empty_values.copy(),
-                'registerData': empty_values.copy(),
-                'adminData': empty_values.copy(),
-                'profileUpdateData': empty_values.copy()
-            }
 
 class SystemErrorLogView(views.APIView):
     """系统错误日志视图"""

@@ -520,6 +520,57 @@ class SendEmailCodeView(APIView):
                 'message': '验证码发送失败，请稍后重试'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+class VerifyEmailCodeView(APIView):
+    """验证邮箱验证码视图"""
+    permission_classes = [permissions.AllowAny]
+    
+    def post(self, request):
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        email = request.data.get('email')
+        code = request.data.get('code')
+        
+        if not email or not code:
+            return Response({
+                'success': False,
+                'message': '请提供邮箱地址和验证码'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # 从Redis获取验证码
+        redis_key = f'email_code:{email}'
+        try:
+            stored_code = redis_client.get(redis_key)
+            if not stored_code:
+                return Response({
+                    'success': False,
+                    'message': '验证码已过期或不存在'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # 解码Redis存储的字节数据
+            stored_code = stored_code.decode('utf-8')
+            
+            # 验证码对比
+            if code != stored_code:
+                return Response({
+                    'success': False,
+                    'message': '验证码不正确'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # 验证成功，但不删除验证码，因为用户可能还需要用它来完成资料更新
+            # 返回成功消息
+            return Response({
+                'success': True,
+                'message': '验证码验证成功'
+            })
+        
+        except Exception as e:
+            logger.error(f"验证邮箱验证码时出错: {str(e)}")
+            return Response({
+                'success': False,
+                'message': '验证码验证失败，请稍后重试'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 class DeleteAccountView(APIView):
     """用户删除账户视图"""
     permission_classes = [permissions.IsAuthenticated]
@@ -678,7 +729,7 @@ class ForgotPasswordView(APIView):
             try:
                 UserActionRecord.objects.create(
                     user=user,
-                    action_type='reset_password_request',
+                    action_type='profile_update',
                     details='请求重置密码验证码'
                 )
             except Exception as e:
@@ -765,7 +816,7 @@ class ResetPasswordView(APIView):
             # 记录密码重置操作
             UserActionRecord.objects.create(
                 user=user,
-                action_type='reset_password',
+                action_type='profile_update',
                 details='密码重置成功'
             )
             

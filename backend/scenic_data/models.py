@@ -166,3 +166,21 @@ class NatureReserveLevelPrice(HierarchyTicketBase):
         verbose_name_plural = '自然景区等级票价'
         db_table = 'nature_reserve_level_price'
         managed = True
+
+class TransportMode(models.Model):
+    """景区交通方式数据模型"""
+    id = models.AutoField(primary_key=True, db_column='id')
+    scenic_name = models.CharField(max_length=100, db_column='scenic_name', verbose_name='景区名称')
+    city_name = models.CharField(max_length=50, db_column='city_name', verbose_name='所在城市')
+    transport_mode = models.CharField(max_length=200, db_column='transport_mode', verbose_name='交通方式')
+    scheme_count = models.IntegerField(db_column='scheme_count', verbose_name='方案数量')
+    different_mode_count = models.IntegerField(db_column='different_mode_count', verbose_name='不同交通方式数量')
+    transport_combinations = models.CharField(max_length=500, db_column='transport_combinations', verbose_name='交通方式组合')
+    
+    def __str__(self):
+        return self.scenic_name
+    
+    class Meta:
+        verbose_name = '景区交通方式'
+        verbose_name_plural = '景区交通方式'
+        db_table = 'transport_mode'  # 直接使用已有数据表

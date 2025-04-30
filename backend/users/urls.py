@@ -4,7 +4,7 @@ from user_management.views import UploadAvatarView, ProfileUpdateView
 
 """
 用户管理相关的URL配置
-可以在这里添加用户登录、注册、个人资料等相关的URL
+用户上传头像、个人资料的URL
 """
 
 urlpatterns = [

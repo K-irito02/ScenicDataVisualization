@@ -52,6 +52,8 @@ import * as echarts from 'echarts'
 // 确保词云图扩展被加载
 import 'echarts-wordcloud'
 
+// 不再使用 vue-echarts 组件，改为直接全局注册ECharts实例
+
 const app = createApp(App)
 
 // 注册ElementPlus图标

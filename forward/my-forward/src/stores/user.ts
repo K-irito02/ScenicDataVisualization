@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { login as apiLogin, register as apiRegister, updateProfile as apiUpdateProfile, toggleFavorite as apiToggleFavorite, getFavorites as apiGetFavorites, deleteAccount as apiDeleteAccount, forgotPassword as apiForgotPassword, resetPassword as apiResetPassword, sendEmailCode as apiSendEmailCode } from '../api'
+import { login as apiLogin, register as apiRegister, updateProfile as apiUpdateProfile, toggleFavorite as apiToggleFavorite, getFavorites as apiGetFavorites, deleteAccount as apiDeleteAccount, forgotPassword as apiForgotPassword, resetPassword as apiResetPassword, sendEmailCode as apiSendEmailCode, verifyEmailCode as apiVerifyEmailCode } from '../api'
 
 interface UserState {
   token: string
@@ -198,6 +198,18 @@ export const useUserStore = defineStore('user', {
     sendEmailCode(email: string, isProfileUpdate: boolean = false) {
       return new Promise((resolve, reject) => {
         apiSendEmailCode(email, isProfileUpdate)
+          .then(response => {
+            resolve(response)
+          })
+          .catch(error => {
+            reject(error)
+          })
+      })
+    },
+    
+    verifyEmailCode(email: string, code: string) {
+      return new Promise((resolve, reject) => {
+        apiVerifyEmailCode(email, code)
           .then(response => {
             resolve(response)
           })

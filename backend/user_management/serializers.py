@@ -291,9 +291,9 @@ class UserFavoriteSerializer(serializers.ModelSerializer):
         from scenic_data.models import ScenicData
         try:
             scenic = ScenicData.objects.get(scenic_id=obj.scenic_id)
-            return scenic.scenic_type.split(',')[0] if scenic.scenic_type else '无级别'
+            return scenic.scenic_type.split(',')[0] if scenic.scenic_type else '暂无分类'
         except (ScenicData.DoesNotExist, IndexError):
-            return '无级别'
+            return '暂无分类'
 
 class UserActionRecordSerializer(serializers.ModelSerializer):
     """用户操作记录序列化器"""

@@ -29,11 +29,15 @@ export default defineComponent({
     const initChart = () => {
       if (!chartRef.value) return
       
-      // 创建或重用图表实例
-      if (!chart) {
-        chart = echarts.init(chartRef.value)
-        console.log('ECharts实例创建成功')
+      // 销毁旧的图表实例，确保完全重新初始化
+      if (chart) {
+        chart.dispose()
+        chart = null
       }
+      
+      // 创建新的图表实例
+      chart = echarts.init(chartRef.value)
+      console.log('ECharts实例创建成功')
       
       try {
         console.log('正在设置图表配置项:', props.options)
@@ -41,8 +45,8 @@ export default defineComponent({
         chart.setOption(props.options, true)
         console.log('图表渲染完成')
         
-        // 发出渲染完成事件
-        emit('rendered')
+        // 发出渲染完成事件，并传递chart实例
+        emit('rendered', chart)
       } catch (error) {
         console.error('图表渲染出错:', error)
       }
@@ -52,6 +56,7 @@ export default defineComponent({
     watch(() => props.options, () => {
       console.log('配置项变化，重新渲染图表')
       nextTick(() => {
+        // 当配置项变化时完全重新初始化图表
         initChart()
       })
     }, { deep: true })
@@ -77,6 +82,7 @@ export default defineComponent({
     onUnmounted(() => {
       // 销毁图表实例
       if (chart) {
+        console.log('BaseChart组件卸载，销毁图表实例')
         chart.dispose()
         chart = null
       }

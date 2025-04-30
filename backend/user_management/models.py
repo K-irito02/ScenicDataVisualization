@@ -36,10 +36,10 @@ class UserActionRecord(models.Model):
         ('login', '登录'),
         ('register', '注册'),
         ('search', '搜索'),
-        ('view', '查看'),
         ('favorite', '收藏'),
         ('admin', '管理员操作'),
         ('profile_update', '修改个人信息'),
+        ('view_scenic_detail', '查看景区详情'),
     )
     
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='actions', verbose_name='用户')

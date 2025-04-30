@@ -207,4 +207,20 @@ export function getScenicTypeDistribution() {
     url: '/api/data/scenic-type-distribution/',
     method: 'get'
   });
+}
+
+/**
+ * 获取指定省份和交通方式相关的景区列表
+ * @param province 省份名称
+ * @param transport 交通方式
+ */
+export function getTransportationScenics(province: string, transport: string) {
+  return request({
+    url: '/api/data/transportation-scenics/',
+    method: 'get',
+    params: {
+      province,
+      transport
+    }
+  });
 } 

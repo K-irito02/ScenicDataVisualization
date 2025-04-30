@@ -14,12 +14,13 @@ export function getUsers(params: { page?: number, pageSize?: number } = {}) {
 
 /**
  * 获取用户操作记录(管理员接口)
- * @param params 查询参数：分页、用户ID筛选、记录类型、时间范围等
+ * @param params 查询参数：分页、用户ID筛选、用户名、记录类型、时间范围等
  */
 export function getUserRecords(params: { 
   page?: number, 
   pageSize?: number, 
   user_id?: number,
+  username?: string,
   record_type?: string, 
   start_date?: string,
   end_date?: string,
@@ -30,6 +31,26 @@ export function getUserRecords(params: {
     method: 'get',
     params,
     ...(params.export ? { responseType: 'blob' } : {})
+  });
+}
+
+/**
+ * 获取用户记录图表数据
+ * @param params 查询参数：用户ID筛选、记录类型、时间范围等
+ */
+export function getUserRecordsChartData(params: {
+  user_id?: number,
+  record_type?: string,
+  start_date?: string,
+  end_date?: string
+} = {}) {
+  return request({
+    url: '/api/admin/user-records/',
+    method: 'get',
+    params: {
+      ...params,
+      chart_data: true
+    }
   });
 }
 

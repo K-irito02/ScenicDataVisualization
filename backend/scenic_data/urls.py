@@ -26,6 +26,9 @@ urlpatterns = [
     # 交通方式数据
     path('data/transportation/', views.TransportationView.as_view(), name='transportation'),
     
+    # 交通方式相关景区列表
+    path('data/transportation-scenics/', views.TransportationScenicView.as_view(), name='transportation-scenics'),
+    
     # 景区搜索接口
     path('scenic/search/', views.ScenicSearchView.as_view(), name='scenic-search'),
     

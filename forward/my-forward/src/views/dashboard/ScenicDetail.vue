@@ -29,6 +29,15 @@
             <el-icon><Back /></el-icon>
             <span>返回我的收藏</span>
           </el-button>
+          <el-button 
+            v-if="fromTransportation" 
+            type="primary" 
+            size="large" 
+            @click="handleBackToTransportation"
+          >
+            <el-icon><Back /></el-icon>
+            <span>{{ transportationBackButtonText }}</span>
+          </el-button>
         </div>
         
         <div class="right-buttons">
@@ -115,6 +124,9 @@
                       </el-col>
                     </el-row>
                   </div>
+                  <div v-else-if="nearbyLoading" class="loading-tip">
+                    <el-skeleton animated :rows="3" />
+                  </div>
                   <div v-else class="no-data-tip">
                     暂无景区
                   </div>
@@ -158,8 +170,13 @@
               <div v-if="wordCloudLoading" class="loading-tip">
                 <el-skeleton animated :rows="3" />
               </div>
-              <div class="cloud-wrapper" v-else-if="hasWordCloudData">
-                <base-chart :options="wordCloudOptions" height="300px" @rendered="() => console.log('词云图渲染完成')" />
+              <div class="cloud-wrapper" v-else-if="hasWordCloudData" ref="wordCloudContainer">
+                <base-chart 
+                  :options="wordCloudOptions" 
+                  height="300px" 
+                  :key="'wc-' + scenicId + '-' + wordCloudRefreshKey"
+                  @rendered="onWordCloudRendered" 
+                />
               </div>
               <div v-else class="no-data-tip">
                 暂无数据
@@ -206,7 +223,7 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, onMounted, computed } from 'vue'
+import { defineComponent, ref, onMounted, computed, nextTick, watch, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import CardContainer from '@/components/common/CardContainer.vue'
 import BaseChart from '@/components/charts/BaseChart.vue'
@@ -300,6 +317,18 @@ export default defineComponent({
       return route.query.from === 'favorites'
     })
     
+    // 判断用户来源是否为交通分析页面
+    const fromTransportation = computed(() => {
+      // 从route.query中获取来源信息
+      return route.query.from === 'transportation'
+    })
+    
+    // 添加计算属性：返回按钮文本
+    const transportationBackButtonText = computed(() => {
+      const province = route.query.province as string
+      return province && province !== '全国' ? `返回${province}力导向图` : '返回交通方式分布图'
+    })
+    
     // 返回搜索筛选页面
     const handleBackToSearch = () => {
       // 使用路由器导航到搜索页面，但我们确保不会导致状态丢失
@@ -311,6 +340,22 @@ export default defineComponent({
     const handleBackToFavorites = () => {
       // 导航到个人中心的收藏标签页
       router.push('/dashboard/profile?tab=favorites')
+    }
+    
+    // 返回交通分析页面
+    const handleBackToTransportation = () => {
+      // 获取来源参数
+      const province = route.query.province as string
+      const transport = route.query.transport as string
+      
+      // 导航到交通分析页面，并保留原来的筛选条件
+      router.push({
+        path: '/dashboard/transportation',
+        query: { 
+          province: province || '全国',
+          transport: transport || ''
+        }
+      })
     }
     
     // 计算属性：交通信息内容
@@ -506,6 +551,17 @@ export default defineComponent({
       }
     }
     
+    // 添加刷新键，确保词云图在数据变化时重新渲染
+    const wordCloudRefreshKey = ref(0)
+    const wordCloudContainer = ref<HTMLElement | null>(null)
+    let wordCloudChart: echarts.ECharts | null = null
+
+    // 处理词云图渲染完成事件
+    const onWordCloudRendered = (chart: echarts.ECharts) => {
+      wordCloudChart = chart
+      console.log('词云图渲染完成')
+    }
+    
     // 获取词云数据
     const fetchWordCloudData = async (scenicId: string) => {
       if (!scenicId) return;
@@ -513,6 +569,17 @@ export default defineComponent({
       wordCloudLoading.value = true;
       try {
         console.log('开始获取词云数据，景区ID:', scenicId);
+        
+        // 每次获取新数据前，增加刷新键
+        wordCloudRefreshKey.value++
+        
+        // 如果存在词云图实例，先销毁
+        if (wordCloudChart) {
+          wordCloudChart.dispose()
+          wordCloudChart = null
+          console.log('已销毁旧的词云图实例')
+        }
+        
         const response = await getWordCloud(scenicId);
         console.log('词云数据API响应:', response);
         
@@ -644,12 +711,33 @@ export default defineComponent({
     }
     
     // 导航到推荐景区
-    const navigateToScenic = (scenicId: string) => {
+    const navigateToScenic = (scenicId: any) => {
       if (!scenicId) {
         ElMessage.warning('景区ID不存在');
         return;
       }
-      router.push(`/dashboard/scenic/${scenicId}`);
+      
+      console.log('准备导航到景区，ID类型:', typeof scenicId, '值:', scenicId);
+      
+      // 保存当前滚动位置
+      const scrollPosition = window.scrollY;
+      localStorage.setItem('scenic_scroll_position', scrollPosition.toString());
+      
+      // 确保ID是字符串类型，并检查是否需要添加前缀'S'
+      let formattedId = String(scenicId); // 强制转换为字符串
+      if (!formattedId.startsWith('S') && !isNaN(Number(formattedId))) {
+        formattedId = `S${formattedId}`;
+      }
+      
+      console.log(`导航到景区详情页，原始ID: ${scenicId}, 格式化后ID: ${formattedId}`);
+      
+      // 在同一页面导航到新景区时，添加reload参数以确保页面刷新数据
+      router.push({
+        path: `/dashboard/scenic/${formattedId}`,
+        query: { 
+          reload: Date.now().toString() // 添加时间戳确保路由变化
+        }
+      });
     }
     
     // 格式化地址，避免重复
@@ -726,6 +814,40 @@ export default defineComponent({
     
     onMounted(() => {
       fetchScenicDetail();
+      
+      // 恢复滚动位置
+      nextTick(() => {
+        const savedPosition = localStorage.getItem('scenic_scroll_position');
+        if (savedPosition) {
+          window.scrollTo(0, parseInt(savedPosition));
+          localStorage.removeItem('scenic_scroll_position'); // 清除保存的位置
+        }
+      });
+    });
+    
+    // 监听路由变化，当URL中的景区ID变化时重新获取数据
+    watch(() => route.params.id, (newId, oldId) => {
+      if (newId && newId !== oldId) {
+        console.log(`景区ID变化：${oldId} -> ${newId}, reload参数: ${route.query.reload}`);
+        fetchScenicDetail();
+      }
+    });
+    
+    // 监听reload查询参数变化
+    watch(() => route.query.reload, (newVal) => {
+      if (newVal) {
+        console.log(`检测到reload参数: ${newVal}, 重新获取景区数据`);
+        fetchScenicDetail();
+      }
+    });
+    
+    // 在组件销毁时清理词云图实例
+    onBeforeUnmount(() => {
+      if (wordCloudChart) {
+        wordCloudChart.dispose()
+        wordCloudChart = null
+        console.log('组件卸载时销毁词云图实例')
+      }
     })
     
     return {
@@ -733,7 +855,9 @@ export default defineComponent({
       loading,
       handleBackToSearch,
       handleBackToFavorites,
+      handleBackToTransportation,
       fromFavorites,
+      fromTransportation,
       isFavorite,
       toggleFavorite,
       wordCloudOptions,
@@ -757,7 +881,11 @@ export default defineComponent({
       nearbyScenics,
       nearbyLoading,
       formatDistance,
-      handleImageUrl
+      handleImageUrl,
+      wordCloudContainer,
+      wordCloudRefreshKey,
+      onWordCloudRendered,
+      transportationBackButtonText
     }
   }
 })
@@ -975,10 +1103,36 @@ export default defineComponent({
   margin-bottom: 10px;
   cursor: pointer;
   transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.recommended-item:before {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background-color: #409EFF;
+  transform: scaleX(0);
+  transition: transform 0.3s ease;
+  transform-origin: left;
 }
 
 .recommended-item:hover {
   background-color: #f5f7fa;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+}
+
+.recommended-item:hover:before {
+  transform: scaleX(1);
+}
+
+.recommended-item:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 4px 0 rgba(0, 0, 0, 0.1);
 }
 
 .recommended-image {
@@ -987,18 +1141,22 @@ export default defineComponent({
   margin-right: 10px;
   border-radius: 4px;
   overflow: hidden;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-.recommended-image img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+.recommended-info {
+  flex: 1;
 }
 
 .recommended-name {
   font-weight: 500;
   color: #303133;
   margin-bottom: 5px;
+  display: -webkit-box;
+  line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .recommended-meta {
@@ -1060,5 +1218,16 @@ export default defineComponent({
   .right-buttons .el-button {
     width: 100%;
   }
+}
+
+.recommended-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.3s ease;
+}
+
+.recommended-item:hover .recommended-image img {
+  transform: scale(1.1);
 }
 </style> 

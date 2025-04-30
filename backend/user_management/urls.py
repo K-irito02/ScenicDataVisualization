@@ -17,5 +17,8 @@ urlpatterns = [
     # 用户收藏相关
     path('favorites/toggle/', views.FavoriteToggleView.as_view(), name='favorite-toggle'),
     path('favorites/', views.UserFavoritesView.as_view(), name='user-favorites'),
+    
+    # 验证码相关
     path('email/send-code/', views.SendEmailCodeView.as_view(), name='send-email-code'),
+    path('email/verify-code/', views.VerifyEmailCodeView.as_view(), name='verify-email-code'),
 ] 

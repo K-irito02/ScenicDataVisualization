@@ -30,10 +30,56 @@
             </div>
             <!-- 对省级视图使用ECharts图表 -->
             <div v-else class="chart-wrapper">
-              <base-chart 
-                :options="circularChartOptions" 
-                height="700px"
-              />
+              <div class="province-view-container">
+                <!-- 修改布局：力导向图放左边，图例放中间，景区列表放右边 -->
+                <!-- 图表区域 -->
+                <div :class="{'chart-area': true}">
+                  <base-chart 
+                    :options="circularChartOptions" 
+                    height="700px"
+                    @rendered="onChartRendered"
+                  />
+                </div>
+                
+                <!-- 景区列表区域 - 无论是否选中交通方式都显示 -->
+                <div class="scenic-list-container">
+                  <h3>{{ selectedProvince }} 景区</h3>
+                  <div v-if="scenicListLoading" class="loading-tip">
+                    <el-skeleton animated :rows="6" />
+                  </div>
+                  <div v-else-if="scenicList.length === 0" class="no-data-tip">
+                    暂无相关景区数据
+                  </div>
+                  <div v-else class="scenic-scroll-wrapper" ref="scrollWrapper">
+                    <div class="scenic-scroll-content" ref="scrollContent">
+                      <div 
+                        v-for="(scenic, index) in scenicListForDisplay" 
+                        :key="index"
+                        class="scenic-item"
+                        @click="navigateToScenic(scenic.id)"
+                      >
+                        <div class="scenic-image">
+                          <img 
+                            :src="handleImageUrl(scenic.image)" 
+                            :alt="scenic.name"
+                            @error="handleImageError($event)"
+                          >
+                        </div>
+                        <div class="scenic-info">
+                          <div class="scenic-name">{{ scenic.name }}</div>
+                          <div class="scenic-meta">
+                            <span class="scenic-price">{{ scenic.price }}</span>
+                            <!-- 已移除省份信息 -->
+                          </div>
+                          <div class="scenic-transport" v-if="scenic.transport_mode">
+                            <el-tag size="small" type="info">{{ scenic.transport_mode }}</el-tag>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </card-container>
@@ -43,7 +89,7 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, onMounted, computed, watch } from 'vue'
+import { defineComponent, ref, onMounted, computed, watch, onBeforeUnmount, nextTick } from 'vue'
 import CardContainer from '@/components/common/CardContainer.vue'
 import BaseChart from '@/components/charts/BaseChart.vue'
 import type { 
@@ -62,7 +108,9 @@ import 'highcharts/modules/export-data'
 // 删除不存在的库导入
 import { ElMessage } from 'element-plus'
 import { Location, Van, TrendCharts } from '@element-plus/icons-vue'
-import { getTransportation } from '@/api/scenic'
+import { getTransportation, getTransportationScenics } from '@/api/scenic'
+import { useRouter, useRoute } from 'vue-router'
+import { processImageUrl, DEFAULT_IMAGE } from '@/api/image-proxy'
 
 // 链接和节点的接口定义
 interface SankeyNode {
@@ -93,6 +141,7 @@ export default defineComponent({
     TrendCharts
   },
   setup() {
+    const router = useRouter()
     const selectedProvince = ref('全国')
     const provinceList = ref<string[]>([])
     const loading = ref(false) 
@@ -100,6 +149,12 @@ export default defineComponent({
     const transportTypes = ref<string[]>([])
     const noDataError = ref('')
     const provincesWithData = ref<Set<string>>(new Set())
+    const selectedTransport = ref('')
+    const scenicList = ref<any[]>([])
+    const scenicListLoading = ref(false)
+    
+    // 获取当前路由对象
+    const currentRoute = useRoute()
     
     // 定义所有省级行政区
     const allProvinces = [
@@ -392,7 +447,7 @@ export default defineComponent({
             lineStyle: {
               color: sourceColor,
               opacity: 0.7,
-              width: Math.max(1, (typeof link.value === 'number' ? link.value : 0) / 5000)
+              width: Math.max(1, (typeof link.value === 'number' ? link.value : 0) / 3000)
             }
           };
         });
@@ -401,8 +456,8 @@ export default defineComponent({
           backgroundColor: '#FFFFFF',
           title: {
             text: `${selectedProvince.value}交通方式分布图`,
-            left: 'center',
-            top: 40,  // 标题距离顶部距离
+            left: '65%', // 向右移动标题，与图表中心对齐
+            top: 20,     // 向上移动标题
             textStyle: {
               fontSize: 18,
               fontWeight: 'bold'
@@ -432,7 +487,7 @@ export default defineComponent({
             show: true,
             type: 'scroll',
             orient: 'vertical',  // 垂直方向排列
-            left: '25%',         // 距离左侧25%位置
+            left: '70%',         // 向右移动图例
             top: 'middle',      // 垂直居中
             itemGap: 10,         // 图例项之间的间距
             pageButtonPosition: 'end', // 分页按钮位置
@@ -490,13 +545,22 @@ export default defineComponent({
                 show: true,
                 formatter: '{c}',
                 fontSize: 12,
-                distance: 10
+                distance: 5, // 增加标签距离，让数字向外移动
+                rotate: 0,   // 保持标签水平
+                position: 'middle' // 放置在线条中间
               },
-              // 调整图表位置
-              center: ['25%', '50%'],  // 将图表中心点向右移动到25%位置
-              radius: '60%',           // 适当调整图表半径
+              // 调整图表位置到页面左侧
+              center: ['65%', '50%'],  // 将图表中心点向左移动
+              radius: '55%',           // 适当调整图表半径
               animationDuration: 1500,
-              animationEasingUpdate: 'quinticInOut'
+              animationEasingUpdate: 'quinticInOut',
+              // 添加点击事件监听
+              select: {
+                itemStyle: {
+                  borderColor: '#FF7733',
+                  borderWidth: 3
+                }
+              }
             }
           ]
         } as EChartsOption;
@@ -509,6 +573,12 @@ export default defineComponent({
       // 当省份变更时，检查是否有相关数据
       if (selectedProvince.value !== '全国') {
         checkProvinceData(selectedProvince.value);
+        // 当选择省份时，自动加载该省份的景区列表
+        if (!noDataError.value) {
+          // 不需要特定的交通方式，加载该省份所有景区
+          selectedTransport.value = '';
+          fetchScenicData();
+        }
       } else {
         noDataError.value = '';
         // 当切换到全国视图时，在下一个tick渲染Highcharts
@@ -516,6 +586,29 @@ export default defineComponent({
           renderDependencyWheel();
         }, 0);
       }
+      
+      // 更新URL查询参数
+      updateUrlParams();
+    }
+    
+    // 添加更新URL查询参数的函数
+    const updateUrlParams = () => {
+      const query: Record<string, string> = {}
+      
+      // 只有非默认值才添加到URL
+      if (selectedProvince.value !== '全国') {
+        query.province = selectedProvince.value
+      }
+      
+      if (selectedTransport.value) {
+        query.transport = selectedTransport.value
+      }
+      
+      // 更新URL而不刷新页面
+      router.replace({ 
+        path: router.currentRoute.value.path,
+        query
+      })
     }
     
     // 渲染Highcharts依赖轮图
@@ -968,11 +1061,461 @@ export default defineComponent({
       console.log('有交通数据的省份:', Array.from(provincesWithLinks));
     }
     
+    // 获取景区数据
+    const fetchScenicData = async () => {
+      if (!selectedProvince.value) {
+        scenicList.value = []
+        return
+      }
+      
+      scenicListLoading.value = true
+      try {
+        console.log(`开始获取景区数据 - 省份: ${selectedProvince.value}, 交通方式: ${selectedTransport.value || '全部'}`)
+        
+        // 调用API获取景区数据，如果没有选择交通方式，则获取省份所有景区
+        const response = await getTransportationScenics(selectedProvince.value, selectedTransport.value || '')
+        console.log('景区数据API响应:', response)
+        
+        // 处理API响应，判断是否有data属性或者本身是数组
+        const responseData = response?.data || response
+        
+        if (responseData && Array.isArray(responseData)) {
+          scenicList.value = responseData
+          
+          console.log('已获取景区数据:', scenicList.value)
+        } else {
+          console.warn('API返回的景区数据格式不正确:', responseData)
+          ElMessage.warning('无法获取景区数据，请稍后再试')
+          scenicList.value = []
+        }
+      } catch (error: any) {
+        console.error('获取景区数据失败:', error)
+        if (error.response) {
+          console.error('错误状态码:', error.response.status)
+          console.error('错误信息:', error.response.data)
+        }
+        ElMessage.error('获取景区数据失败，请检查网络连接')
+        scenicList.value = []
+      } finally {
+        scenicListLoading.value = false
+      }
+    }
+    
+    // 导航到景区详情页面
+    const navigateToScenic = (id: string) => {
+      // 如果ID以TM开头，这是TransportMode的ID，无法跳转到详情页
+      if (id.startsWith('TM')) {
+        ElMessage.info('该景区暂无详细信息')
+        return
+      }
+      
+      // 确保ID格式正确
+      let formattedId = String(id);
+      if (!formattedId.startsWith('S') && !isNaN(Number(formattedId))) {
+        formattedId = `S${formattedId}`;
+      }
+      
+      // 跳转到景区详情页，同时标记来源为交通分析页面
+      router.push({
+        path: `/dashboard/scenic/${formattedId}`,
+        query: { 
+          from: 'transportation',
+          province: selectedProvince.value,
+          transport: selectedTransport.value
+        }
+      });
+    }
+    
+    // 处理图片URL
+    const handleImageUrl = (url: string) => {
+      if (!url) return DEFAULT_IMAGE
+      return processImageUrl(url, DEFAULT_IMAGE)
+    }
+
+    // 处理图片加载错误
+    const handleImageError = (event: Event) => {
+      if (event.target) {
+        (event.target as HTMLImageElement).src = DEFAULT_IMAGE
+      }
+    }
+    
+    // 在图表渲染完成后处理点击事件
+    const onChartRendered = (chart: any) => {
+      // 添加点击事件监听
+      chart.on('click', (params: any) => {
+        const isNode = params.dataType === 'node';
+        if (isNode) {
+          const nodeName = params.name;
+          console.log('选中节点:', nodeName);
+
+          // 如果选中节点是省份，则忽略
+          if (allProvinces.includes(nodeName)) {
+            console.log('点击的是省份节点，忽略');
+            return;
+          }
+
+          // 更新选中的交通方式
+          selectedTransport.value = nodeName;
+          console.log(`选中交通方式：${selectedTransport.value}，开始获取相关景区`);
+
+          // 获取该交通方式相关的景区列表
+          fetchScenicData();
+          
+          // 更新URL查询参数
+          updateUrlParams();
+        }
+      });
+    }
+    
+    // 处理景区列表滚动的逻辑
+    const scrollWrapper = ref<HTMLElement | null>(null);
+    const scrollContent = ref<HTMLElement | null>(null);
+    const scenicListForDisplay = computed(() => {
+      // 直接返回原始列表，不进行复制
+      return scenicList.value;
+    });
+
+    // 存储定时器ID以便清理
+    const scrollIntervals = ref<number[]>([]);
+    // 是否正在自动滚动
+    const isAutoScrolling = ref(true);
+    // 是否已经到达底部
+    const hasReachedBottom = ref(false);
+    // 添加：是否被用户手动暂停的状态
+    const isManuallyPaused = ref(false);
+    // 添加：跟踪最后手动滚动的时间
+    const lastManualScrollTime = ref(0);
+    // 添加：跟踪鼠标是否悬停在滚动区域
+    const isMouseOver = ref(false);
+    // 添加：记录到达底部或鼠标离开的时间
+    const idleStartTime = ref(0);
+    // 添加：跟踪是否已经设置了重置计时器
+    const hasResetTimerSet = ref(false);
+    // 添加：跟踪鼠标是否刚刚进入列表区域
+    const isMouseJustEntered = ref(false);
+    // 添加：上次鼠标进入时间
+    const lastMouseEnterTime = ref(0);
+
+    // 设置滚动动画
+    const setupScrollAnimation = () => {
+      // 清理之前的定时器
+      scrollIntervals.value.forEach(id => {
+        clearInterval(id);
+        clearTimeout(id);
+      });
+      scrollIntervals.value = [];
+      
+      // 重置自动滚动状态，但保留手动暂停的状态
+      if (!isManuallyPaused.value) {
+        isAutoScrolling.value = true;
+      }
+      hasReachedBottom.value = false;
+      hasResetTimerSet.value = false;
+
+      if (!scrollWrapper.value || !scrollContent.value || scenicList.value.length === 0) {
+        return;
+      }
+      
+      // 检查内容高度是否足够滚动且景区数量足够
+      const contentHeight = scrollContent.value.scrollHeight;
+      const wrapperHeight = scrollWrapper.value.clientHeight;
+      
+      // 当景区数量小于等于6个或内容高度不足时，不启用滚动
+      if (scenicList.value.length <= 6 || contentHeight <= wrapperHeight) {
+        isAutoScrolling.value = false;
+        return;
+      }
+      
+      // 移除之前可能添加的类
+      if (scrollContent.value.classList.contains('auto-scroll')) {
+        scrollContent.value.classList.remove('auto-scroll');
+      }
+      
+      // 不再使用CSS动画，改用JS控制滚动
+      // 每次滚动的距离和总滚动距离
+      const scrollStep = 1; // 每次滚动1像素
+      const maxScroll = contentHeight - wrapperHeight;
+      
+      // 固定总滚动时间为景区数量*0.8秒（最少8秒，最多20秒）
+      const baseDuration = Math.min(20, Math.max(8, scenicList.value.length * 0.8));
+      
+      // 计算滚动间隔（毫秒），确保较少的内容也能平滑滚动
+      const baseMsPerPixel = (baseDuration * 1000) / maxScroll;
+      const scrollInterval = Math.min(50, Math.max(10, Math.floor(baseMsPerPixel * scrollStep)));
+      
+      // 清理所有计时器的辅助函数
+      const clearAllScrollTimers = () => {
+        scrollIntervals.value.forEach(id => {
+          clearInterval(id);
+          clearTimeout(id);
+        });
+        scrollIntervals.value = [];
+      };
+      
+      // 添加：重置到顶部并重新开始滚动的函数
+      const resetToTopAndScroll = () => {
+        if (!scrollWrapper.value) return;
+        
+        // 流畅地滚动回顶部
+        scrollWrapper.value.scrollTo({
+          top: 0,
+          behavior: 'smooth'
+        });
+        
+        // 重置状态
+        hasReachedBottom.value = false;
+        hasResetTimerSet.value = false;
+        
+        console.log('重置滚动位置到顶部');
+        
+        // 短暂延迟后重新启动自动滚动
+        setTimeout(() => {
+          if (!isMouseOver.value) {
+            isAutoScrolling.value = true;
+            isManuallyPaused.value = false;
+          }
+        }, 1000);
+      };
+      
+      // 添加：设置自动重置计时器
+      const setupResetTimer = () => {
+        if (hasResetTimerSet.value) return;
+        
+        // 记录开始空闲时间
+        idleStartTime.value = Date.now();
+        
+        // 设置3秒后自动回到顶部
+        const resetTimer = setTimeout(() => {
+          const idleTime = Date.now() - idleStartTime.value;
+          
+          // 确保真的过了5秒
+          if (idleTime >= 3000) {
+            resetToTopAndScroll();
+          }
+          
+          hasResetTimerSet.value = false;
+        }, 3000);
+        
+        scrollIntervals.value.push(resetTimer);
+        hasResetTimerSet.value = true;
+        
+        console.log('设置5秒自动重置计时器');
+      };
+      
+      // 添加：跟踪上一次滚动位置
+      let lastScrollPosition = 0;
+      
+      // 处理手动滚动
+      const handleManualScroll = () => {
+        if (!scrollWrapper.value) return;
+        
+        // 更新最后手动滚动时间
+        lastManualScrollTime.value = Date.now();
+        
+        // 获取当前滚动位置
+        const currentScroll = scrollWrapper.value.scrollTop;
+        
+        // 检测滚动方向
+        const isScrollingUp = currentScroll < lastScrollPosition;
+        
+        // 更新上一次滚动位置
+        lastScrollPosition = currentScroll;
+        
+        // 如果不是由自动滚动触发的事件（通过时间间隔判断）
+        const isUserInitiated = !scrollIntervals.value.length || 
+                              Date.now() - lastManualScrollTime.value > scrollInterval * 2;
+        
+        if (isUserInitiated) {
+          const maxScrollWithBuffer = maxScroll - 5; // 添加5px缓冲区
+          
+          // 检查是否接近底部
+          if (currentScroll >= maxScrollWithBuffer) {
+            // 已到达底部，停止自动滚动
+            isAutoScrolling.value = false;
+            hasReachedBottom.value = true;
+            isManuallyPaused.value = false; // 不是手动暂停，而是到达底部
+            
+            // 清理自动滚动定时器
+            clearAllScrollTimers();
+            
+            // 设置5秒后自动回到顶部
+            setupResetTimer();
+            
+            console.log('手动滚动到底部');
+          } else {
+            // 如果是向上滚动且之前已到达底部，重置底部状态
+            if (isScrollingUp && hasReachedBottom.value) {
+              hasReachedBottom.value = false;
+              console.log('向上滚动，重置底部状态');
+            }
+            
+            // 特殊处理：检查是否是从外部刚进入列表区域并向上滚动
+            if (isMouseJustEntered.value && isScrollingUp) {
+              // 用户从外部刚进入并且向上滚动，重置状态
+              hasReachedBottom.value = false;
+              isManuallyPaused.value = false;
+              isAutoScrolling.value = true;
+              isMouseJustEntered.value = false;
+              
+              console.log('从外部进入并向上滚动，重置自动滚动');
+              return;
+            }
+            
+            // 手动滚动时暂停自动滚动，标记为手动暂停
+            isAutoScrolling.value = false;
+            isManuallyPaused.value = true;
+            
+            console.log('用户手动滚动，暂停自动滚动');
+          }
+        }
+      };
+      
+      // 处理鼠标移入
+      const handleMouseEnter = () => {
+        isMouseOver.value = true;
+        lastMouseEnterTime.value = Date.now();
+        
+        // 检查是否是刚从外部进入（距离上次进入超过300ms）
+        const timeSinceLastEntry = Date.now() - lastMouseEnterTime.value;
+        isMouseJustEntered.value = timeSinceLastEntry > 300 || lastMouseEnterTime.value === 0;
+        
+        // 鼠标悬停时暂停自动滚动
+        if (isAutoScrolling.value) {
+          isManuallyPaused.value = true;
+          isAutoScrolling.value = false;
+          console.log('鼠标悬停，暂停自动滚动');
+        }
+        
+        // 重置空闲计时器
+        idleStartTime.value = 0;
+        hasResetTimerSet.value = false;
+      };
+      
+      // 处理鼠标移出
+      const handleMouseLeave = () => {
+        isMouseOver.value = false;
+        isMouseJustEntered.value = false;
+        
+        // 如果当前不在底部，恢复自动滚动
+        if (!hasReachedBottom.value) {
+          isManuallyPaused.value = false;
+          isAutoScrolling.value = true;
+          console.log('鼠标移开，恢复自动滚动');
+        } else {
+          // 当在底部时，设置5秒后自动回到顶部
+          setupResetTimer();
+          console.log('鼠标移开且在底部，设置自动重置');
+        }
+      };
+      
+      // 添加事件监听
+      if (scrollWrapper.value) {
+        scrollWrapper.value.addEventListener('scroll', handleManualScroll);
+        scrollWrapper.value.addEventListener('mouseenter', handleMouseEnter);
+        scrollWrapper.value.addEventListener('mouseleave', handleMouseLeave);
+        
+        // 保存移除函数以便清理
+        const cleanupListeners = () => {
+          if (scrollWrapper.value) {
+            scrollWrapper.value.removeEventListener('scroll', handleManualScroll);
+            scrollWrapper.value.removeEventListener('mouseenter', handleMouseEnter);
+            scrollWrapper.value.removeEventListener('mouseleave', handleMouseLeave);
+          }
+        };
+        
+        // 将清理函数保存为onBeforeUnmount时执行
+        onBeforeUnmount(cleanupListeners);
+      }
+      
+      // 启动自动滚动定时器
+      const autoScrollTimer = setInterval(() => {
+        // 检查是否应该滚动
+        if (!isAutoScrolling.value || !scrollWrapper.value || hasReachedBottom.value || isMouseOver.value) {
+          return;
+        }
+        
+        // 获取当前滚动位置
+        const currentScroll = scrollWrapper.value.scrollTop;
+        
+        // 如果没有到达底部，继续滚动
+        if (currentScroll < maxScroll) {
+          scrollWrapper.value.scrollTop = currentScroll + scrollStep;
+          
+          // 检查是否已到达底部
+          const maxScrollWithBuffer = maxScroll - 5; // 添加5px缓冲区
+          if (scrollWrapper.value.scrollTop >= maxScrollWithBuffer) {
+            // 已到达底部，停止滚动
+            isAutoScrolling.value = false;
+            hasReachedBottom.value = true;
+            
+            // 确保精确滚动到底部
+            scrollWrapper.value.scrollTop = maxScroll;
+            
+            // 设置5秒后自动回到顶部
+            setupResetTimer();
+            
+            console.log('自动滚动到底部，停止滚动');
+          }
+        } else {
+          // 已到达底部，停止滚动
+          isAutoScrolling.value = false;
+          hasReachedBottom.value = true;
+          isManuallyPaused.value = false;
+          
+          // 设置5秒后自动回到顶部
+          setupResetTimer();
+        }
+      }, scrollInterval);
+      
+      // 存储定时器ID以便清理
+      scrollIntervals.value.push(autoScrollTimer);
+    };
+
+    // 监听景区列表变化，更新滚动效果
+    watch(scenicList, () => {
+      // 延迟执行以确保DOM已更新
+      setTimeout(() => {
+        setupScrollAnimation();
+      }, 100);
+    }, { deep: true });
+
+    // 在卸载前清理所有定时器
+    onBeforeUnmount(() => {
+      scrollIntervals.value.forEach(id => {
+        clearInterval(id);
+        clearTimeout(id);
+      });
+      scrollIntervals.value = [];
+    });
+
+    // 在挂载后初始化滚动效果
     onMounted(async () => {
       loading.value = true
       try {
         // 获取交通数据
         await fetchTransportationData()
+        
+        // 处理URL查询参数
+        const provinceParam = currentRoute.query.province as string
+        const transportParam = currentRoute.query.transport as string
+        
+        // 如果有省份参数且在可用省份列表中，则设置选中的省份
+        if (provinceParam && provinceParam !== '全国') {
+          // 等待数据加载完成
+          await nextTick()
+          
+          // 确保provincesWithData已经有数据
+          if (provincesWithData.value.has(provinceParam)) {
+            selectedProvince.value = provinceParam
+            // 如果有交通方式参数，也设置它
+            if (transportParam && transportTypes.value.includes(transportParam)) {
+              selectedTransport.value = transportParam
+            }
+            // 手动触发省份变更，确保视图更新
+            handleProvinceChange()
+          }
+        }
+        
         // 如果初始视图是全国，渲染依赖轮图
         if (selectedProvince.value === '全国') {
           setTimeout(() => {
@@ -985,16 +1528,38 @@ export default defineComponent({
       } finally {
         loading.value = false
       }
+      
+      // 设置滚动动画
+      setTimeout(() => {
+        setupScrollAnimation();
+      }, 200);
     })
+
+    // 在组件更新后检查滚动状态
+    const updateScrollStatus = () => {
+      setupScrollAnimation();
+    };
     
     return {
       selectedProvince,
       provinceList,
-      availableProvinces, // 使用可用省份替代所有省份
+      availableProvinces,
       circularChartOptions,
       handleProvinceChange,
       loading,
-      noDataError
+      noDataError,
+      selectedTransport,
+      scenicList,
+      scenicListLoading,
+      navigateToScenic,
+      handleImageUrl,
+      handleImageError,
+      onChartRendered,
+      scrollWrapper,
+      scrollContent,
+      scenicListForDisplay,
+      updateScrollStatus,
+      updateUrlParams
     }
   }
 })
@@ -1012,6 +1577,132 @@ export default defineComponent({
   box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.05);
   border-radius: 4px;
   padding: 0;
+}
+
+/* 省份视图容器样式 */
+.province-view-container {
+  display: flex;
+  width: 100%;
+  height: 700px;
+  position: relative;
+}
+
+/* 景区列表容器样式 */
+.scenic-list-container {
+  width: 300px;
+  padding: 15px;
+  background-color: #F7F9FC;
+  display: flex;
+  flex-direction: column;
+  margin-right: 20px; /* 不贴边框 */
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.scenic-list-container h3 {
+  margin-top: 0;
+  margin-bottom: 15px;
+  color: #303133;
+  font-size: 16px;
+  font-weight: 600;
+  text-align: center;
+}
+
+/* 新增：景区列表外层容器 - 修改为可手动滚动 */
+.scenic-scroll-wrapper {
+  flex: 1;
+  overflow-y: auto; /* 添加垂直滚动条 */
+  position: relative;
+  border-radius: 4px;
+  /* 自定义滚动条样式 */
+  scrollbar-width: none; /* 火狐浏览器隐藏滚动条 */
+  /* 确保滚动平滑 */
+  scroll-behavior: smooth;
+}
+
+/* 自定义滚动条样式 - Webkit浏览器 */
+.scenic-scroll-wrapper::-webkit-scrollbar {
+  width: 0; /* 完全隐藏滚动条 */
+  display: none; /* 确保滚动条不显示 */
+}
+
+/* 新增：景区列表内部滚动内容 */
+.scenic-scroll-content {
+  position: relative;
+  width: 100%;
+}
+
+/* 滚动到底部后禁止继续滚动 */
+.scenic-scroll-wrapper.scroll-disabled {
+  overflow-y: hidden; /* 禁止滚动 */
+}
+
+/* 景区项目样式 */
+.scenic-item {
+  display: flex;
+  padding: 10px;
+  margin-bottom: 12px;
+  background-color: #FFFFFF;
+  border-radius: 4px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.scenic-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.scenic-image {
+  width: 80px;
+  height: 60px;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-right: 10px;
+}
+
+.scenic-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.scenic-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.scenic-name {
+  font-weight: 500;
+  color: #303133;
+  margin-bottom: 5px;
+  /* 多行文本省略 */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.scenic-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.scenic-price {
+  color: #F56C6C;
+  font-size: 13px;
+}
+
+/* 图表区域样式 */
+.chart-area {
+  flex: 1;
+  transition: width 0.3s ease;
 }
 
 /* Highcharts容器样式 */
@@ -1033,6 +1724,24 @@ export default defineComponent({
   
   .chart-wrapper {
     box-shadow: none;
+  }
+  
+  /* 移动设备上调整布局方向 */
+  .province-view-container {
+    flex-direction: column;
+    height: auto;
+  }
+  
+  .scenic-list-container {
+    width: 100%;
+    height: 300px;
+    border-right: none;
+    margin-right: 0;
+    margin-bottom: 15px;
+  }
+  
+  .chart-area {
+    height: 500px;
   }
 }
 
@@ -1061,5 +1770,28 @@ export default defineComponent({
   .loading-container {
     min-height: 500px;
   }
+}
+
+.scenic-transport {
+  margin-top: 5px;
+}
+
+.scenic-transport .el-tag {
+  font-size: 11px;
+  padding: 0 5px;
+  height: 20px;
+  line-height: 20px;
+}
+
+/* 无数据提示样式 */
+.no-data-tip {
+  text-align: center;
+  color: #909399;
+  padding: 20px 0;
+}
+
+/* 加载提示样式 */
+.loading-tip {
+  padding: 10px;
 }
 </style> 

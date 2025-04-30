@@ -24,7 +24,7 @@ from .models import (
     ScenicData, PriceData, ProvinceTraffic, TimeData, TrafficData,
     ScenicLevelPrice, MuseumLevelPrice, GeoLogicalParkLevelPrice,
     ForestParkLevelPrice, WetlandLevelPrice, CulturalRelicLevelPrice, 
-    NatureReserveLevelPrice
+    NatureReserveLevelPrice, TransportMode
 )
 from .serializers import (
     ScenicDataSerializer, ScenicSearchSerializer, ScenicDetailSerializer,
@@ -803,42 +803,43 @@ class ScenicSearchView(views.APIView):
                 
                 # 记录搜索操作(如果用户已登录)
                 try:
-                    search_details = f'搜索景区: {keyword}'
-                    if province or city or district or scenic_type or level:
-                        filters = []
-                        if province: filters.append(f'省份={province}')
-                        if city: filters.append(f'城市={city}')
-                        if district: filters.append(f'区县={district}')
-                        if scenic_type: filters.append(f'类型={scenic_type}')
-                        if level: filters.append(f'等级={level}')
-                        search_details += f'(筛选: {", ".join(filters)})'
+                    # 只在有关键字或筛选条件时才记录搜索操作
+                    if keyword.strip() or province or city or district or scenic_type or level:
+                        search_details = f'搜索景区: {keyword}'
+                        if province or city or district or scenic_type or level:
+                            filters = []
+                            if province: filters.append(f'省份={province}')
+                            if city: filters.append(f'城市={city}')
+                            if district: filters.append(f'区县={district}')
+                            if scenic_type: filters.append(f'类型={scenic_type}')
+                            if level: filters.append(f'等级={level}')
+                            search_details += f'(筛选: {", ".join(filters)})'
                     
-                    # 区分已登录用户和匿名用户
-                    if request.user.is_authenticated:
-                        # 已登录用户，正常记录搜索操作
-                        UserActionRecord.objects.create(
-                            user=request.user,
-                            action_type='search',
-                            details=search_details
-                        )
-                    else:
-                        # 匿名用户，使用系统中第一个管理员用户记录
-                        from django.contrib.auth.models import User
-                        try:
-                            # 查找管理员用户
-                            admin_user = User.objects.filter(is_staff=True).first() or User.objects.first()
-                            if admin_user:
-                                UserActionRecord.objects.create(
-                                    user=admin_user,
-                                    action_type='search',
-                                    details=f"[匿名搜索] {search_details}"
-                                )
-                        except Exception as e:
-                            print(f"[匿名搜索] 获取系统用户失败: {str(e)}")
-                except Exception as e:
-                    print(f"[警告] 记录用户操作失败: {e}")
-                    import traceback
-                    traceback.print_exc()
+                        # 区分已登录用户和匿名用户
+                        if request.user.is_authenticated:
+                            # 已登录用户，正常记录搜索操作
+                            UserActionRecord.objects.create(
+                                user=request.user,
+                                action_type='search',
+                                details=search_details
+                            )
+                        else:
+                            # 匿名用户，使用系统中第一个管理员用户记录
+                            from django.contrib.auth.models import User
+                            try:
+                                # 查找管理员用户
+                                admin_user = User.objects.filter(is_staff=True).first() or User.objects.first()
+                                if admin_user:
+                                    UserActionRecord.objects.create(
+                                        user=admin_user,
+                                        action_type='search',
+                                        details=f"[匿名搜索] {search_details}"
+                                    )
+                            except Exception as e:
+                                print(f"[匿名搜索] 获取系统用户失败: {str(e)}")
+                except Exception as record_error:
+                    print(f"记录搜索操作失败: {str(record_error)}")
+                    # 忽略记录错误，继续返回搜索结果
                 
                 # 按关键词匹配度排序，将名称中包含关键词的景区排在最前面
                 if keyword:
@@ -1141,7 +1142,7 @@ class ProvinceCityDistributionView(views.APIView):
                 try:
                     UserActionRecord.objects.create(
                         user=request.user,
-                        action_type='view_province_city_distribution',
+                        action_type='view_scenic_detail',
                         details=f"查看省份城市分布: {province_name}"
                     )
                 except Exception as record_error:
@@ -1426,8 +1427,8 @@ class SentimentTypeView(views.APIView):
                     if len(type_level) == 2 and type_level[0].strip() == scenic_type:
                         return type_level[1].strip()
                 elif scenic_type in part and part == scenic_type:
-                    # 对于没有指定级别的，记为"无级别"
-                    return "无级别"
+                    # 对于没有指定级别的，记为"暂无分类"
+                    return "暂无分类"
                     
         return None
 
@@ -2081,8 +2082,13 @@ class NearbyScenicView(views.APIView):
                     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
                     distance = R * c  # 距离，单位：公里
                     
+                    # 确保ID格式正确，为纯数字ID添加S前缀
+                    scenic_id_formatted = nearby.scenic_id
+                    if str(scenic_id_formatted).isdigit():
+                        scenic_id_formatted = f"S{scenic_id_formatted}"
+                    
                     result.append({
-                        'id': nearby.scenic_id,
+                        'id': scenic_id_formatted,  # 使用格式化后的ID
                         'name': nearby.name,
                         'price': nearby.min_price or '免费',
                         'image': nearby.image_url,
@@ -2160,3 +2166,106 @@ class StatisticsSummaryView(views.APIView):
                 {'error': '获取统计数据失败', 'message': str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+class TransportationScenicView(views.APIView):
+    """获取指定省份和交通方式相关的景区列表"""
+    permission_classes = [permissions.AllowAny]
+    
+    def get(self, request):
+        try:
+            # 获取查询参数
+            province = request.query_params.get('province', '')
+            transport_type = request.query_params.get('transport', '')
+            
+            if not province:
+                return Response({'error': '省份参数不能为空'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # 记录用户操作
+            if request.user.is_authenticated:
+                UserActionRecord.objects.create(
+                    user=request.user,
+                    action_type='view',
+                    details=f'查询交通方式与景区关系(省份: {province}, 交通方式: {transport_type or "全部"})'
+                )
+            
+            # 查询逻辑，使用多种可能的字段名尝试匹配
+            transport_mode_items = []
+            try:
+                # 构建基本查询条件
+                query = TransportMode.objects.filter(city_name=province)
+                
+                # 如果提供了交通方式，则添加交通方式筛选条件
+                if transport_type:
+                    transport_keyword = transport_type.lower()
+                    query = query.filter(transport_mode__icontains=transport_keyword)
+                
+                transport_mode_items = list(query)
+                
+                # 如果没有找到记录，尝试使用原始SQL查询
+                if not transport_mode_items:
+                    if transport_type:
+                        query = TransportMode.objects.raw(
+                            "SELECT * FROM transport_mode WHERE city_name = %s AND transport_mode LIKE %s",
+                            [province, f"%{transport_type.lower()}%"]
+                        )
+                    else:
+                        query = TransportMode.objects.raw(
+                            "SELECT * FROM transport_mode WHERE city_name = %s",
+                            [province]
+                        )
+                    transport_mode_items = list(query)
+            except Exception as e:
+                print(f"[TransportationScenic] 查询时出错: {e}")
+                import traceback
+                print(traceback.format_exc())
+            
+            # 转换为前端需要的格式
+            filtered_scenics = []
+            
+            for item in transport_mode_items:
+                try:
+                    # 确保ID格式正确，为纯数字ID添加S前缀
+                    item_info = {
+                        'id': f"TM{item.id}",  # 使用TransportMode的ID|TM
+                        'name': item.scenic_name,
+                        'image': None,  # 没有图片
+                        'price': '未知',
+                        'type': '未知',
+                        'city': getattr(item, 'city_name', province),
+                        'transport_mode': item.transport_mode
+                    }
+                    
+                    # 尝试查找对应的景区数据补充信息
+                    try:
+                        scenic = ScenicData.objects.filter(name=item.scenic_name).first()
+                        if scenic:
+                            scenic_id_formatted = scenic.scenic_id
+                            if str(scenic_id_formatted).isdigit():
+                                scenic_id_formatted = f"S{scenic_id_formatted}"
+                            
+                            item_info.update({
+                                'id': scenic_id_formatted,
+                                'image': scenic.image_url if scenic.image_url else '/img/default-scenic.jpg',
+                                'price': scenic.min_price or '免费',
+                                'type': scenic.scenic_type,
+                                'city': scenic.city or getattr(item, 'city_name', province)
+                            })
+                    except Exception as e:
+                        print(f"[TransportationScenic] 获取景区详情错误: {e}")
+                        pass
+                    
+                    filtered_scenics.append(item_info)
+                except Exception as e:
+                    print(f"[TransportationScenic] 处理景区项时出错: {e}")
+                    continue
+            
+            # 按景区名称排序
+            filtered_scenics.sort(key=lambda x: x['name'])
+
+            return Response(filtered_scenics)
+            
+        except Exception as e:
+            print(f"[TransportationScenic] 处理请求时出错: {e}")
+            import traceback
+            print(traceback.format_exc())
+            return Response({'error': f'处理请求时出错: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

@@ -4,7 +4,19 @@ import { useUserStore } from '@/stores/user'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import axios from 'axios'
-import { Check, Upload, Picture, Location, Delete } from '@element-plus/icons-vue'
+import { 
+  Check, 
+  Upload, 
+  Picture, 
+  Location, 
+  Delete, 
+  WarningFilled, 
+  CircleCheckFilled, 
+  Loading, 
+  View,
+  Key,
+  CircleCheck
+} from '@element-plus/icons-vue'
 import { useRoute, useRouter } from 'vue-router'
 
 const userStore = useUserStore()
@@ -15,7 +27,7 @@ const uploading = ref(false)
 const loading = ref(false)
 const favoritesLoading = ref(false)
 const favorites = ref<any[]>([])
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001'
 
 // 个人信息表单
 const profileForm = reactive({
@@ -30,6 +42,8 @@ const originalEmail = ref(userStore.email) // 保存原始邮箱用于比较
 const showEmailCodeField = ref(false) // 控制验证码字段显示
 const emailCodeSending = ref(false) // 验证码发送状态
 const emailCodeCountdown = ref(0) // 验证码倒计时
+const emailVerificationSuccess = ref(false) // 邮箱验证成功状态
+const emailModificationInProgress = ref(false) // 邮箱修改进行中状态
 
 const profileFormRef = ref<FormInstance>()
 
@@ -158,9 +172,13 @@ const handleAvatarSuccess = (response: any) => {
 const checkEmailChange = () => {
   if (profileForm.email !== originalEmail.value) {
     showEmailCodeField.value = true
+    emailVerificationSuccess.value = false
+    emailModificationInProgress.value = true
   } else {
     showEmailCodeField.value = false
     profileForm.email_code = '' // 清空验证码
+    emailVerificationSuccess.value = false
+    emailModificationInProgress.value = false
   }
 }
 
@@ -177,6 +195,8 @@ const sendEmailCode = async () => {
   }
 
   emailCodeSending.value = true
+  emailVerificationSuccess.value = false
+  
   try {
     await userStore.sendEmailCode(profileForm.email, true) // true表示是个人资料更新场景
     ElMessage.success('验证码已发送，请查收邮件')
@@ -194,6 +214,43 @@ const sendEmailCode = async () => {
     ElMessage.error(error.response?.data?.message || '发送验证码失败，请稍后重试')
   } finally {
     emailCodeSending.value = false
+  }
+}
+
+// 验证验证码是否正确（可选，添加单独验证步骤）
+const verifyEmailCode = async () => {
+  if (!profileForm.email_code || profileForm.email_code.length !== 6) {
+    ElMessage.warning('请输入6位数字验证码')
+    return
+  }
+  
+  loading.value = true
+  
+  try {
+    // 调用API验证验证码
+    await userStore.verifyEmailCode(profileForm.email, profileForm.email_code)
+    emailVerificationSuccess.value = true
+    ElMessage.success('验证码验证成功')
+  } catch (error: any) {
+    console.error('验证码验证失败:', error)
+    emailVerificationSuccess.value = false
+    ElMessage.error(error.response?.data?.message || '验证码验证失败')
+  } finally {
+    loading.value = false
+  }
+}
+
+// 取消修改邮箱
+const cancelEmailModification = () => {
+  profileForm.email = originalEmail.value
+  profileForm.email_code = ''
+  showEmailCodeField.value = false
+  emailVerificationSuccess.value = false
+  emailModificationInProgress.value = false
+  
+  // 重置表单验证状态
+  if (profileFormRef.value) {
+    profileFormRef.value.clearValidate('email')
   }
 }
 
@@ -252,6 +309,8 @@ const saveProfile = async (formEl: FormInstance | undefined) => {
         // 隐藏验证码字段和清空验证码
         showEmailCodeField.value = false
         profileForm.email_code = ''
+        emailVerificationSuccess.value = false
+        emailModificationInProgress.value = false
         
         // 成功后强制刷新头像显示
         setTimeout(() => {
@@ -510,43 +569,48 @@ const handleDeleteAccount = async () => {
 watch(() => profileForm.email, (newEmail) => {
   if (newEmail !== originalEmail.value) {
     showEmailCodeField.value = true
+    emailVerificationSuccess.value = false
+    emailModificationInProgress.value = true
   } else {
     showEmailCodeField.value = false
+    emailVerificationSuccess.value = false
+    emailModificationInProgress.value = false
   }
 }, { immediate: true })
 </script>
 
 <template>
   <div class="profile-container">
-    <el-card>
+    <el-card class="profile-card">
       <template #header>
         <div class="card-header">
           <span class="header-title">个人中心</span>
         </div>
       </template>
       
-      <el-tabs v-model="activeTab" @tab-click="handleTabClick">
+      <el-tabs v-model="activeTab" @tab-click="handleTabClick" class="profile-tabs">
         <!-- 个人信息标签页 -->
         <el-tab-pane label="个人信息" name="info">
           <div class="user-info-container">
             <div class="avatar-section">
-              <el-avatar 
-                :key="avatarKey"
-                :src="profileForm.avatar ? getFullAvatarUrl(profileForm.avatar) : 'https://cube.elemecdn.com/3/7c/3ea6beec64369c2642b92c6726f1epng.png'" 
-                :size="120" 
-                class="user-avatar"
-              >
-                <template #error>
-                  <el-icon style="font-size: 30px; color: #909399;"><Picture /></el-icon>
-                </template>
-              </el-avatar>
+              <div class="avatar-wrapper">
+                <el-avatar 
+                  :key="avatarKey"
+                  :src="profileForm.avatar ? getFullAvatarUrl(profileForm.avatar) : 'https://cube.elemecdn.com/3/7c/3ea6beec64369c2642b92c6726f1epng.png'" 
+                  :size="120" 
+                  class="user-avatar"
+                >
+                  <template #error>
+                    <el-icon style="font-size: 30px; color: #909399;"><Picture /></el-icon>
+                  </template>
+                </el-avatar>
+                <div class="avatar-overlay" v-if="uploading">
+                  <el-icon class="loading-icon"><Loading /></el-icon>
+                </div>
+              </div>
               
               <!-- 头像操作按钮区域 -->
               <div class="avatar-buttons">
-                <el-button type="primary" size="small" @click="testDirectAccess" class="avatar-btn">
-                  查看头像
-                </el-button>
-                
                 <el-upload
                   class="avatar-uploader"
                   action="/api/users/upload-avatar/"
@@ -576,6 +640,10 @@ watch(() => profileForm.email, (newEmail) => {
                     <el-icon class="el-icon--left"><Upload /></el-icon>更换头像
                   </el-button>
                 </el-upload>
+                
+                <el-button type="info" size="small" @click="testDirectAccess" class="avatar-btn view-btn">
+                  <el-icon class="el-icon--left"><View /></el-icon>查看头像
+                </el-button>
               </div>
               
               <!-- 提示信息 -->
@@ -591,31 +659,120 @@ watch(() => profileForm.email, (newEmail) => {
                 :rules="rules"
                 label-position="top"
                 class="profile-form"
+                status-icon
               >
                 <el-form-item label="用户名" prop="username">
-                  <el-input v-model="profileForm.username" placeholder="请输入用户名" />
+                  <el-input v-model="profileForm.username" placeholder="请输入用户名" prefix-icon="User" />
                 </el-form-item>
                 
-                <el-form-item label="邮箱" prop="email">
-                  <el-input v-model="profileForm.email" placeholder="请输入邮箱地址" @input="checkEmailChange" />
+                <!-- 邮箱修改部分 - 优化版 -->
+                <el-form-item label="邮箱" prop="email" class="email-form-item">
+                  <!-- 邮箱输入框 -->
+                  <div class="email-input-container">
+                    <el-input 
+                      v-model="profileForm.email" 
+                      placeholder="请输入邮箱地址" 
+                      @input="checkEmailChange" 
+                      :disabled="emailVerificationSuccess"
+                      prefix-icon="Message"
+                    />
+                    
+                    <!-- 取消修改按钮 - 修改为按钮形式并调整样式 -->
+                    <el-button
+                      v-if="emailModificationInProgress"
+                      @click="cancelEmailModification"
+                      size="small"
+                      class="cancel-btn"
+                      type="danger"
+                      plain
+                    >
+                      取消修改
+                    </el-button>
+                  </div>
+                  
+                  <!-- 修改状态提示 -->
+                  <div v-if="emailModificationInProgress && !emailVerificationSuccess" class="email-change-tip warning">
+                    <el-icon><WarningFilled /></el-icon>
+                    <span>您正在修改邮箱，需要验证新邮箱才能保存</span>
+                  </div>
+                  
+                  <!-- 验证成功提示 -->
+                  <div v-if="emailVerificationSuccess" class="email-change-tip success">
+                    <el-icon><CircleCheckFilled /></el-icon>
+                    <span>新邮箱验证成功，请点击保存修改按钮完成修改</span>
+                  </div>
                 </el-form-item>
                 
-                <el-form-item v-if="showEmailCodeField" label="验证码" prop="email_code">
+                <!-- 验证码部分 -->
+                <el-form-item 
+                  v-if="showEmailCodeField" 
+                  label="验证码" 
+                  prop="email_code" 
+                  class="verification-form-item"
+                  :class="{'is-success': emailVerificationSuccess}"
+                >
                   <div class="verify-code-input">
-                    <el-input v-model="profileForm.email_code" placeholder="请输入验证码" />
+                    <el-input 
+                      v-model="profileForm.email_code" 
+                      placeholder="请输入验证码" 
+                      :disabled="emailVerificationSuccess"
+                      maxlength="6"
+                      show-word-limit
+                      class="code-input"
+                    >
+                      <template #prefix>
+                        <el-icon><Key /></el-icon>
+                      </template>
+                      <template #suffix>
+                        <el-icon v-if="emailVerificationSuccess" color="#67c23a"><CircleCheck /></el-icon>
+                      </template>
+                    </el-input>
                     <el-button 
                       type="primary" 
-                      :disabled="emailCodeSending || emailCodeCountdown > 0" 
+                      :disabled="emailCodeSending || emailCodeCountdown > 0 || emailVerificationSuccess" 
                       @click="sendEmailCode"
+                      class="send-code-btn"
                     >
                       {{ emailCodeCountdown > 0 ? `${emailCodeCountdown}秒后重试` : '获取验证码' }}
                     </el-button>
                   </div>
-                  <div class="verify-code-tip">修改邮箱需要先验证新邮箱，请输入发送到新邮箱的验证码</div>
+                  
+                  <!-- 验证码验证按钮 - 调整样式使其与获取验证码按钮一致 -->
+                  <div class="verify-code-actions">
+                    <el-button 
+                      type="success" 
+                      :disabled="!profileForm.email_code || profileForm.email_code.length !== 6 || emailVerificationSuccess"
+                      :class="{'is-verified': emailVerificationSuccess}"
+                      @click="verifyEmailCode"
+                      class="verify-btn"
+                    >
+                      <el-icon v-if="emailVerificationSuccess"><Check /></el-icon>
+                      {{ emailVerificationSuccess ? '已验证' : '验证' }}
+                    </el-button>
+                  </div>
+                  
+                  <div class="verify-code-tip">
+                    <el-alert
+                      type="info"
+                      :closable="false"
+                      show-icon
+                    >
+                      <template #title>修改邮箱说明</template>
+                      <ol class="verification-steps">
+                        <li>验证码已发送到新邮箱，有效期10分钟</li>
+                        <li>请检查新邮箱的收件箱和垃圾邮件文件夹</li>
+                        <li>验证成功后点击下方保存按钮完成修改</li>
+                      </ol>
+                    </el-alert>
+                  </div>
                 </el-form-item>
                 
                 <el-form-item label="所在地" prop="location">
-                  <el-input v-model="profileForm.location" placeholder="如：北京市海淀区" />
+                  <el-input 
+                    v-model="profileForm.location" 
+                    placeholder="如：北京市海淀区" 
+                    prefix-icon="Location"
+                  />
                 </el-form-item>
                 
                 <el-form-item>
@@ -624,18 +781,20 @@ watch(() => profileForm.email, (newEmail) => {
                     @click="saveProfile(profileFormRef)" 
                     :loading="loading"
                     class="save-btn"
+                    :disabled="emailModificationInProgress && !emailVerificationSuccess"
                   >
                     <el-icon class="el-icon--left"><Check /></el-icon>保存修改
                   </el-button>
                 </el-form-item>
                 
                 <!-- 账户安全区域 -->
-                <div style="margin-top: 30px; border-top: 1px solid #ebeef5; padding-top: 20px;">
-                  <h3 style="font-size: 16px; color: #303133; margin-bottom: 16px;">账户安全</h3>
+                <div class="account-security-section">
+                  <h3 class="section-title">账户安全</h3>
                   <el-button 
                     type="danger" 
                     @click="showDeleteAccountConfirm"
                     plain
+                    class="delete-btn"
                   >
                     <el-icon class="el-icon--left"><Delete /></el-icon>删除账户
                   </el-button>
@@ -668,10 +827,11 @@ watch(() => profileForm.email, (newEmail) => {
                   :src="item.image || '/static/images/default-scenic.jpg'" 
                   fit="cover"
                   class="scenic-image"
+                  loading="lazy"
                 >
                   <template #error>
                     <div class="image-placeholder">
-                      <el-icon><picture /></el-icon>
+                      <el-icon><Picture /></el-icon>
                     </div>
                   </template>
                 </el-image>
@@ -679,11 +839,11 @@ watch(() => profileForm.email, (newEmail) => {
                 <div class="scenic-info">
                   <h3 class="scenic-name">{{ item.name }}</h3>
                   <div class="scenic-location">
-                    <el-icon><location /></el-icon>
+                    <el-icon><Location /></el-icon>
                     <span>{{ item.province }} {{ item.city }}</span>
                   </div>
                   <div class="scenic-level" v-if="item.level">
-                    <el-tag size="small">{{ item.level }}</el-tag>
+                    <el-tag size="small" type="info" effect="plain" class="disabled-tag">{{ item.level }}</el-tag>
                   </div>
                 </div>
                 
@@ -729,8 +889,13 @@ watch(() => profileForm.email, (newEmail) => {
       width="400px"
       :close-on-click-modal="false"
       :close-on-press-escape="!deleteAccountLoading"
+      center
+      align-center
+      class="delete-account-dialog"
     >
-      <div>
+      <div class="delete-account-content">
+        <el-icon class="warning-icon"><WarningFilled /></el-icon>
+        <p class="delete-warning">删除账户后将无法恢复，所有数据将被永久删除。</p>
         <p>请输入您的密码以确认删除账户：</p>
         <el-input
           v-model="deleteAccountPassword"
@@ -739,9 +904,6 @@ watch(() => profileForm.email, (newEmail) => {
           show-password
           class="delete-account-input"
         />
-        <p class="dialog-warning">
-          提示：账户删除后将无法恢复，所有数据将被永久删除。
-        </p>
       </div>
       <template #footer>
         <div class="dialog-footer">
@@ -762,24 +924,58 @@ watch(() => profileForm.email, (newEmail) => {
 <style scoped>
 .profile-container {
   min-height: 100%;
+  padding: 20px 0;
+}
+
+.profile-card {
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+}
+
+.profile-tabs :deep(.el-tabs__nav) {
+  border-radius: 4px;
+}
+
+.profile-tabs :deep(.el-tabs__item) {
+  transition: all 0.3s ease;
+}
+
+.profile-tabs :deep(.el-tabs__item.is-active) {
+  font-weight: 600;
 }
 
 .card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  padding: 0 8px;
 }
 
 .header-title {
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 600;
   color: #303133;
+  position: relative;
+  padding-left: 10px;
+}
+
+.header-title::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 18px;
+  background-color: #409eff;
+  border-radius: 2px;
 }
 
 .user-info-container {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 30px;
 }
 
 .avatar-section {
@@ -787,14 +983,52 @@ watch(() => profileForm.email, (newEmail) => {
   flex-direction: column;
   align-items: center;
   gap: 15px;
-  padding: 20px;
-  background-color: #f5f7fa;
+  padding: 25px;
+  background-color: #f8f9fb;
   border-radius: 8px;
+  transition: all 0.3s ease;
+}
+
+.avatar-section:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.avatar-wrapper {
+  position: relative;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  overflow: hidden;
 }
 
 .user-avatar {
   box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
   border: 4px solid #fff;
+  transition: all 0.3s ease;
+}
+
+.avatar-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  border-radius: 50%;
+}
+
+.loading-icon {
+  font-size: 24px;
+  color: #fff;
+  animation: spin 1.5s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 
 .avatar-buttons {
@@ -811,10 +1045,21 @@ watch(() => profileForm.email, (newEmail) => {
 
 .avatar-btn {
   transition: all 0.3s;
+  border-radius: 4px;
 }
 
 .avatar-btn:hover {
   transform: translateY(-2px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+.view-btn {
+  background-color: #f4f4f5;
+  color: #606266;
+}
+
+.view-btn:hover {
+  background-color: #e9e9eb;
 }
 
 .el-upload__tip {
@@ -826,16 +1071,34 @@ watch(() => profileForm.email, (newEmail) => {
 }
 
 .info-form-section {
-  margin-top: 20px;
+  margin-top: 10px;
 }
 
 .profile-form .el-form-item {
   margin-bottom: 22px;
+  max-width: 100%;
+}
+
+.profile-form .el-input,
+.profile-form .el-select,
+.save-btn {
+  width: 100%;
 }
 
 .save-btn {
   width: 100%;
   margin-top: 10px;
+  height: 42px;
+  font-size: 16px;
+  font-weight: 500;
+  letter-spacing: 1px;
+  border-radius: 4px;
+  transition: all 0.3s ease;
+}
+
+.save-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(64, 158, 255, 0.3);
 }
 
 .favorites-container {
@@ -848,11 +1111,13 @@ watch(() => profileForm.email, (newEmail) => {
 .favorite-item {
   height: 100%;
   transition: all 0.3s;
+  border-radius: 8px;
+  overflow: hidden;
 }
 
 .favorite-item:hover {
   transform: translateY(-5px);
-  box-shadow: 0 10px 15px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
 }
 
 .favorite-content {
@@ -867,6 +1132,11 @@ watch(() => profileForm.email, (newEmail) => {
   object-fit: cover;
   border-radius: 4px;
   margin-bottom: 12px;
+  transition: all 0.5s ease;
+}
+
+.scenic-image:hover {
+  transform: scale(1.03);
 }
 
 .image-placeholder {
@@ -905,10 +1175,40 @@ watch(() => profileForm.email, (newEmail) => {
   margin-top: 8px;
 }
 
+.disabled-tag {
+  color: #909399;
+  background-color: #f4f4f5;
+  border-color: #e9e9eb;
+  cursor: default;
+}
+
 .actions {
   display: flex;
   justify-content: space-between;
   margin-top: 15px;
+}
+
+.delete-account-dialog :deep(.el-dialog__header) {
+  padding-bottom: 10px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.delete-account-content {
+  text-align: center;
+  padding: 10px 0;
+}
+
+.warning-icon {
+  font-size: 48px;
+  color: #e6a23c;
+  margin-bottom: 15px;
+}
+
+.delete-warning {
+  color: #e6a23c;
+  font-size: 15px;
+  font-weight: 500;
+  margin-bottom: 20px;
 }
 
 .delete-account-input {
@@ -916,20 +1216,15 @@ watch(() => profileForm.email, (newEmail) => {
   width: 100%;
 }
 
-.dialog-warning {
-  color: #e6a23c;
-  font-size: 14px;
-  margin-top: 16px;
-}
-
 .dialog-footer {
   display: flex;
-  justify-content: flex-end;
-  gap: 10px;
+  justify-content: center;
+  gap: 20px;
+  padding-top: 10px;
 }
 
 .pagination-container {
-  margin-top: 20px;
+  margin-top: 30px;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -940,17 +1235,139 @@ watch(() => profileForm.email, (newEmail) => {
 
 .verify-code-input {
   display: flex;
+  align-items: center;
   gap: 10px;
+  margin-bottom: 15px;
 }
 
-.verify-code-input .el-input {
+.verify-code-input .code-input {
   flex: 1;
 }
 
+.send-code-btn {
+  white-space: nowrap;
+  margin-left: 10px;
+  height: 40px;
+  min-width: 100px;
+}
+
+.verify-code-actions {
+  display: flex;
+  justify-content: flex-start;
+  margin-bottom: 15px;
+}
+
+.verify-btn {
+  height: 40px;
+  min-width: 100px;
+}
+
+.verification-form-item {
+  margin-bottom: 25px;
+  padding: 15px;
+  background-color: #f8f9fd;
+  border-radius: 6px;
+  transition: all 0.3s ease;
+}
+
+.verification-form-item.is-success {
+  background-color: #f0f9eb;
+  border: 1px solid rgba(103, 194, 58, 0.2);
+}
+
 .verify-code-tip {
-  font-size: 12px;
-  color: #909399;
   margin-top: 5px;
+}
+
+.verification-steps {
+  padding-left: 20px;
+  margin: 10px 0 5px;
+}
+
+.verification-steps li {
+  margin-bottom: 6px;
+  font-size: 13px;
+}
+
+.email-form-item {
+  margin-bottom: 22px;
+}
+
+.email-input-container {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.email-input-container .el-input {
+  flex: 1;
+}
+
+.cancel-btn {
+  border-radius: 4px;
+  transition: all 0.3s ease;
+  min-width: 90px;
+  margin-left: 10px;
+  height: 32px;
+}
+
+.cancel-btn:hover {
+  background-color: rgba(245, 108, 108, 0.1);
+}
+
+.email-change-tip {
+  margin-top: 8px;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.warning {
+  color: #e6a23c;
+}
+
+.success {
+  color: #67c23a;
+}
+
+.account-security-section {
+  margin-top: 30px; 
+  border-top: 1px solid #ebeef5; 
+  padding-top: 20px;
+}
+
+.section-title {
+  font-size: 16px; 
+  color: #303133; 
+  margin-bottom: 16px;
+  position: relative;
+  padding-left: 10px;
+}
+
+.section-title::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 14px;
+  background-color: #f56c6c;
+  border-radius: 2px;
+}
+
+.delete-btn {
+  transition: all 0.3s ease;
+}
+
+.delete-btn:hover {
+  background-color: rgba(245, 108, 108, 0.1);
+  transform: translateY(-2px);
+}
+
+.is-verified {
+  pointer-events: none;
 }
 
 @media (min-width: 768px) {
@@ -960,13 +1377,42 @@ watch(() => profileForm.email, (newEmail) => {
   }
   
   .avatar-section {
-    width: 250px;
+    width: 280px;
   }
   
   .info-form-section {
     flex: 1;
     margin-top: 0;
     margin-left: 30px;
+  }
+}
+
+@media (max-width: 767px) {
+  .avatar-section {
+    margin-bottom: 20px;
+  }
+  
+  .email-input-container {
+    align-items: flex-start;
+  }
+  
+  .cancel-btn {
+    margin-top: 5px;
+  }
+  
+  .verify-code-input {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .send-code-btn {
+    margin-left: 0;
+    margin-top: 10px;
+    width: 100%;
+  }
+  
+  .verify-btn {
+    width: 100%;
   }
 }
 </style> 
