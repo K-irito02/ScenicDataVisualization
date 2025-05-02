@@ -31,7 +31,7 @@
           <div class="chart-wrapper">
             <base-chart 
               :options="sentimentPieOptions" 
-              height="400px"
+              height="490px"
               v-loading="sentimentLoading"
             />
           </div>
@@ -40,8 +40,9 @@
       
       <!-- 右侧列 - 分析区域 -->
       <el-col :span="12">
-        <!-- 条形图分析在上面 -->
-        <card-container title="景区类型情感数据分析">
+        <!-- 合并后的分析卡片 -->
+        <card-container title="景区情感数据综合分析">
+          <!-- 第一部分：景区类型情感数据表 -->
           <div v-if="typeData.length > 0" class="data-table-backup">
             <h4>景区类型情感数据表</h4>
             <el-table 
@@ -49,6 +50,8 @@
               stripe 
               style="width: 100%"
               size="small"
+              border
+              :header-cell-style="{background:'#f5f7fa',color:'#606266'}"
             >
               <el-table-column prop="level" label="景区级别" />
               <el-table-column prop="avg_sentiment_score" label="情感得分">
@@ -66,20 +69,48 @@
           </div>
           
           <div class="analysis-summary">
-            <h4>数据分析结论</h4>
+            <h4>景区类型情感分析</h4>
             <ul>
+              <li>表中的情感得分和情感强度是该类型等级景区相关数据之和除以该类型等级景区数量得到的<strong>（即平均值）</strong></li>
               <li>随着景区等级的提高，情感得分总体呈上升趋势</li>
               <li>高等级景区通常能引起更强烈的情感反应</li>
               <li>同类型不同等级景区间的情感得分差异反映了等级评定的合理性</li>
               <li>情感强度高的景区往往具有更鲜明的特色或更好的服务</li>
             </ul>
           </div>
-        </card-container>
-        
-        <!-- 饼图分析在下面 -->
-        <card-container title="情感倾向分析" class="mt-20 bottom-card">
-          <div class="analysis-summary">
-            <h4>数据分析结论</h4>
+          
+          <!-- 中间部分：情感分析计算方法 -->
+          <div class="calculation-method">
+            <h4>情感分析计算方法</h4>
+            <div class="calculation-item">
+              <div class="calculation-title">情感得分</div>
+              <div class="calculation-desc">
+                情感得分<strong>（考虑情感词正负）</strong>通过遍历评论中的每个词语，如果该词在情感词典中存在，则获取其情感值。计算过程中同时考虑了程度词（如"非常"、"很"等）的增强作用，以及否定词（如"不"、"没有"等）对情感极性的反转作用。最终将所有词语的情感值累加，得到总的情感得分。
+              </div>
+            </div>
+            
+            <div class="calculation-item">
+              <div class="calculation-title">情感强度</div>
+              <div class="calculation-desc">
+                情感强度<strong>（不考虑情感词正负）</strong>反映情感表达的强弱程度。计算时，系统累加每个<strong>情感词得分的绝对值</strong>，然后除以分词后的总词数，得到平均情感强度。无论是积极情感还是消极情感，强度越高表示情感表达越强烈。
+              </div>
+            </div>
+            
+            <div class="calculation-item">
+              <div class="calculation-title">情感倾向</div>
+              <div class="calculation-desc">
+                情感倾向将评价分为"优"、"中"、"良"三类，基于平均情感得分确定：<br>
+                平均情感得分 = 情感得分 / 分词数<br>
+                平均情感得分 > 0.09，判定为"优"<br>
+                平均情感得分 < 0.03，判定为"良"<br>
+                介于两者之间，判定为"中"
+              </div>
+            </div>
+          </div>
+          
+          <!-- 第三部分：情感倾向分析 -->
+          <div class="analysis-summary mt-20">
+            <h4>情感倾向分析</h4>
             <ul>
               <li>情感倾向为"优"的景区占比最大，表明大部分景区评价良好</li>
               <li>不同情感倾向的分布反映游客对景区的整体满意度</li>
@@ -427,15 +458,31 @@ export default defineComponent({
 
 .analysis-summary {
   background-color: #f8f9fa;
-  padding: 15px;
+  padding: 20px;
   border-radius: 4px;
-  margin-top: 10px;
+  margin-top: 20px;
+  border: 1px solid #e4e7ed;
 }
 
 .analysis-summary h4 {
   margin-top: 0;
-  margin-bottom: 10px;
+  margin-bottom: 15px;
   color: #303133;
+  position: relative;
+  padding-left: 10px;
+  font-size: 16px;
+}
+
+.analysis-summary h4:before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 14px;
+  background-color: #67c23a;
+  border-radius: 2px;
 }
 
 .analysis-summary ul {
@@ -445,13 +492,15 @@ export default defineComponent({
 
 .analysis-summary li {
   margin-bottom: 8px;
+  line-height: 1.6;
+  color: #606266;
 }
 
 .data-table-backup {
-  margin-top: 10px;
-  margin-bottom: 10px;
-  border: 1px solid #ebeef5;
-  padding: 15px;
+  margin-top: 20px;
+  margin-bottom: 0;
+  border: 1px solid #e4e7ed;
+  padding: 20px;
   border-radius: 4px;
   background-color: #f8f9fa;
 }
@@ -460,10 +509,16 @@ export default defineComponent({
   margin-top: 0;
   margin-bottom: 15px;
   text-align: center;
+  position: relative;
+  color: #303133;
 }
 
 .mt-20 {
   margin-top: 20px;
+}
+
+.mt-10 {
+  margin-top: 10px;
 }
 
 .title-with-select {
@@ -476,7 +531,7 @@ export default defineComponent({
 /* 确保底部两张卡片高度一致 */
 .el-row {
   display: flex;
-  flex-wrap: wrap;
+  align-items: flex-start;
 }
 
 .el-col {
@@ -484,8 +539,94 @@ export default defineComponent({
   flex-direction: column;
 }
 
+.el-col .card-container {
+  margin-bottom: 20px;
+  height: 100%;
+}
+
+/* 确保左右两列的卡片从相同位置开始 */
+.el-row {
+  display: flex;
+  align-items: flex-start;
+}
+
+/* 使左侧布局为纵向布局，以便饼图能对齐到底部 */
+.el-col:first-child {
+  display: flex;
+  flex-direction: column;
+}
+
+/* 调整饼图卡片，使其占用剩余空间 */
 .bottom-card {
-  flex: 1;
+  margin-top: 20px !important;
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 确保右侧卡片高度占满 */
+.el-col:last-child .card-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.analysis-summary:last-child h4:before {
+  background-color: #e6a23c;
+}
+
+.calculation-method {
+  margin-top: 25px;
+  margin-bottom: 25px;
+  padding: 20px;
+  border: 1px solid #e4e7ed;
+  border-radius: 4px;
+  background-color: #f5f7fa;
+}
+
+.calculation-method h4 {
+  margin-top: 0;
+  margin-bottom: 15px;
+  font-size: 16px;
+  color: #303133;
+  position: relative;
+  padding-left: 10px;
+}
+
+.calculation-method h4:before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 14px;
+  background-color: #409EFF;
+  border-radius: 2px;
+}
+
+.calculation-item {
+  margin-bottom: 15px;
+  padding-bottom: 15px;
+  border-bottom: 1px dashed #e4e7ed;
+}
+
+.calculation-item:last-child {
   margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.calculation-title {
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: #409EFF;
+}
+
+.calculation-desc {
+  margin-left: 0;
+  line-height: 1.6;
+  color: #606266;
+  text-align: justify;
 }
 </style>

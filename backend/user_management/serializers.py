@@ -264,9 +264,14 @@ class UserFavoriteSerializer(serializers.ModelSerializer):
         from scenic_data.models import ScenicData
         try:
             scenic = ScenicData.objects.get(scenic_id=obj.scenic_id)
-            return scenic.image_url or '/static/images/default-scenic.jpg'
+            # 检查image_url是否存在且有效
+            if scenic.image_url and scenic.image_url.strip() and scenic.image_url.lower() != 'null' and scenic.image_url.lower() != 'none':
+                return scenic.image_url
+            # 返回正确的默认图片路径 - 前端使用/img/default-scenic.jpg
+            return '/img/default-scenic.jpg'
         except ScenicData.DoesNotExist:
-            return '/static/images/default-scenic.jpg'
+            # 使用正确的默认图片路径
+            return '/img/default-scenic.jpg'
     
     def get_province(self, obj):
         # 从ScenicData中获取景区省份

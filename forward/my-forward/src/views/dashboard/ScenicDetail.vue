@@ -111,7 +111,11 @@
                       <el-col :xs="24" :sm="12" :md="8" v-for="(item, index) in nearbyScenics" :key="index">
                         <div class="recommended-item" @click="navigateToScenic(item.id)">
                           <div class="recommended-image">
-                            <img :src="handleImageUrl(item.image)" :alt="item.name">
+                            <img 
+                              :src="handleImageUrl(item.image)" 
+                              :alt="item.name" 
+                              @error="handleNearbyImageError($event)"
+                            >
                           </div>
                           <div class="recommended-info">
                             <div class="recommended-name">{{ item.name }}</div>
@@ -143,7 +147,7 @@
                     <div class="score-circle">
                       <div class="score-value">{{ scenic.sentimentScore ? scenic.sentimentScore.toFixed(1) : '0.0' }}</div>
                     </div>
-                    <div class="score-label">情感评分</div>
+                    <div class="score-label">情感得分</div>
                   </div>
                 </el-col>
                 <el-col :span="16">
@@ -153,16 +157,46 @@
                       <span class="item-value">{{ scenic.commentCount || '0' }}</span>
                     </div>
                     <div class="sentiment-item">
-                      <span class="item-label">正面评论占比:</span>
-                      <span class="item-value">{{ scenic.positiveRate ? (scenic.positiveRate * 100).toFixed(1) + '%' : '暂无数据' }}</span>
+                      <span class="item-label">情感倾向:</span>
+                      <span class="item-value">{{ scenic.sentiment || '暂无数据' }}</span>
                     </div>
                     <div class="sentiment-item">
                       <span class="item-label">情感强度:</span>
-                      <span class="item-value">{{ scenic.sentimentIntensity ? getSentimentIntensity(scenic.sentimentIntensity) : '暂无数据' }}</span>
+                      <span class="item-value">{{ scenic.sentimentMagnitude ? scenic.sentimentMagnitude.toFixed(2) : '暂无数据' }}</span>
                     </div>
                   </div>
                 </el-col>
               </el-row>
+            </div>
+            
+            <div class="sentiment-calculation">
+              <h3>情感分析计算方法</h3>
+              <div class="calculation-item">
+                <div class="calculation-title">情感得分</div>
+                <div class="calculation-desc">
+                  情感得分<strong>（考虑情感词正负）</strong>通过遍历评论中的每个词语，如果该词在情感词典中存在，则获取其情感值。计算过程中同时考虑了程度词（如"非常"、"很"等）的增强作用，以及否定词（如"不"、"没有"等）对情感极性的反转作用。最终将所有词语的情感值累加，得到总的情感得分。
+                </div>
+              </div>
+              
+              <div class="calculation-item">
+                <div class="calculation-title">情感强度</div>
+                <div class="calculation-desc">
+                  情感强度<strong>（不考虑情感词正负）</strong>反映情感表达的强弱程度。计算时，系统累加每个<strong>情感词得分的绝对值</strong>，然后除以分词后的总词数，得到平均情感强度。无论是积极情感还是消极情感，强度越高表示情感表达越强烈。
+                </div>
+              </div>
+              
+              <div class="calculation-item">
+                <div class="calculation-title">情感倾向</div>
+                <div class="calculation-desc">
+                  情感倾向将评价分为"优"、"中"、"良"三类，基于平均情感得分确定：
+                  <ul>
+                    <li>平均情感得分 > 0.09，判定为"优"</li>
+                    <li>平均情感得分 < 0.03，判定为"良"</li>
+                    <li>介于两者之间，判定为"中"</li>
+                  </ul>
+                  平均情感得分 = 情感得分 / 分词数
+                </div>
+              </div>
             </div>
             
             <div class="comment-cloud">
@@ -189,11 +223,11 @@
                 <el-timeline-item
                   v-for="(comment, index) in paginatedComments"
                   :key="index"
-                  :type="getCommentType(comment.sentiment).type"
+                  :type="getCommentType(scenic.sentiment || '').type"
                   :timestamp="comment.date"
                 >
                   <div class="comment-content">
-                    <div class="comment-user">{{ comment.user }}</div>
+                    <div class="comment-user">{{ comment.user || '游客' }}</div>
                     <div class="comment-text">{{ comment.content }}</div>
                   </div>
                 </el-timeline-item>
@@ -277,9 +311,9 @@ export default defineComponent({
     
     const scenic = ref<any>({
       sentimentScore: 0,
-      sentimentIntensity: 0,
+      sentimentMagnitude: 0,
+      sentiment: '',
       commentCount: 0,
-      positiveRate: 0,
       comments: [],
       trafficInfo: [],
       facilities: [],
@@ -490,8 +524,8 @@ export default defineComponent({
           comments: data.comments || [],
           commentCount: data.comment_count || 0,
           sentimentScore: data.sentiment_score || 0,
-          sentimentIntensity: data.sentiment_magnitude || 0,
-          positiveRate: data.sentiment_score ? (data.sentiment_score > 0 ? data.sentiment_score/300 : 0) : 0,
+          sentiment: data.sentiment || '暂无',
+          sentimentMagnitude: data.sentiment_magnitude || 0,
           
           // 交通信息 - 保存所有可能的交通数据字段
           transportation: data.transportation || '',
@@ -681,17 +715,12 @@ export default defineComponent({
     });
     
     // 获取评论类型样式和文本
-    const getCommentType = (score: number) => {
-      if (score >= 0.5) return { type: 'success', text: '正面评价' };
-      if (score >= 0) return { type: 'warning', text: '中性评价' };
-      return { type: 'danger', text: '负面评价' };
-    };
-    
-    // 获取情感强度描述
-    const getSentimentIntensity = (magnitude: number) => {
-      if (magnitude >= 0.8) return '强烈';
-      if (magnitude >= 0.5) return '中等';
-      return '轻微';
+    const getCommentType = (sentiment: string) => {
+      if (sentiment === '优') return { type: 'success', text: '评价优' };
+      if (sentiment === '中') return { type: 'warning', text: '评价中' };
+      if (sentiment === '良') return { type: 'danger', text: '评价良' };
+      // 默认返回
+      return { type: 'info', text: '暂无评价' };
     };
     
     // 切换收藏状态
@@ -812,6 +841,15 @@ export default defineComponent({
       return processImageUrl(url, defaultImage)
     }
     
+    // 处理附近景区图片加载错误
+    const handleNearbyImageError = (event: Event) => {
+      console.log('[ScenicDetail] 附近景区图片加载失败');
+      // 替换为默认图片
+      if (event.target) {
+        (event.target as HTMLImageElement).src = defaultImage;
+      }
+    };
+    
     onMounted(() => {
       fetchScenicDetail();
       
@@ -875,7 +913,6 @@ export default defineComponent({
       isLoggedIn,
       hasWordCloudData,
       getCommentType,
-      getSentimentIntensity,
       navigateToScenic,
       formatAddress,
       nearbyScenics,
@@ -885,7 +922,8 @@ export default defineComponent({
       wordCloudContainer,
       wordCloudRefreshKey,
       onWordCloudRendered,
-      transportationBackButtonText
+      transportationBackButtonText,
+      handleNearbyImageError
     }
   }
 })
@@ -1001,6 +1039,51 @@ export default defineComponent({
   margin-bottom: 20px;
   padding-bottom: 20px;
   border-bottom: 1px solid #f0f0f0;
+}
+
+.sentiment-calculation {
+  margin-bottom: 20px;
+  padding: 15px;
+  background-color: #f8f9fa;
+  border-radius: 4px;
+  border: 1px solid #ebeef5;
+}
+
+.sentiment-calculation h3 {
+  font-size: 16px;
+  color: #303133;
+  margin-top: 0;
+  margin-bottom: 15px;
+  font-weight: 500;
+}
+
+.calculation-item {
+  margin-bottom: 15px;
+}
+
+.calculation-item:last-child {
+  margin-bottom: 0;
+}
+
+.calculation-title {
+  font-weight: 500;
+  color: #409EFF;
+  margin-bottom: 8px;
+}
+
+.calculation-desc {
+  color: #606266;
+  line-height: 1.6;
+  font-size: 14px;
+}
+
+.calculation-desc ul {
+  padding-left: 20px;
+  margin: 8px 0;
+}
+
+.calculation-desc li {
+  margin-bottom: 5px;
 }
 
 .sentiment-score {

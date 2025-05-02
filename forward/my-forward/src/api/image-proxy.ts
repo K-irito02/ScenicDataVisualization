@@ -11,15 +11,32 @@ export function processImageUrl(
   fallbackImage = DEFAULT_IMAGE
 ): string {
   try {
-    // 如果URL为空，使用默认图片
-    if (!imageUrl || imageUrl === 'null' || imageUrl === 'undefined') {
+    // 如果URL为空或无效值，使用默认图片
+    if (!imageUrl || 
+        imageUrl === 'null' || 
+        imageUrl === 'undefined' || 
+        imageUrl === 'none' || 
+        imageUrl.toLowerCase() === 'null' || 
+        imageUrl.toLowerCase() === 'none') {
       console.log('[图片处理] 图片URL为空或无效，使用默认图片');
+      return fallbackImage;
+    }
+
+    // 如果URL已经是默认图片路径，直接返回
+    if (imageUrl === '/img/default-scenic.jpg') {
       return fallbackImage;
     }
     
     // 如果URL是相对路径且不以/开头，添加斜杠
     if (!imageUrl.startsWith('/') && !imageUrl.startsWith('http')) {
       imageUrl = '/' + imageUrl;
+    }
+    
+    // 如果URL包含"static/images/default-scenic.jpg"，替换为新的默认图片路径
+    if (imageUrl.includes('static/images/default-scenic.jpg') || 
+        imageUrl.includes('/static/images/default-scenic.jpg')) {
+      console.log('[图片处理] 将旧的默认图片路径替换为新路径');
+      return fallbackImage;
     }
     
     // 如果是相对路径或已经是http开头的URL，直接返回

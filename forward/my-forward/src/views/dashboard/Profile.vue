@@ -18,6 +18,7 @@ import {
   CircleCheck
 } from '@element-plus/icons-vue'
 import { useRoute, useRouter } from 'vue-router'
+import { processImageUrl, DEFAULT_IMAGE } from '@/api/image-proxy' // 导入图片处理工具
 
 const userStore = useUserStore()
 const route = useRoute()
@@ -27,7 +28,7 @@ const uploading = ref(false)
 const loading = ref(false)
 const favoritesLoading = ref(false)
 const favorites = ref<any[]>([])
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001'
+const defaultImage = DEFAULT_IMAGE // 使用统一的默认图片路径
 
 // 个人信息表单
 const profileForm = reactive({
@@ -71,37 +72,9 @@ const rules = reactive<FormRules>({
   ]
 })
 
-// 获取完整的头像URL
-const getFullAvatarUrl = (avatar: string) => {
-  if (!avatar) return ''
-  
-  // 添加时间戳防止浏览器缓存头像
-  const timestamp = new Date().getTime()
-  
-  // 已经是完整URL的情况
-  if (avatar.startsWith('http')) {
-    return avatar.includes('?') ? `${avatar}&_t=${timestamp}` : `${avatar}?_t=${timestamp}`
-  }
-  
-  // 处理媒体文件路径
-  // 确保在开发环境中使用后端服务器URL
-  let baseUrl = apiBaseUrl
-  
-  // 针对媒体文件路径，确保使用apiBaseUrl
-  let url = ''
-  if (avatar.startsWith('/media/')) {
-    // 如果是媒体文件路径，直接使用apiBaseUrl
-    url = `${baseUrl}${avatar}`
-  } else if (avatar.startsWith('media/')) {
-    // 如果是不带前导斜杠的媒体路径
-    url = `${baseUrl}/${avatar}`
-  } else {
-    // 其他路径
-    url = baseUrl + (avatar.startsWith('/') ? avatar : `/${avatar}`)
-  }
-  
-  // 添加时间戳
-  return url.includes('?') ? `${url}&_t=${timestamp}` : `${url}?_t=${timestamp}`
+// 处理图片URL，确保正确显示默认图片
+const getImageUrl = (imageUrl: string) => {
+  return processImageUrl(imageUrl, defaultImage);
 }
 
 // 刷新头像变量
@@ -509,7 +482,7 @@ const testDirectAccess = () => {
   }
   
   // 构建完整URL
-  const fullUrl = getFullAvatarUrl(profileForm.avatar)
+  const fullUrl = getImageUrl(profileForm.avatar)
   console.log('测试直接访问头像URL:', fullUrl)
   
   // 在新窗口中打开图片URL
@@ -596,7 +569,7 @@ watch(() => profileForm.email, (newEmail) => {
               <div class="avatar-wrapper">
                 <el-avatar 
                   :key="avatarKey"
-                  :src="profileForm.avatar ? getFullAvatarUrl(profileForm.avatar) : 'https://cube.elemecdn.com/3/7c/3ea6beec64369c2642b92c6726f1epng.png'" 
+                  :src="profileForm.avatar ? getImageUrl(profileForm.avatar) : 'https://cube.elemecdn.com/3/7c/3ea6beec64369c2642b92c6726f1epng.png'" 
                   :size="120" 
                   class="user-avatar"
                 >
@@ -824,15 +797,13 @@ watch(() => profileForm.email, (newEmail) => {
             >
               <div class="favorite-content">
                 <el-image 
-                  :src="item.image || '/static/images/default-scenic.jpg'" 
+                  :src="getImageUrl(item.image)"
                   fit="cover"
                   class="scenic-image"
                   loading="lazy"
                 >
                   <template #error>
-                    <div class="image-placeholder">
-                      <el-icon><Picture /></el-icon>
-                    </div>
+                    <img :src="defaultImage" class="scenic-image" alt="默认景区图片" />
                   </template>
                 </el-image>
                 

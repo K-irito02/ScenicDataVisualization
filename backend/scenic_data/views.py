@@ -2091,7 +2091,7 @@ class NearbyScenicView(views.APIView):
                         'id': scenic_id_formatted,  # 使用格式化后的ID
                         'name': nearby.name,
                         'price': nearby.min_price or '免费',
-                        'image': nearby.image_url,
+                        'image': nearby.image_url if nearby.image_url and nearby.image_url.lower() not in ['null', 'none', ''] else '/img/default-scenic.jpg',
                         'distance': distance,  # 距离（公里）
                         'level': nearby.scenic_type  # 景区等级信息
                     })
