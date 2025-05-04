@@ -463,7 +463,7 @@ class SendEmailCodeView(APIView):
                 from django.core.mail import EmailMessage
                 # 根据不同场景使用不同的邮件主题和内容
                 subject = '邮箱验证码' if is_profile_update else '注册验证码'
-                body_intro = '感谢您修改邮箱信息。' if is_profile_update else '感谢您注册使用全国景区数据分析及可视化系统。'
+                body_intro = '这是您修改邮箱信息。' if is_profile_update else '感谢您注册使用全国景区数据分析及可视化系统。'
                 
                 email_message = EmailMessage(
                     subject=subject,

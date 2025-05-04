@@ -1169,11 +1169,6 @@ export default defineComponent({
       return 'info';
     }
     
-    // 获取标签样式
-    const getTagStyle = (action: string) => {
-      return {}; // 不再使用自定义样式
-    }
-    
     onMounted(() => {
       fetchRecords()
       initCharts()
@@ -1198,7 +1193,6 @@ export default defineComponent({
       trendChartRef,
       getActionText,
       getTagType,
-      getTagStyle,
       handleFilter,
       resetFilter,
       handleCurrentChange,

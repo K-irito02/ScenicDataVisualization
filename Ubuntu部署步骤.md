@@ -109,7 +109,7 @@ cd /var/www/scenic
 git clone -b lite_version --single-branch https://github.com/K-irito02/ScenicDataVisualization.git temp_repo
 # 使用Token进行Git操作时，克隆仓库使用格式：
 # git clone https://<你的token>@github.com/用户名/仓库名.git
-例如：git clone -b lite_version --single-branch https://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@github.com/K-irito02/ScenicDataVisualization.git temp_repo
+例如：git clone -b lite_version --single-branch https://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@github.com/K-irito02/ScenicDataVisualization.git temp_repo
 # 4. 移动backend文件夹到正确位置
 mv temp_repo/backend .
 
@@ -131,7 +131,14 @@ sudo chmod -R 775 /var/www/scenic/backend/logs
 
 ### 4. 安装后端依赖
 ```bash
-cd /var/www/scenic/backend
+# 给 backend 目录赋予当前用户权限（ubuntu 是你的用户名）
+sudo chown -R ubuntu:ubuntu backend/
+
+# 重新生成 requirements.txt
+cd backend
+
+pip freeze > requirements.txt
+
 pip install -r requirements.txt
 ```
 
@@ -244,6 +251,11 @@ pip install gunicorn
 ```
 
 ### 10. 创建Gunicorn服务配置
+
+sudo chown -R www-data:www-data /var/www/scenic
+sudo chmod -R 755 /var/www/scenic
+ss -tulnp | grep 8000
+
 ```bash
 sudo nano /etc/systemd/system/scenic-gunicorn.service
 ```
@@ -251,26 +263,57 @@ sudo nano /etc/systemd/system/scenic-gunicorn.service
 添加以下内容：
 ```
 [Unit]
-Description=Scenic Gunicorn Daemon
+# 服务描述信息，用于标识服务用途
+Description=Scenic Gunicorn Daemon  
+
+# 定义服务启动顺序，在网络就绪后启动（网络依赖）
 After=network.target
 
+
 [Service]
+# 运行服务的用户和用户组（生产环境推荐使用非root用户）
 User=www-data
 Group=www-data
+
+# 服务的工作目录（Django项目的manage.py所在目录）
 WorkingDirectory=/var/www/scenic/backend
-Environment="PYTHONPATH=/var/www/scenic/backend"
-ExecStart=/var/www/scenic/venv/bin/gunicorn --workers 3 --bind unix:/var/www/scenic/scenic.sock wsgi:application
+
+# 环境变量配置
+Environment="PYTHONPATH=/var/www/scenic"  # Python模块搜索路径
+Environment="DJANGO_SETTINGS_MODULE=backend.settings"  # 指定Django配置文件
+
+# Gunicorn启动命令（使用虚拟环境中的gunicorn）
+ExecStart=/var/www/scenic/venv/bin/gunicorn \
+    --workers 4 \                     # 工作进程数，通常设为 (CPU核心数 * 2) + 1
+    --worker-class=gthread \          # 使用线程模式（适合I/O密集型应用）
+    --threads 2 \                     # 每个工作进程的线程数
+    --worker-connections=1000 \       # 单个进程最大并发连接数
+    --timeout 300 \                   # 超时时间（秒），超过则重启工作进程
+    --bind 0.0.0.0:8000 \             # 监听所有网络接口的8000端口
+    --max-requests 1000 \             # 处理1000个请求后自动重启工作进程（防内存泄漏）
+    --max-requests-jitter 50 \        # 添加随机抖动（0-50），避免所有进程同时重启
+    backend.wsgi:application          # WSGI应用入口
+
+
+# 进程崩溃时自动重启（生产环境必备）
+Restart=on-failure
+RestartSec=5s                        # 重启间隔（避免频繁重启）
+
+# 系统资源限制
+LimitNOFILE=4096                     # 最大打开文件描述符数（防资源耗尽）
+
 
 [Install]
+# 定义服务如何被启用（multi-user.target表示多用户命令行模式）
 WantedBy=multi-user.target
 ```
 
-启动服务：
+启动服务并设置开机自启：
 ```bash
 sudo systemctl start scenic-gunicorn
 sudo systemctl enable scenic-gunicorn
 ```
-
+# 重新加载systemd配置
 sudo systemctl daemon-reload
 sudo systemctl restart scenic-gunicorn
 sudo systemctl restart nginx
@@ -309,11 +352,70 @@ nvm use 22    //切换Nodejs版本
 sudo chown -R ubuntu:ubuntu /var/www/scenic/
 cd /var/www/scenic/frontend
 npm install
+
+若有漏洞，查看漏洞详情:npm audit
+若是：​Vite 6.2.0 - 6.2.6 版本存在多个中等安全漏洞​​
+1. 解决方案​​
+​​(1) 自动修复（推荐）​​
+运行以下命令尝试自动升级：
+
+npm audit fix
+如果成功，输出会显示：
+
+fixed 1 of 1 vulnerability in 1 package
+​​(2) 手动升级 Vite​​
+如果自动修复失败，手动指定升级版本：
+
+npm install vite@latest --save-dev
+# 或指定安全版本（如 6.2.7+）
+npm install vite@6.2.7 --save-dev
+​​(3) 验证修复​​
+检查 package.json 和 package-lock.json 中 Vite 版本是否已更新：
+
+npm list vite
+# 应显示高于 6.2.6 的版本（如 6.2.7+ 或最新版）
 ```
 步骤1：安装 Highcharts 核心库​​
 npm install highcharts --save
 ​​步骤2：安装 Highcharts 类型声明（TypeScript 必需）​​
 npm install @types/highcharts --save-dev
+方法 1：使用 npm 命令（推荐）​​
+​
+​查看所有已安装的依赖及版本​​
+npm list
+
+​​查找 Highcharts​​：在输出列表中搜索 highcharts
+​​精简输出​​（仅显示 Highcharts）：
+
+npm list highcharts
+
+​​输出示例​​：
+my-project@1.0.0 /path/to/project
+└── highcharts@10.3.3  # 显示版本号
+如果未安装，会显示 (empty) 或报错。
+​
+​方法 2：检查 package.json​​
+直接查看项目根目录下的 package.json 文件：
+
+cat package.json | grep highcharts
+
+​​输出示例​​：
+"dependencies": {
+  "highcharts": "^10.3.3"
+}
+如果未找到结果，表示未安装。
+​
+​方法 3：查看 node_modules 目录​​
+验证文件是否存在：
+
+ls node_modules/highcharts/package.json
+
+如果存在，查看版本：
+
+cat node_modules/highcharts/package.json | grep version
+​
+​输出​​：
+"version": "10.3.3"
 
 ### 4. 构建前端项目
 ```bash
@@ -324,6 +426,16 @@ npm run build
 ## 四、Nginx配置
 
 ### 1. 创建Nginx配置文件
+vim 剪贴板支持​​：
+运行 vim --version | grep clipboard 确认是否有 +clipboard 特性。
+如果没有，需安装支持剪贴板的 Vim（如 sudo apt install vim-gtk3）。
+
+场景	推荐命令	优点
+常规复制到剪贴板	:%y+	最快捷
+无剪贴板支持的终端	ggVG"*y	使用 X11 主选择缓冲区
+需要筛选内容	ggVG:y + 手动粘贴	可先调整选区
+远程服务器操作	:w /tmp/file	不依赖剪贴板
+
 ```bash
 sudo nano /etc/nginx/sites-available/scenic
 ```
@@ -595,4 +707,14 @@ crontab -e
    - 启用Nginx压缩
    - 配置浏览器缓存控制
 
-按照以上步骤操作，您的全国景区数据分析及可视化系统应该能够成功部署在Ubuntu云服务器上。此部署方案适用于Ubuntu 20.04 LTS和Ubuntu 22.04 LTS版本。
+
+
+# Nginx日志
+sudo tail -f /var/log/nginx/error.log
+sudo tail -f /var/log/nginx/access.log
+
+# Gunicorn服务日志
+sudo journalctl -u scenic-gunicorn
+
+
+sudo vim /etc/nginx/sites-available/scenic
