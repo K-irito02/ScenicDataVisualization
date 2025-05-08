@@ -36,6 +36,25 @@ class AdminUserListView(views.APIView):
             # 查询所有用户
             users = User.objects.all().select_related('profile')
             
+            # 计算当天活跃用户和新注册用户
+            from django.utils import timezone
+            import datetime
+            today = timezone.now().date()
+            today_start = datetime.datetime.combine(today, datetime.time.min, tzinfo=timezone.get_current_timezone())
+            today_end = datetime.datetime.combine(today, datetime.time.max, tzinfo=timezone.get_current_timezone())
+            
+            # 当天登录过系统的用户数量
+            active_users_today = UserProfile.objects.filter(
+                last_login__gte=today_start,
+                last_login__lte=today_end
+            ).count()
+            
+            # 当天注册的用户数量
+            new_users_today = User.objects.filter(
+                date_joined__gte=today_start,
+                date_joined__lte=today_end
+            ).count()
+            
             # 分页
             paginator = Paginator(users, page_size)
             try:
@@ -54,7 +73,9 @@ class AdminUserListView(views.APIView):
                 'total': paginator.count,
                 'page': int(page),
                 'pageSize': int(page_size),
-                'pages': paginator.num_pages
+                'pages': paginator.num_pages,
+                'active_users_today': active_users_today,
+                'new_users_today': new_users_today
             })
         except Exception as e:
             # 记录错误

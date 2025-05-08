@@ -174,23 +174,23 @@ CORS_EXPOSE_HEADERS = [
 
 # 添加具体的允许的域名列表作为备选方案
 CORS_ALLOWED_ORIGINS = [
-    'http://localhost:8080',
+    'http://localhost:8002',
     'http://localhost:5173',
-    'http://localhost:3000',
-    'http://127.0.0.1:8080',
+    'http://localhost:3001',
+    'http://127.0.0.1:8002',
     'http://127.0.0.1:5173',
-    'http://127.0.0.1:3000',
+    'http://127.0.0.1:3001',
     # 在这里添加您的生产环境域名
 ]
 
 # 添加CSRF信任的源
 CSRF_TRUSTED_ORIGINS = [
-    'http://localhost:8080',
+    'http://localhost:8002',
     'http://localhost:5173',
-    'http://localhost:3000',
-    'http://127.0.0.1:8080',
+    'http://localhost:3001',
+    'http://127.0.0.1:8002',
     'http://127.0.0.1:5173',
-    'http://127.0.0.1:3000',
+    'http://127.0.0.1:3001',
     # 在这里添加您的生产环境域名
 ]
 

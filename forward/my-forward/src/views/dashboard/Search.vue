@@ -216,7 +216,7 @@ import { request } from '@/api'
 import { processImageUrl, DEFAULT_IMAGE } from '@/api/image-proxy'
 
 // 设置API基础URL
-const API_BASE_URL = 'http://localhost:8001/api'
+const API_BASE_URL = 'http://localhost:8002/api'
 
 // API服务
 const apiService = {

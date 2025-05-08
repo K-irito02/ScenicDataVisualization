@@ -95,7 +95,8 @@ import BaseChart from '@/components/charts/BaseChart.vue'
 import type { 
   EChartsOption, 
 } from 'echarts'
-// 引入Highcharts及其依赖轮模块
+// 引入Highcharts及其依赖轮图模块（TypeScript 找不到 highcharts 的类型定义）
+// @ts-ignore
 import Highcharts from 'highcharts'
 import 'highcharts/modules/sankey'
 import 'highcharts/modules/dependency-wheel'

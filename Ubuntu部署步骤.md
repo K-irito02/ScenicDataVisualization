@@ -109,7 +109,7 @@ cd /var/www/scenic
 git clone -b lite_version --single-branch https://github.com/K-irito02/ScenicDataVisualization.git temp_repo
 # 使用Token进行Git操作时，克隆仓库使用格式：
 # git clone https://<你的token>@github.com/用户名/仓库名.git
-例如：git clone -b lite_version --single-branch https://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@github.com/K-irito02/ScenicDataVisualization.git temp_repo
+例如：git clone -b lite_version --single-branch https://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@github.com/K-irito02/ScenicDataVisualization.git temp_repo
 # 4. 移动backend文件夹到正确位置
 mv temp_repo/backend .
 
@@ -326,7 +326,7 @@ sudo systemctl restart nginx
 ```bash
 # 如果使用GitHub仓库
 cd /var/www/scenic
-git clone -b lite_version --single-branch https://github.com/K-irito02/ScenicDataVisualization.git temp_repo
+git clone -b lite_version --single-branch https://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@github.com/K-irito02/ScenicDataVisualization.git temp_repo
 mv temp_repo/forward/my-forward /var/www/scenic/frontend
 rm -rf temp_repo
 

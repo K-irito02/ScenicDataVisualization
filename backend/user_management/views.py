@@ -365,7 +365,7 @@ class UploadAvatarView(APIView):
             
             # 生成唯一文件名，确保每次上传都用不同的文件名
             import time
-            random_uuid = uuid.uuid4().hex[:8]  # 生成8位随机UUID
+            random_uuid = uuid.uuid4().hex[:8]  # 生成36位UUID，去掉字符转换为32位十六进制，截取前8位
             timestamp = int(time.time())
             file_ext = avatar_file.name.split('.')[-1]
             file_name = f"avatar_{timestamp}_{random_uuid}.{file_ext}"

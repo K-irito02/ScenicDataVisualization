@@ -3,6 +3,7 @@ import request from './axios';
 /**
  * 获取所有用户信息(管理员接口)
  * @param params 分页参数
+ * @returns {Promise} 包含用户列表和统计数据的响应
  */
 export function getUsers(params: { page?: number, pageSize?: number } = {}) {
   return request({

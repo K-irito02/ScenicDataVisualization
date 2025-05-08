@@ -32,7 +32,7 @@
             <div class="statistics-card">
               <div class="statistics-card-content">
                 <div class="statistics-value">{{ statistics.activeUsers }}</div>
-                <div class="statistics-label">活跃用户</div>
+                <div class="statistics-label">今日活跃</div>
               </div>
               <div class="statistics-icon green">
                 <el-icon><UserFilled /></el-icon>
@@ -44,7 +44,7 @@
             <div class="statistics-card">
               <div class="statistics-card-content">
                 <div class="statistics-value">{{ statistics.newUsers }}</div>
-                <div class="statistics-label">新增用户</div>
+                <div class="statistics-label">今日新增</div>
               </div>
               <div class="statistics-icon blue">
                 <el-icon><Plus /></el-icon>
@@ -302,14 +302,36 @@ export default defineComponent({
         
         // 更新统计数据
         statistics.totalUsers = totalUsers.value;
-        statistics.activeUsers = users.value.filter(user => user.status === 'active').length;
+        // 如果API返回了活跃用户数和新增用户数，则直接使用
+        if ('active_users_today' in response.data) {
+          statistics.activeUsers = response.data.active_users_today;
+        } else {
+          // 否则使用前端计算的逻辑（作为备选）
+          statistics.activeUsers = users.value.filter(user => {
+            if (!user.lastLoginTime) return false;
+            const loginDate = new Date(user.lastLoginTime);
+            const today = new Date();
+            return loginDate.getDate() === today.getDate() &&
+                   loginDate.getMonth() === today.getMonth() &&
+                   loginDate.getFullYear() === today.getFullYear();
+          }).length;
+        }
+        
         statistics.disabledUsers = users.value.filter(user => user.status === 'disabled').length;
-        statistics.newUsers = users.value.filter(user => {
-          const registerDate = new Date(user.registerTime)
-          const thirtyDaysAgo = new Date()
-          thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
-          return registerDate > thirtyDaysAgo
-        }).length;
+        
+        if ('new_users_today' in response.data) {
+          statistics.newUsers = response.data.new_users_today;
+        } else {
+          // 备选的前端计算逻辑
+          statistics.newUsers = users.value.filter(user => {
+            if (!user.registerTime) return false;
+            const registerDate = new Date(user.registerTime);
+            const today = new Date();
+            return registerDate.getDate() === today.getDate() &&
+                   registerDate.getMonth() === today.getMonth() &&
+                   registerDate.getFullYear() === today.getFullYear();
+          }).length;
+        }
       } catch (error) {
         console.error('获取用户数据失败:', error);
         ElMessage.error('获取用户数据失败');
