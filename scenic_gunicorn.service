@@ -1,0 +1,14 @@
+[Unit]
+Description=Scenic Gunicorn Service
+After=network.target
+
+[Service]
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/var/www/scenic/backend
+ExecStart=/var/www/scenic/venv/bin/gunicorn --config gunicorn_config.py wsgi:application
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target 
