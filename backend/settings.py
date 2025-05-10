@@ -180,7 +180,7 @@ CORS_ALLOWED_ORIGINS = [
     'http://127.0.0.1:8002',
     'http://127.0.0.1:5173',
     'http://127.0.0.1:3001',
-    # 在这里添加您的生产环境域名
+    # 生产环境域名
 ]
 
 # 添加CSRF信任的源
@@ -191,10 +191,10 @@ CSRF_TRUSTED_ORIGINS = [
     'http://127.0.0.1:8002',
     'http://127.0.0.1:5173',
     'http://127.0.0.1:3001',
-    # 在这里添加您的生产环境域名
+    # 生产环境域名
 ]
 
-# 禁用CSRF，仅在开发环境使用，生产环境请删除此设置
+# 禁用CSRF，仅在开发环境使用，生产环境删除此设置
 CSRF_COOKIE_SECURE = False
 CSRF_COOKIE_HTTPONLY = False
 CSRF_USE_SESSIONS = False

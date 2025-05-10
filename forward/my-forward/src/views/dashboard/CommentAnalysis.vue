@@ -209,18 +209,22 @@ export default defineComponent({
             borderWidth: 2
           },
           label: {
-            show: false,
-            position: 'center'
+            show: true,
+            position: 'outside',
+            formatter: '{b}: {c} ({d}%)',
+            fontSize: 14
           },
           emphasis: {
             label: {
               show: true,
-              fontSize: 20,
+              fontSize: 16,
               fontWeight: 'bold'
             }
           },
           labelLine: {
-            show: false
+            show: true,
+            length: 15,
+            length2: 10
           },
           data: sentimentData.value.map(item => ({
             name: item.name,

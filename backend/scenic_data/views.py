@@ -1867,7 +1867,7 @@ class TicketBoxplotByLevelView(views.APIView):
         return Response(result)
 
 class ScenicTypeDistributionView(views.APIView):
-    """景区类型分布数据视图 - 用于雷达图和旭日图"""
+    """景区类型分布数据视图 - 用于雷达图和堆叠柱状图"""
     permission_classes = [permissions.AllowAny]
     
     def get(self, request):
@@ -2065,7 +2065,7 @@ class NearbyScenicView(views.APIView):
                     n_lon = float(n_lon)
                     n_lat = float(n_lat)
                     
-                    # 计算两点间距离（简化版的Haversine公式）
+                    # 计算两点间距离（简化版的哈弗辛公式）
                     # 地球平均半径，单位：公里
                     R = 6371.0
                     
@@ -2224,7 +2224,7 @@ class TransportationScenicView(views.APIView):
             
             for item in transport_mode_items:
                 try:
-                    # 确保ID格式正确，为纯数字ID添加S前缀
+                    # 确保ID格式正确，为纯数字ID添加TM前缀
                     item_info = {
                         'id': f"TM{item.id}",  # 使用TransportMode的ID|TM
                         'name': item.scenic_name,
@@ -2241,7 +2241,7 @@ class TransportationScenicView(views.APIView):
                         if scenic:
                             scenic_id_formatted = scenic.scenic_id
                             if str(scenic_id_formatted).isdigit():
-                                scenic_id_formatted = f"S{scenic_id_formatted}"
+                                scenic_id_formatted = f"S{scenic_id_formatted}" # 确保ID格式正确，为纯数字ID添加S前缀
                             
                             item_info.update({
                                 'id': scenic_id_formatted,

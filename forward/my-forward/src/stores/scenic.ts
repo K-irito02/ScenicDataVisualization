@@ -394,7 +394,7 @@ export const useScenicStore = defineStore('scenic', {
       }
     },
     
-    // 获取景区类型分布数据（用于雷达图和旭日图）
+    // 获取景区类型分布数据（用于雷达图和堆叠柱状图）
     async getScenicTypeDistribution() {
       try {
         const response = await getScenicTypeDistribution()

@@ -1,0 +1,75 @@
+2025-04-29 23:40:54 [scrapy.utils.log] INFO: Scrapy 2.12.0 started (bot: mafengwo)
+2025-04-29 23:40:54 [scrapy.utils.log] INFO: Versions: lxml 5.3.1.0, libxml2 2.11.7, cssselect 1.2.0, parsel 1.10.0, w3lib 2.3.1, Twisted 24.11.0, Python 3.13.2 (tags/v3.13.2:4f8bb39, Feb  4 2025, 15:23:48) [MSC v.1942 64 bit (AMD64)], pyOpenSSL 25.0.0 (OpenSSL 3.4.1 11 Feb 2025), cryptography 44.0.1, Platform Windows-11-10.0.26100-SP0
+2025-04-29 23:40:54 [china_attractions_db] INFO: 设置信号处理器
+2025-04-29 23:40:54 [china_attractions_db] INFO: 已注册SIGINT和SIGTERM信号处理器
+2025-04-29 23:40:54 [china_attractions_db] INFO: 爬虫初始化: 节点ID=node1, 是否主节点=True
+2025-04-29 23:40:54 [china_attractions_db] INFO: Redis连接成功初始化，连接到 localhost
+2025-04-29 23:40:54 [china_attractions_db] INFO: 作为主节点初始化队列
+2025-04-29 23:40:54 [china_attractions_db] INFO: 已加载断点续爬检查点: 2025-03-05 12:49:41
+2025-04-29 23:40:54 [china_attractions_db] ERROR: 加载断点续爬检查点失败: Client sent AUTH, but no password is set
+2025-04-29 23:40:54 [china_attractions_db] ERROR: Redis连接初始化失败: Client sent AUTH, but no password is set
+2025-04-29 23:40:54 [scrapy.addons] INFO: Enabled addons:
+[]
+2025-04-29 23:40:54 [scrapy.extensions.telnet] INFO: Telnet Password: 831974db5250fcbf
+2025-04-29 23:40:54 [py.warnings] WARNING: C:\Users\31432\AppData\Local\Programs\Python\Python313\Lib\site-packages\scrapy\extensions\feedexport.py:432: ScrapyDeprecationWarning: The `FEED_URI` and `FEED_FORMAT` settings have been deprecated in favor of the `FEEDS` setting. Please see the `FEEDS` setting docs for more details
+  exporter = cls(crawler)
+
+2025-04-29 23:40:54 [scrapy.middleware] INFO: Enabled extensions:
+['scrapy.extensions.corestats.CoreStats',
+ 'scrapy.extensions.telnet.TelnetConsole',
+ 'scrapy.extensions.feedexport.FeedExporter',
+ 'scrapy.extensions.logstats.LogStats',
+ 'scrapy.extensions.spiderstate.SpiderState',
+ 'scrapy.extensions.throttle.AutoThrottle']
+2025-04-29 23:40:54 [scrapy.crawler] INFO: Overridden settings:
+{'AUTOTHROTTLE_ENABLED': True,
+ 'BOT_NAME': 'mafengwo',
+ 'CONCURRENT_REQUESTS': 1,
+ 'DOWNLOAD_DELAY': 5,
+ 'DOWNLOAD_FAIL_ON_DATALOSS': False,
+ 'DOWNLOAD_TIMEOUT': 60,
+ 'DUPEFILTER_CLASS': 'scrapy_redis.dupefilter.RFPDupeFilter',
+ 'FEED_EXPORT_ENCODING': 'utf-8',
+ 'FEED_EXPORT_INDENT': 4,
+ 'JOBDIR': 'crawls/china_attractions_db_node1',
+ 'LOG_FILE': 'logs/china_attractions_db_node1_20250429_234053.log',
+ 'LOG_LEVEL': 'INFO',
+ 'NEWSPIDER_MODULE': 'mafengwo.spiders',
+ 'RETRY_HTTP_CODES': [500, 502, 503, 504, 522, 524, 408, 202],
+ 'RETRY_TIMES': 5,
+ 'SCHEDULER': 'scrapy_redis.scheduler.Scheduler',
+ 'SPIDER_MODULES': ['mafengwo.spiders'],
+ 'TWISTED_REACTOR': 'twisted.internet.asyncioreactor.AsyncioSelectorReactor'}
+2025-04-29 23:40:55 [scrapy.middleware] INFO: Enabled downloader middlewares:
+['scrapy.downloadermiddlewares.offsite.OffsiteMiddleware',
+ 'scrapy.downloadermiddlewares.httpauth.HttpAuthMiddleware',
+ 'scrapy.downloadermiddlewares.downloadtimeout.DownloadTimeoutMiddleware',
+ 'scrapy.downloadermiddlewares.defaultheaders.DefaultHeadersMiddleware',
+ 'mafengwo.middlewares.RandomUserAgentMiddleware',
+ 'mafengwo.middlewares.RandomDelayMiddleware',
+ 'scrapy.downloadermiddlewares.retry.RetryMiddleware',
+ 'scrapy.downloadermiddlewares.redirect.MetaRefreshMiddleware',
+ 'scrapy.downloadermiddlewares.httpcompression.HttpCompressionMiddleware',
+ 'scrapy.downloadermiddlewares.redirect.RedirectMiddleware',
+ 'scrapy.downloadermiddlewares.cookies.CookiesMiddleware',
+ 'scrapy.downloadermiddlewares.httpproxy.HttpProxyMiddleware',
+ 'scrapy.downloadermiddlewares.stats.DownloaderStats']
+2025-04-29 23:40:55 [scrapy.middleware] INFO: Enabled spider middlewares:
+['scrapy.spidermiddlewares.httperror.HttpErrorMiddleware',
+ 'scrapy.spidermiddlewares.referer.RefererMiddleware',
+ 'scrapy.spidermiddlewares.urllength.UrlLengthMiddleware',
+ 'scrapy.spidermiddlewares.depth.DepthMiddleware']
+2025-04-29 23:40:55 [scrapy.middleware] INFO: Enabled item pipelines:
+['scrapy_redis.pipelines.RedisPipeline']
+2025-04-29 23:40:55 [twisted] CRITICAL: Unhandled error in Deferred:
+2025-04-29 23:40:55 [twisted] CRITICAL: 
+Traceback (most recent call last):
+  File "C:\Users\31432\AppData\Local\Programs\Python\Python313\Lib\site-packages\twisted\internet\defer.py", line 2017, in _inlineCallbacks
+    result = context.run(gen.send, result)
+  File "C:\Users\31432\AppData\Local\Programs\Python\Python313\Lib\site-packages\scrapy\crawler.py", line 153, in crawl
+    start_requests = iter(self.spider.start_requests())
+                          ~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\ScenicDataVisualization\crawler\mafengwo\spiders\china_attractions_db.py", line 324, in start_requests
+    cities_urls_count = self.redis_client.llen(f"{self.name}:cities_urls")
+                        ^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'NoneType' object has no attribute 'llen'

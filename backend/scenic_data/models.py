@@ -19,8 +19,6 @@ class ScenicData(models.Model):
     transportation = models.TextField(null=True, blank=True, db_column='交通原数据', verbose_name='交通原数据')
     comments = models.TextField(null=True, blank=True, db_column='评论原数据', verbose_name='评论原数据')
     min_price = models.CharField(max_length=50, null=True, blank=True, db_column='最低票价', verbose_name='最低票价')
-    # 该列已从数据库中删除，注释掉避免出错
-    # transport_mode = models.CharField(max_length=255, null=True, blank=True, db_column='交通方式', verbose_name='交通方式')
     comment_count = models.IntegerField(null=True, blank=True, db_column='评论数量', verbose_name='评论数量')
     sentiment = models.CharField(max_length=10, null=True, blank=True, db_column='情感倾向', verbose_name='情感倾向')
     sentiment_score = models.FloatField(null=True, blank=True, db_column='情感得分', verbose_name='情感得分')
@@ -183,4 +181,4 @@ class TransportMode(models.Model):
     class Meta:
         verbose_name = '景区交通方式'
         verbose_name_plural = '景区交通方式'
-        db_table = 'transport_mode'  # 直接使用已有数据表
+        db_table = 'transport_mode'

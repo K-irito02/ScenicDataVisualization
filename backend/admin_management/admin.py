@@ -1,7 +1,7 @@
 from django.contrib import admin
 from .models import SystemErrorLog
 
-# Register your models here.
+# 系统错误日志模型
 @admin.register(SystemErrorLog)
 class SystemErrorLogAdmin(admin.ModelAdmin):
     list_display = ('level', 'message', 'path', 'user_id', 'ip_address', 'timestamp')
