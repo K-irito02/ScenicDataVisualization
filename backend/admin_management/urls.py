@@ -8,7 +8,7 @@ urlpatterns = [
     # 用户管理接口
     path('users/', AdminUserListView.as_view(), name='admin_users'),
     path('users/<int:user_id>/', AdminUserListView.as_view(), name='admin_user_edit'),
-    path('users/stats/<int:user_id>/', UserStatsView.as_view(), name='user_stats'),
+    path('users/<int:user_id>/stats/', UserStatsView.as_view(), name='user_stats'),
     
     # 用户记录接口
     path('records/', AdminUserRecordView.as_view(), name='admin_records'),
