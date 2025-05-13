@@ -368,6 +368,13 @@ const goToAdminLogin = () => {
         </el-form>
       </div>
     </div>
+
+    <!-- MOVED DISCLAIMER HERE -->
+    <div class="page-disclaimer">
+      <p><strong>声明：</strong></p>
+      <p>1. 本网站所有景区数据均采集自马蜂窝旅游网，仅用于本科毕业设计（学术研究），非商业用途。数据版权归马蜂窝所有。</p>
+      <p>2. 若马蜂窝或其他权利方认为本网站内容侵犯合法权益，可通过 [邮箱：Kirito3143285505@outlook.com / 联系方式：19985469461] 联系，我将立即处理。</p>
+    </div>
   </div>
 </template>
 
@@ -378,6 +385,7 @@ const goToAdminLogin = () => {
   width: 100%;
   overflow: hidden;
   background: linear-gradient(135deg, #4a0060 0%, #1a0d3b 100%);
+  position: relative; /* Added for positioning disclaimer */
 }
 
 /* 左侧学校信息区域样式 */
@@ -600,5 +608,28 @@ const goToAdminLogin = () => {
   .department-info {
     font-size: 16px;
   }
+}
+
+/* New styles for page-level disclaimer */
+.page-disclaimer {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  padding: 15px;
+  background-color: rgba(0, 0, 0, 0.5); /* Semi-transparent background */
+  font-size: 12px;
+  color: #f0f0f0; /* Light text color for dark background */
+  line-height: 1.6;
+  text-align: center;
+  z-index: 10; /* Ensure it's above other content if necessary */
+}
+
+.page-disclaimer p {
+  margin-bottom: 5px;
+}
+
+.page-disclaimer p:last-child {
+  margin-bottom: 0;
 }
 </style> 

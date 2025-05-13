@@ -36,6 +36,7 @@ backend/
 │   ├── fix_migrations.py           # 修复迁移问题
 │   ├── migrate_hierarchy_tables.py # 数据库迁移脚本
 │   └── update_frontend_data.py     # 前端数据更新脚本
+│   └── download_scenic_images.py   # 景区图片下载脚本
 ├── user_management/      # 用户管理相关功能
 │   ├── authentication.py # 自定义认证类
 │   ├── middleware.py     # 自定义中间件
@@ -83,6 +84,7 @@ backend/
    - 数据提取和分析
    - 数据库迁移工具
    - 前端数据更新
+   - 景区图片下载脚本 (`download_scenic_images.py`): 用于从马蜂窝等外部链接下载景区图片到本地服务器，并更新数据库中的图片URL。
 
 ## 数据库配置
 项目使用MySQL数据库：
@@ -138,9 +140,23 @@ python manage.py runserver
 - 生产环境应明确指定允许的源
 
 ## 媒体文件
-- 媒体文件存储在`media`目录下
+- 媒体文件存储在`media`目录下，其中景区图片存储在 `media/scenic_images/`
 - 开发环境通过`settings.MEDIA_URL`提供访问
 - 生产环境应配置服务器直接提供静态文件
+
+- **运行方法**:
+  ```bash
+  # 进入项目根目录
+  cd /var/www/scenic
+  # 激活虚拟环境
+  source venv/bin/activate
+  # 运行脚本
+  python backend/scripts/download_scenic_images.py
+  ```
+- **注意**:
+    - 首次运行或大量图片更新时，脚本可能需要较长时间执行。
+    - 确保 `/var/www/scenic/media/scenic_images/` 目录有写入权限。
+    - 脚本支持断点续传，如果中途中断，再次运行时会从上次未完成的地方继续。
 
 ## 邮件服务
 - 系统使用QQ邮箱SMTP服务
@@ -150,7 +166,7 @@ python manage.py runserver
 ## 部署说明
 1. 设置环境变量
 2. 配置静态文件收集
-3. 使用Gunicorn/uWSGI作为WSGI服务器
+3. 使用Gunicorn作为WSGI服务器
 4. 配置Nginx作为反向代理
 5. 设置SSL证书
 6. 启用完整的CSRF保护 
