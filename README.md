@@ -1,4 +1,36 @@
-# 全国景区数据分析及可视化系统后端
+## 全国景区数据分析与可视化系统的系统架构图
+![image](https://github.com/user-attachments/assets/e46aff45-4dca-4ce8-8d2c-7d6af074c537)
+
+## 爬虫模块流程图
+![image](https://github.com/user-attachments/assets/7a4b1de4-f4de-430f-93c5-b71d1c87fd49)
+
+## 防爬虫应对流程图（马蜂窝网站防爬虫已升级，爬虫现已采集不到数据）
+![image](https://github.com/user-attachments/assets/e8cc09f3-b38f-498f-82c0-855da9f2fb96)
+
+## 数据处理模块架构图
+![image](https://github.com/user-attachments/assets/e8c02001-5a3e-4376-aafa-eb91449e4424)
+
+## 系统各模块技术栈表
+
+| 模块             | 子模块               | 技术栈                                                                 |
+|------------------|----------------------|-----------------------------------------------------------------------|
+| 爬虫模块         | 1.马蜂窝爬虫         | 1.Scrapy-Redis、Selenium                                             |
+| 数据处理模块     | 1.数据清洗           | 1.正则表达式、pandas、numpy、哈工大停用词表                          |
+|                  | 2.数据分析           | 2.BosonNLP 情感词典、jieba、cpca                                     |
+|                  | 3.数据富化           | 3.DeepSeekAPI                                                        |
+| 数据存储模块     | 1.爬虫存储           | 1.Redis、MongoDB                                                     |
+|                  | 2.数据表、系统表存储 | 2.MySQL                                                              |
+|                  | 3.缓存数据           | 3.Redis                                                              |
+| 后端API模块      | 1.Web服务            | 1.Django·REST·Framework                                              |
+|                  | 2.认证与安全         | 2.JWT、SMTP 邮件服务                                                 |
+| 前端可视化模块   | 1.UI框架             | 1.Vue3、TypeScript、Element·Plus                                     |
+|                  | 2.路由与状态管理     | 2.Vue·Router、Pinia                                                  |
+|                  | 3.数据可视化         | 3.ECharts、Highcharts                                                |
+|                  | 4.网络请求           | 4.Axios                                                              |
+
+-------------------------
+
+# 全国景区数据分析及可视化系统后端（development-environment分支）
 
 ## 项目介绍
 
@@ -88,16 +120,6 @@ backend/
    - 数据库迁移工具
    - 前端数据更新
 
-## 数据库配置
-
-项目使用MySQL数据库：
-
-- **数据库名**: `scenic_area`
-- **主机**: localhost
-- **端口**: 3306
-- **用户**: root
-- **字符集**: utf8mb4
-
 ## API接口
 
 API接口按功能模块组织：
@@ -106,95 +128,6 @@ API接口按功能模块组织：
 - `/api/users/` - 用户资料和头像接口
 - `/api/admin/` - 管理员功能接口
 - `/admin/` - Django管理界面
-
-## 环境配置
-
-### 系统要求
-
-- Python 3.x
-- MySQL 5.7+
-- Redis (用于缓存)
-
-### 安装依赖
-
-```bash
-pip install django==5.1.6
-pip install djangorestframework
-pip install mysqlclient
-pip install redis
-pip install django-cors-headers
-```
-
-### 数据库迁移
-
-```bash
-python manage.py makemigrations
-python manage.py migrate
-```
-
-### 管理员后台
-
-```bash
-http://localhost:8002/admin/
-```
-
-### 创建超级用户
-
-```bash
-python manage.py createsuperuser
-```
-
-### 运行开发服务器
-
-```bash
-python manage.py runserver 0.0.0.0:8002
-```
-
-## 安全提示
-
-- 生产环境中请修改`settings.py`中的`SECRET_KEY`
-- 关闭`DEBUG`模式
-- 更新数据库密码和邮箱配置
-- 配置适当的`ALLOWED_HOSTS`
-- 启用CSRF保护
-
-## CORS配置
-
-系统已配置CORS以支持前端跨域请求：
-
-- 开发环境允许所有源：`CORS_ALLOW_ALL_ORIGINS = True`
-- 支持凭证请求：`CORS_ALLOW_CREDENTIALS = True`
-- 配置了特定的允许头和方法
-- 已配置的允许域名包括:
-  - `http://localhost:8002`
-  - `http://localhost:5173`
-  - `http://localhost:3001`
-  - `http://127.0.0.1:8002`
-  - `http://127.0.0.1:5173`
-  - `http://127.0.0.1:3001`
-
-## 媒体文件
-
-- 媒体文件存储在`media`目录下
-- 通过`settings.MEDIA_URL`提供访问
-- 配置：`MEDIA_URL = '/media/'`
-
-## 邮件服务
-
-- 系统使用QQ邮箱SMTP服务
-- 邮箱: 2412311965@qq.com
-- SMTP服务器: smtp.qq.com
-- 端口: 587
-- 用途: 找回密码和系统通知
-
-## 部署说明
-
-1. 设置环境变量
-2. 配置静态文件收集
-3. 使用Gunicorn/uWSGI作为WSGI服务器
-4. 配置Nginx作为反向代理
-5. 设置SSL证书
-6. 启用完整的CSRF保护
 
 -------------------------
 
@@ -291,58 +224,6 @@ src/
 - **响应式设计**：适配不同屏幕尺寸
 - **路由守卫**：基于权限的访问控制
 
-## 开发环境设置
-
-### 前提条件
-
-- Node.js (v16+)
-- npm 或 yarn
-
-### 安装
-
-```bash
-# 安装依赖
-npm install
-# 或
-yarn install
-```
-
-### 开发服务器
-
-```bash
-# 启动开发服务器
-npm run dev
-# 或
-yarn dev
-```
-
-服务器将在 http://localhost:3001 上运行
-
-### 构建生产版本
-
-```bash
-# 构建生产版本
-npm run build
-# 或
-yarn build
-```
-
-### 预览构建版本
-
-```bash
-# 预览构建后的版本
-npm run preview
-# 或
-yarn preview
-```
-
-## API代理配置
-
-开发环境已配置API代理，将以下请求转发到后端服务器：
-
-- `/api` -> `http://localhost:8002`
-- `/media` -> `http://localhost:8002`
-
 ## 项目依赖
 
 主要依赖包括：
@@ -369,7 +250,3 @@ yarn preview
 - @types/node: 20.11.0
 - @types/highcharts: 5.0.44
 - @vue/tsconfig: 0.7.0
-
-## 许可证
-
-[添加许可证信息] 
